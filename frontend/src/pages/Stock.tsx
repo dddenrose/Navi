@@ -358,13 +358,13 @@ export default function Stock() {
               {/* RSI */}
               {technicalData.rsi != null && (
                 <div
-                  className="rounded-2xl p-4"
+                  className="rounded-2xl p-6"
                   style={{
                     background: "rgba(255,255,255,0.03)",
                     border: "1px solid var(--border)",
                   }}
                 >
-                  <div className="flex justify-between items-center mb-3">
+                  <div className="flex justify-between items-center mb-4">
                     <span className="text-sm text-slate-400">RSI (14)</span>
                     <span
                       className={`text-sm font-bold ${
@@ -390,7 +390,7 @@ export default function Stock() {
                       style={{ width: `${Math.min(technicalData.rsi, 100)}%` }}
                     />
                   </div>
-                  <div className="flex justify-between text-xs text-slate-600 mt-1">
+                  <div className="flex justify-between text-xs text-slate-600 mt-2">
                     <span>超賣 &lt;30</span>
                     <span>超買 &gt;70</span>
                   </div>
@@ -400,7 +400,7 @@ export default function Stock() {
               {/* MACD */}
               {technicalData.macd && (
                 <div
-                  className="rounded-2xl p-4"
+                  className="rounded-2xl p-6"
                   style={{
                     background: "rgba(255,255,255,0.03)",
                     border: "1px solid var(--border)",
@@ -426,7 +426,7 @@ export default function Stock() {
                       <div key={label}>
                         <p className="text-xs text-slate-500">{label}</p>
                         <p
-                          className={`text-sm font-semibold mt-0.5 ${color ?? "text-slate-100"}`}
+                          className={`text-sm font-semibold mt-2 ${color ?? "text-slate-100"}`}
                         >
                           {value}
                         </p>
@@ -438,7 +438,7 @@ export default function Stock() {
 
               {/* Moving Averages */}
               <div
-                className="rounded-2xl p-4"
+                className="rounded-2xl p-6"
                 style={{
                   background: "rgba(255,255,255,0.03)",
                   border: "1px solid var(--border)",
@@ -454,7 +454,7 @@ export default function Stock() {
                     <div key={label}>
                       <p className="text-xs text-slate-500">{label}</p>
                       <p
-                        className={`text-sm font-semibold mt-0.5 ${
+                        className={`text-sm font-semibold mt-2 ${
                           value != null && priceData.current_price > value
                             ? "text-green-400"
                             : "text-red-400"
@@ -470,13 +470,13 @@ export default function Stock() {
               {/* RSI Chart Mock (simplified bar) */}
               {technicalData.rsi != null && (
                 <div
-                  className="rounded-2xl p-4 h-40"
+                  className="rounded-2xl p-6 h-52"
                   style={{
                     background: "rgba(255,255,255,0.03)",
                     border: "1px solid var(--border)",
                   }}
                 >
-                  <p className="text-xs text-slate-500 mb-2">RSI 視覺化</p>
+                  <p className="text-xs text-slate-500 mb-3">RSI 視覺化</p>
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart
                       data={[{ name: "RSI", value: technicalData.rsi }]}
@@ -518,25 +518,25 @@ export default function Stock() {
             <div className="space-y-5">
               {fundamentalData.description && (
                 <div
-                  className="rounded-2xl p-4"
+                  className="rounded-2xl p-6"
                   style={{
                     background: "rgba(255,255,255,0.03)",
                     border: "1px solid var(--border)",
                   }}
                 >
-                  <p className="text-xs text-slate-500 mb-2">公司簡介</p>
-                  <p className="text-sm text-slate-300 leading-relaxed line-clamp-4">
+                  <p className="text-xs text-slate-500 mb-3">公司簡介</p>
+                  <p className="text-sm text-slate-300 leading-loose line-clamp-4">
                     {fundamentalData.description}
                   </p>
                   {(fundamentalData.sector || fundamentalData.industry) && (
-                    <div className="flex gap-2 mt-3">
+                    <div className="flex gap-3 mt-5">
                       {fundamentalData.sector && (
-                        <span className="px-2 py-1 bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-xs rounded-full">
+                        <span className="px-3 py-1.5 bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-xs rounded-full">
                           {fundamentalData.sector}
                         </span>
                       )}
                       {fundamentalData.industry && (
-                        <span className="px-2 py-1 bg-slate-700 text-slate-400 text-xs rounded-full">
+                        <span className="px-3 py-1.5 bg-slate-700 text-slate-400 text-xs rounded-full">
                           {fundamentalData.industry}
                         </span>
                       )}

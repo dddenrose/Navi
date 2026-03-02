@@ -72,7 +72,7 @@ export default function Layout() {
           className="px-6 pt-6 pb-5"
           style={{ borderBottom: "1px solid var(--border)" }}
         >
-            <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3">
             <div
               className="w-8 h-8 rounded-lg flex items-center justify-center text-base flex-shrink-0"
               style={{

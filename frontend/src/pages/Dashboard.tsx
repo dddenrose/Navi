@@ -25,7 +25,7 @@ export default function Dashboard() {
     <div className="px-10 py-10 max-w-4xl mx-auto animate-fade-up">
       {/* Header */}
       <div className="mb-14">
-        <p className="text-sm text-slate-600 mb-1 tracking-widest uppercase">
+        <p className="text-sm text-slate-600 mb-3 tracking-widest uppercase">
           {new Date().toLocaleDateString("zh-TW", {
             weekday: "long",
             year: "numeric",
@@ -33,7 +33,7 @@ export default function Dashboard() {
             day: "numeric",
           })}
         </p>
-        <h1 className="text-2xl font-semibold text-slate-100">
+        <h1 className="text-3xl font-semibold text-slate-100">
           {greeting()}，
           <span className="gradient-text">{user?.displayName ?? "投資人"}</span>
         </h1>

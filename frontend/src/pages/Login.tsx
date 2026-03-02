@@ -68,7 +68,7 @@ export default function Login() {
         {/* Logo */}
         <div className="text-center mb-8">
           <div
-            className="inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-4"
+            className="inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-5"
             style={{
               background: "linear-gradient(135deg, #6366f1, #8b5cf6)",
               boxShadow: "0 0 32px rgba(99,102,241,0.4)",
@@ -77,14 +77,14 @@ export default function Login() {
             <span className="text-3xl">🧭</span>
           </div>
           <h1 className="text-2xl font-bold gradient-text">Navi</h1>
-          <p className="text-slate-500 text-sm mt-1 tracking-wide">
+          <p className="text-slate-500 text-sm mt-2.5 tracking-wide">
             AI 投資分析助理
           </p>
         </div>
 
         {/* Card */}
-        <div className="glass-md rounded-2xl p-7 shadow-2xl">
-          <h2 className="text-base font-semibold text-slate-200 mb-5">
+        <div className="glass-md rounded-2xl p-8 shadow-2xl">
+          <h2 className="text-base font-semibold text-slate-200 mb-6">
             登入帳號
           </h2>
 
@@ -101,14 +101,14 @@ export default function Login() {
           )}
 
           {/* Email/Password */}
-          <form onSubmit={handleEmailSignIn} className="space-y-3 mb-4">
+          <form onSubmit={handleEmailSignIn} className="space-y-4 mb-5">
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="電子郵件"
               required
-              className="input-field w-full rounded-xl px-4 py-2.5 text-sm text-slate-100 placeholder-slate-600 color-scheme-dark"
+              className="input-field w-full rounded-xl px-4 py-3.5 text-sm text-slate-100 placeholder-slate-600 color-scheme-dark"
             />
             <input
               type="password"
@@ -116,12 +116,12 @@ export default function Login() {
               onChange={(e) => setPassword(e.target.value)}
               placeholder="密碼"
               required
-              className="input-field w-full rounded-xl px-4 py-2.5 text-sm text-slate-100 placeholder-slate-600"
+              className="input-field w-full rounded-xl px-4 py-3.5 text-sm text-slate-100 placeholder-slate-600"
             />
             <button
               type="submit"
               disabled={submitting}
-              className="w-full rounded-xl py-2.5 text-sm font-semibold text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+              className="w-full rounded-xl py-3.5 text-sm font-semibold text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed"
               style={{
                 background: "linear-gradient(135deg, #6366f1, #8b5cf6)",
                 boxShadow: submitting
@@ -134,7 +134,7 @@ export default function Login() {
           </form>
 
           {/* Divider */}
-          <div className="flex items-center gap-3 my-4">
+          <div className="flex items-center gap-3 my-6">
             <div
               className="flex-1 h-px"
               style={{ background: "rgba(255,255,255,0.07)" }}
