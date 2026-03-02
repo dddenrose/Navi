@@ -8,7 +8,7 @@ from langchain.agents import AgentExecutor, create_tool_calling_agent
 from langchain_core.chat_history import InMemoryChatMessageHistory
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.runnables.history import RunnableWithMessageHistory
-from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_google_vertexai import ChatVertexAI
 
 from config import settings
 from services.conversation_service import (
@@ -54,13 +54,12 @@ def _build_prompt() -> ChatPromptTemplate:
     )
 
 
-def _build_llm() -> ChatGoogleGenerativeAI:
+def _build_llm() -> ChatVertexAI:
     vertexai.init(project=settings.google_cloud_project)
-    return ChatGoogleGenerativeAI(
-        model=settings.gemini_model_name,
+    return ChatVertexAI(
+        model_name=settings.gemini_model_name,
         temperature=0.3,
         project=settings.google_cloud_project,
-        convert_system_message_to_human=True,
     )
 
 
