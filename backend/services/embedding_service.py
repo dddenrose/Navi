@@ -101,8 +101,8 @@ def search_similar(query: str, top_k: int = 5) -> list[dict]:
 
     return [
         {
-            "content": doc.get("content", ""),
-            "metadata": doc.get("metadata", {}),
+            "content": (doc.to_dict() or {}).get("content", ""),
+            "metadata": (doc.to_dict() or {}).get("metadata", {}),
         }
         for doc in results
     ]
@@ -121,10 +121,11 @@ def get_collection_stats() -> dict:
 
     for doc in docs:
         count += 1
-        meta = doc.get("metadata") or {}
+        data = doc.to_dict() or {}
+        meta = data.get("metadata", {})
         if cat := meta.get("category"):
             categories.add(cat)
-        created = doc.get("created_at")
+        created = data.get("created_at")
         if created and (last_updated is None or created > last_updated):
             last_updated = created
 

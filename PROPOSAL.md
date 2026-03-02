@@ -91,13 +91,13 @@ Google Cloud Console
 
 ### Frontend
 
-| 類別     | 技術                          | 原因                   |
-| -------- | ----------------------------- | ---------------------- |
-| 框架     | Next.js (App Router)          | 熟悉的技術棧           |
-| UI       | shadcn/ui 或 Ant Design       | 快速搭建 Dashboard     |
-| 圖表     | Recharts / Lightweight Charts | 股票 K 線圖            |
-| 狀態管理 | Redux Toolkit                 | 熟悉的技術棧           |
-| 即時更新 | Server-Sent Events (SSE)      | LLM streaming response |
+| 類別     | 技術                          | 原因                                  |
+| -------- | ----------------------------- | ------------------------------------- |
+| 框架     | Next.js (App Router)          | 熟悉的技術棧                          |
+| UI       | shadcn/ui 或 Ant Design       | 快速搭建 Dashboard                    |
+| 圖表     | Recharts / Lightweight Charts | 股票 K 線圖                           |
+| 狀態管理 | Zustand                       | 輕量、零 boilerplate、適合 App Router |
+| 即時更新 | Server-Sent Events (SSE)      | LLM streaming response                |
 
 ### Infrastructure
 
