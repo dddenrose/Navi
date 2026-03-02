@@ -8,7 +8,6 @@ from pydantic import BaseModel, Field
 class ChatRequest(BaseModel):
     message: str = Field(..., min_length=1, description="使用者問題")
     conversation_id: str | None = Field(None, description="對話 ID（多輪對話）")
-    ticker: str | None = Field(None, description="相關股票代碼")
 
 
 class SourceReference(BaseModel):
@@ -33,6 +32,64 @@ class StockOverview(BaseModel):
     change_percent: float | None = None
     volume: int | None = None
     market_cap: int | None = None
+    currency: str = ""
+    exchange: str = ""
+
+
+class TechnicalResponse(BaseModel):
+    ticker: str
+    period: str = "3mo"
+    current_price: float | None = None
+    # 均線
+    ma5: float | None = None
+    ma10: float | None = None
+    ma20: float | None = None
+    ma60: float | None = None
+    ma_trend: str = ""
+    # RSI
+    rsi_14: float | None = None
+    rsi_signal: str = ""
+    # MACD
+    macd: float | None = None
+    macd_signal: float | None = None
+    macd_histogram: float | None = None
+    macd_cross: str = ""
+    # KD
+    k_value: float | None = None
+    d_value: float | None = None
+    kd_signal: str = ""
+    # 布林通道
+    bb_upper: float | None = None
+    bb_middle: float | None = None
+    bb_lower: float | None = None
+    bb_position: str = ""
+    # 綜合
+    summary: str = ""
+
+
+class FundamentalResponse(BaseModel):
+    ticker: str
+    name: str = ""
+    # 估值
+    pe_ratio: float | None = None
+    forward_pe: float | None = None
+    pb_ratio: float | None = None
+    ps_ratio: float | None = None
+    # 獲利能力
+    roe: float | None = None
+    roa: float | None = None
+    profit_margin: float | None = None
+    operating_margin: float | None = None
+    # 成長
+    revenue_growth: float | None = None
+    earnings_growth: float | None = None
+    # 每股
+    eps: float | None = None
+    forward_eps: float | None = None
+    dividend_yield: float | None = None
+    # 分類
+    sector: str = ""
+    industry: str = ""
 
 
 # ── Knowledge ────────────────────────────────────────────────────────────────

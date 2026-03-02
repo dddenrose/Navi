@@ -1,8 +1,11 @@
 """RAG Service — Vector Search + Gemini for investment analysis."""
 
+import logging
 from collections.abc import AsyncGenerator
 
 import vertexai
+
+logger = logging.getLogger(__name__)
 from vertexai.generative_models import GenerativeModel
 
 from config import settings
@@ -59,8 +62,16 @@ async def analyze(
 
     context = "\n\n---\n\n".join(context_parts) if context_parts else "（知識庫中沒有找到相關內容）"
 
-    # 2. Real-time stock data placeholder (Phase 2)
-    stock_data = "（即時數據功能將在 Phase 2 實裝）"
+    # 2. Real-time stock data
+    stock_data = "（未指定股票代碼，僅基於知識庫回答）"
+    if ticker:
+        try:
+            from services.stock_service import get_full_stock_data
+
+            stock_data = get_full_stock_data(ticker)
+        except Exception as e:
+            logger.warning("Failed to fetch stock data for %s: %s", ticker, e)
+            stock_data = f"（取得 {ticker} 數據失敗：{e}）"
 
     # 3. Build prompt and call Gemini with streaming
     prompt = ANALYST_PROMPT.format(
