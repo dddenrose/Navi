@@ -215,7 +215,7 @@ export default function Stock() {
           >
             <div className="flex items-start justify-between flex-wrap gap-4">
               <div>
-                <div className="flex items-center gap-3 mb-1">
+                <div className="flex items-center gap-3 mb-2">
                   <h1 className="text-xl font-bold text-white">
                     {priceData.symbol}
                   </h1>
@@ -230,7 +230,7 @@ export default function Stock() {
                     NASDAQ
                   </span>
                 </div>
-                <p className="text-slate-500 text-sm">
+                <p className="text-slate-400 text-sm mt-1">
                   {priceData.company_name}
                 </p>
               </div>
@@ -239,7 +239,7 @@ export default function Stock() {
                   ${fmtNum(priceData.current_price)}
                 </div>
                 <div
-                  className={`text-sm font-medium mt-0.5 ${
+                  className={`text-sm font-medium mt-2 ${
                     isPositive ? "text-emerald-400" : "text-red-400"
                   }`}
                 >

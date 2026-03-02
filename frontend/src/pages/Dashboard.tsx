@@ -37,7 +37,7 @@ export default function Dashboard() {
           {greeting()}，
           <span className="gradient-text">{user?.displayName ?? "投資人"}</span>
         </h1>
-        <p className="text-slate-500 text-sm mt-1.5">
+        <p className="text-slate-500 text-sm mt-3">
           歡迎使用 Navi AI 投資分析助理
         </p>
       </div>
@@ -68,10 +68,10 @@ export default function Dashboard() {
             >
               💬
             </div>
-            <h3 className="text-sm font-semibold text-white mb-1">
+            <h3 className="text-base font-semibold text-white mb-2.5">
               開始 AI 對話
             </h3>
-            <p className="text-xs text-slate-400 leading-relaxed">
+            <p className="text-sm text-slate-400 leading-relaxed">
               向 AI 提問投資策略、技術指標、個股分析
             </p>
           </div>
@@ -102,10 +102,10 @@ export default function Dashboard() {
             >
               📈
             </div>
-            <h3 className="text-sm font-semibold text-white mb-1">
+            <h3 className="text-base font-semibold text-white mb-2.5">
               股票行情分析
             </h3>
-            <p className="text-xs text-slate-500 leading-relaxed">
+            <p className="text-sm text-slate-500 leading-relaxed">
               即時股價、技術指標及基本面財務數據
             </p>
           </div>
@@ -117,7 +117,7 @@ export default function Dashboard() {
 
       {/* Quick stock chips */}
       <div className="mb-14">
-        <h2 className="text-xs font-medium text-slate-600 mb-4 tracking-widest uppercase">
+        <h2 className="text-xs font-medium text-slate-600 mb-5 tracking-widest uppercase">
           快速查詢股票
         </h2>
         <div className="flex flex-wrap gap-3">
@@ -149,7 +149,7 @@ export default function Dashboard() {
 
       {/* Quick questions */}
       <div>
-        <h2 className="text-xs font-medium text-slate-600 mb-4 tracking-widest uppercase">
+        <h2 className="text-xs font-medium text-slate-600 mb-5 tracking-widest uppercase">
           常見投資問題
         </h2>
         <div className="space-y-3">
@@ -166,8 +166,8 @@ export default function Dashboard() {
                 animationDelay: `${i * 60}ms`,
               }}
             >
-              <div className="flex items-center gap-3">
-                <span className="w-5 h-5 rounded-lg flex items-center justify-center text-xs text-indigo-400/60 group-hover:text-indigo-400 transition-colors font-mono">
+              <div className="flex items-center gap-4">
+                <span className="w-6 h-6 rounded-lg flex items-center justify-center text-xs text-indigo-400/60 group-hover:text-indigo-400 transition-colors font-mono flex-shrink-0">
                   {i + 1}
                 </span>
                 <span>{q}</span>

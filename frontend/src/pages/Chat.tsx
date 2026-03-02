@@ -252,7 +252,7 @@ export default function Chat() {
           {messages.length === 0 && (
             <div className="flex flex-col items-center justify-center h-full text-center animate-fade-in">
               <div
-                className="w-16 h-16 rounded-2xl flex items-center justify-center text-3xl mb-5"
+                className="w-20 h-20 rounded-2xl flex items-center justify-center text-4xl mb-7"
                 style={{
                   background:
                     "linear-gradient(135deg, rgba(99,102,241,0.2), rgba(139,92,246,0.12))",
@@ -261,10 +261,10 @@ export default function Chat() {
               >
                 🧭
               </div>
-              <h2 className="text-lg font-semibold text-slate-200 mb-2">
+              <h2 className="text-xl font-semibold text-slate-200 mb-3">
                 Navi 投資助理
               </h2>
-              <p className="text-slate-600 text-sm max-w-xs leading-relaxed">
+              <p className="text-slate-500 text-sm max-w-xs leading-loose">
                 您好！我可以幫您分析股票、解釋技術指標，以及回答投資相關問題。
               </p>
             </div>
@@ -273,7 +273,7 @@ export default function Chat() {
             {messages.map((msg, i) => (
               <div
                 key={i}
-                className={`flex gap-3 animate-fade-up ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+                className={`flex gap-4 animate-fade-up ${msg.role === "user" ? "justify-end" : "justify-start"}`}
                 style={{ animationDelay: "0ms" }}
               >
                 {msg.role === "assistant" && (
@@ -287,7 +287,7 @@ export default function Chat() {
                   </div>
                 )}
                 <div
-                  className={`max-w-2xl px-5 py-4 rounded-2xl text-sm leading-8 whitespace-pre-wrap ${
+                  className={`max-w-2xl px-5 py-4 rounded-2xl text-sm leading-8 whitespace-pre-wrap break-words ${
                     msg.role === "user" ? "rounded-tr-sm" : "rounded-tl-sm"
                   }`}
                   style={
