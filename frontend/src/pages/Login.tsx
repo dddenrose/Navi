@@ -41,71 +41,120 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-900 flex items-center justify-center px-4">
-      <div className="w-full max-w-sm">
+    <div
+      className="relative min-h-screen flex items-center justify-center px-4 overflow-hidden"
+      style={{
+        background:
+          "linear-gradient(135deg, #080e1f 0%, #0d1424 50%, #0a0f1e 100%)",
+      }}
+    >
+      {/* Ambient orbs */}
+      <div
+        className="orb-1 absolute top-1/4 -left-32 w-80 h-80 rounded-full pointer-events-none"
+        style={{
+          background:
+            "radial-gradient(circle, rgba(99,102,241,0.18) 0%, transparent 70%)",
+        }}
+      />
+      <div
+        className="orb-2 absolute bottom-1/4 -right-32 w-96 h-96 rounded-full pointer-events-none"
+        style={{
+          background:
+            "radial-gradient(circle, rgba(139,92,246,0.14) 0%, transparent 70%)",
+        }}
+      />
+
+      <div className="relative w-full max-w-sm animate-fade-up">
         {/* Logo */}
         <div className="text-center mb-8">
-          <div className="text-5xl mb-3">🧭</div>
-          <h1 className="text-2xl font-bold text-white">Navi</h1>
-          <p className="text-slate-400 text-sm mt-1">AI 投資分析助理</p>
+          <div
+            className="inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-4"
+            style={{
+              background: "linear-gradient(135deg, #6366f1, #8b5cf6)",
+              boxShadow: "0 0 32px rgba(99,102,241,0.4)",
+            }}
+          >
+            <span className="text-3xl">🧭</span>
+          </div>
+          <h1 className="text-2xl font-bold gradient-text">Navi</h1>
+          <p className="text-slate-500 text-sm mt-1 tracking-wide">
+            AI 投資分析助理
+          </p>
         </div>
 
         {/* Card */}
-        <div className="bg-slate-800 rounded-2xl p-6 border border-slate-700 shadow-xl">
-          <h2 className="text-lg font-semibold text-white mb-5">登入帳號</h2>
+        <div className="glass-md rounded-2xl p-7 shadow-2xl">
+          <h2 className="text-base font-semibold text-slate-200 mb-5">
+            登入帳號
+          </h2>
 
           {error && (
-            <div className="mb-4 px-3 py-2 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm">
+            <div
+              className="mb-4 px-4 py-3 rounded-xl text-sm text-red-300"
+              style={{
+                background: "rgba(239,68,68,0.08)",
+                border: "1px solid rgba(239,68,68,0.2)",
+              }}
+            >
               {error}
             </div>
           )}
 
           {/* Email/Password */}
           <form onSubmit={handleEmailSignIn} className="space-y-3 mb-4">
-            <div>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="電子郵件"
-                required
-                className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors"
-              />
-            </div>
-            <div>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="密碼"
-                required
-                className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors"
-              />
-            </div>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="電子郵件"
+              required
+              className="input-field w-full rounded-xl px-4 py-2.5 text-sm text-slate-100 placeholder-slate-600 color-scheme-dark"
+            />
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="密碼"
+              required
+              className="input-field w-full rounded-xl px-4 py-2.5 text-sm text-slate-100 placeholder-slate-600"
+            />
             <button
               type="submit"
               disabled={submitting}
-              className="w-full bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white rounded-lg py-2 text-sm font-medium transition-colors"
+              className="w-full rounded-xl py-2.5 text-sm font-semibold text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+              style={{
+                background: "linear-gradient(135deg, #6366f1, #8b5cf6)",
+                boxShadow: submitting
+                  ? "none"
+                  : "0 4px 20px rgba(99,102,241,0.35)",
+              }}
             >
               {submitting ? "登入中..." : "登入"}
             </button>
           </form>
 
           {/* Divider */}
-          <div className="relative my-4">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-slate-600" />
-            </div>
-            <div className="relative flex justify-center text-xs text-slate-500 bg-slate-800 px-2 w-fit mx-auto">
-              或使用
-            </div>
+          <div className="flex items-center gap-3 my-4">
+            <div
+              className="flex-1 h-px"
+              style={{ background: "rgba(255,255,255,0.07)" }}
+            />
+            <span className="text-xs text-slate-600">或</span>
+            <div
+              className="flex-1 h-px"
+              style={{ background: "rgba(255,255,255,0.07)" }}
+            />
           </div>
 
           {/* Google */}
           <button
             onClick={handleGoogleSignIn}
             disabled={submitting}
-            className="w-full flex items-center justify-center gap-2 bg-white hover:bg-gray-100 disabled:opacity-50 text-gray-800 rounded-lg py-2 text-sm font-medium transition-colors"
+            className="w-full flex items-center justify-center gap-2.5 rounded-xl py-2.5 text-sm font-medium text-slate-200 transition-all disabled:opacity-40 hover:brightness-110"
+            style={{
+              background: "rgba(255,255,255,0.06)",
+              border: "1px solid rgba(255,255,255,0.1)",
+            }}
           >
             <svg viewBox="0 0 24 24" className="w-4 h-4">
               <path
