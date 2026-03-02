@@ -76,13 +76,18 @@ uv run python cli.py
 
 ## API 端點
 
-| 方法 | 路徑                   | 說明                     |
-| ---- | ---------------------- | ------------------------ |
-| GET  | `/`                    | Health check             |
-| GET  | `/health`              | Health check             |
-| POST | `/api/chat`            | AI 對話（SSE Streaming） |
-| GET  | `/api/stock/{ticker}`  | 股票概覽                 |
-| GET  | `/api/knowledge/stats` | 知識庫統計               |
+| 方法   | 路徑                              | 說明                     |
+| ------ | --------------------------------- | ------------------------ |
+| GET    | `/`                               | Health check             |
+| GET    | `/health`                         | Health check             |
+| POST   | `/api/chat`                       | AI 對話（SSE Streaming） |
+| GET    | `/api/conversations`              | 列出對話紀錄             |
+| DELETE | `/api/conversations/{id}`         | 刪除指定對話             |
+| GET    | `/api/stock/{ticker}`             | 股票概覽                 |
+| GET    | `/api/stock/{ticker}/technical`   | 技術面分析               |
+| GET    | `/api/stock/{ticker}/fundamental` | 基本面分析               |
+| GET    | `/api/stock/{ticker}/chart`       | 歷史K線數據              |
+| GET    | `/api/knowledge/stats`            | 知識庫統計               |
 
 ### Chat API 範例
 
@@ -102,14 +107,22 @@ backend/
 ├── cli.py                         # CLI 互動式問答
 ├── api/
 │   ├── routes/
-│   │   ├── chat.py                # POST /api/chat (SSE)
+│   │   ├── chat.py                # POST /api/chat (SSE) + 對話管理
 │   │   ├── stock.py               # GET /api/stock/{ticker}
 │   │   └── knowledge.py           # GET /api/knowledge/stats
 │   └── dependencies.py
 ├── services/
 │   ├── firestore_client.py        # Firestore singleton
 │   ├── embedding_service.py       # text-embedding-004 + Vector Search
-│   └── rag_service.py             # RAG pipeline (Search → Gemini)
+│   ├── rag_service.py             # RAG pipeline (Search → Gemini)
+│   ├── stock_service.py           # yfinance 股價、技術指標、財報
+│   ├── agent_service.py           # LangChain Tool-calling Agent（Phase 3）
+│   └── conversation_service.py    # 多輪對話記憶（Firestore）（Phase 3）
+├── tools/                         # LangChain Agent 可用工具（Phase 3）
+│   ├── stock_price.py             # get_stock_price
+│   ├── technical_analysis.py      # analyze_technicals
+│   ├── fundamental_analysis.py    # analyze_fundamentals
+│   └── knowledge_search.py        # search_knowledge
 ├── models/
 │   ├── schemas.py                 # Pydantic models
 │   └── prompts.py                 # Prompt templates
@@ -122,7 +135,9 @@ backend/
 └── tests/
     ├── test_firestore.py
     ├── test_embedding.py
-    └── test_rag.py
+    ├── test_rag.py
+    ├── test_stock_service.py
+    └── test_agent.py              # Agent 單元測試（Phase 3）
 ```
 
 ## Firestore Vector Index 設定
