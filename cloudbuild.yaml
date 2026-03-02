@@ -1,0 +1,60 @@
+# Cloud Build — Build & deploy Navi backend to Cloud Run
+# Usage: gcloud builds submit --config cloudbuild.yaml .
+
+steps:
+  # Build Docker image
+  - name: "gcr.io/cloud-builders/docker"
+    args:
+      - "build"
+      - "-t"
+      - "asia-east1-docker.pkg.dev/$PROJECT_ID/navi/backend:$SHORT_SHA"
+      - "-t"
+      - "asia-east1-docker.pkg.dev/$PROJECT_ID/navi/backend:latest"
+      - "-f"
+      - "backend/Dockerfile"
+      - "backend"
+
+  # Push to Artifact Registry
+  - name: "gcr.io/cloud-builders/docker"
+    args:
+      - "push"
+      - "asia-east1-docker.pkg.dev/$PROJECT_ID/navi/backend:$SHORT_SHA"
+
+  - name: "gcr.io/cloud-builders/docker"
+    args:
+      - "push"
+      - "asia-east1-docker.pkg.dev/$PROJECT_ID/navi/backend:latest"
+
+  # Deploy to Cloud Run
+  - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
+    entrypoint: gcloud
+    args:
+      - "run"
+      - "deploy"
+      - "navi-backend"
+      - "--image"
+      - "asia-east1-docker.pkg.dev/$PROJECT_ID/navi/backend:$SHORT_SHA"
+      - "--region"
+      - "asia-east1"
+      - "--platform"
+      - "managed"
+      - "--allow-unauthenticated"
+      - "--service-account"
+      - "navi-backend@$PROJECT_ID.iam.gserviceaccount.com"
+      - "--memory"
+      - "1Gi"
+      - "--cpu"
+      - "1"
+      - "--timeout"
+      - "300"
+      - "--max-instances"
+      - "3"
+      - "--set-env-vars"
+      - "GOOGLE_CLOUD_PROJECT=$PROJECT_ID"
+
+images:
+  - "asia-east1-docker.pkg.dev/$PROJECT_ID/navi/backend:$SHORT_SHA"
+  - "asia-east1-docker.pkg.dev/$PROJECT_ID/navi/backend:latest"
+
+options:
+  logging: CLOUD_LOGGING_ONLY
