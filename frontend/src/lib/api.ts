@@ -127,6 +127,7 @@ export async function streamChat(options: ChatStreamOptions): Promise<void> {
 
   const decoder = new TextDecoder();
   let buffer = "";
+  let capturedConvId = conversationId ?? ""; // will be set from first SSE event
 
   while (true) {
     const { done, value } = await reader.read();
@@ -139,16 +140,32 @@ export async function streamChat(options: ChatStreamOptions): Promise<void> {
     for (const line of lines) {
       if (line.startsWith("data: ")) {
         const data = line.slice(6).trim();
-        if (data === "[DONE]") continue;
+
+        // Backend sends literal "[DONE]" to signal end of stream
+        if (data === "[DONE]") {
+          onDone(capturedConvId);
+          continue;
+        }
 
         try {
           const parsed = JSON.parse(data);
-          if (parsed.type === "token" && parsed.content) {
-            onChunk(parsed.content);
-          } else if (parsed.type === "done" && parsed.conversation_id) {
-            onDone(parsed.conversation_id);
-          } else if (parsed.type === "error") {
-            onError(parsed.content);
+
+          // First event: {"conversation_id": "xxx"}
+          if (parsed.conversation_id && !parsed.text && !parsed.error) {
+            capturedConvId = parsed.conversation_id;
+            continue;
+          }
+
+          // Content chunk: {"text": "..."}
+          if (parsed.text) {
+            onChunk(parsed.text);
+            continue;
+          }
+
+          // Error event: {"error": "..."}
+          if (parsed.error) {
+            onError(parsed.error);
+            continue;
           }
         } catch {
           // skip malformed lines

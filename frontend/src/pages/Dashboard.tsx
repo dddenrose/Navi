@@ -22,48 +22,124 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="p-6 max-w-4xl">
+    <div className="px-10 py-10 max-w-4xl mx-auto animate-fade-up">
       {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-white">
-          {greeting()}，{user?.displayName ?? "投資人"} 👋
+      <div className="mb-14">
+        <p className="text-sm text-slate-600 mb-1 tracking-widest uppercase">
+          {new Date().toLocaleDateString("zh-TW", {
+            weekday: "long",
+            year: "numeric",
+            month: "long",
+            day: "numeric",
+          })}
+        </p>
+        <h1 className="text-2xl font-semibold text-slate-100">
+          {greeting()}，
+          <span className="gradient-text">{user?.displayName ?? "投資人"}</span>
         </h1>
-        <p className="text-slate-400 mt-1">歡迎使用 Navi AI 投資分析助理</p>
+        <p className="text-slate-500 text-sm mt-1.5">
+          歡迎使用 Navi AI 投資分析助理
+        </p>
       </div>
 
       {/* Quick actions */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-14">
         <button
           onClick={() => navigate("/chat")}
-          className="bg-indigo-600 hover:bg-indigo-500 rounded-xl p-5 text-left transition-colors group"
+          className="group relative rounded-2xl p-7 text-left transition-all duration-200 overflow-hidden hover:scale-[1.02]"
+          style={{
+            background:
+              "linear-gradient(135deg, rgba(99,102,241,0.2), rgba(139,92,246,0.12))",
+            border: "1px solid rgba(99,102,241,0.25)",
+          }}
         >
-          <div className="text-2xl mb-2">💬</div>
-          <h3 className="text-white font-semibold">開始對話</h3>
-          <p className="text-indigo-200 text-sm mt-1">向 AI 提問投資相關問題</p>
+          {/* Glow on hover */}
+          <div
+            className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
+            style={{
+              background:
+                "radial-gradient(circle at 50% 50%, rgba(99,102,241,0.12), transparent 70%)",
+            }}
+          />
+          <div className="relative">
+            <div
+              className="w-10 h-10 rounded-xl flex items-center justify-center mb-5 text-lg"
+              style={{ background: "rgba(99,102,241,0.25)" }}
+            >
+              💬
+            </div>
+            <h3 className="text-sm font-semibold text-white mb-1">
+              開始 AI 對話
+            </h3>
+            <p className="text-xs text-slate-400 leading-relaxed">
+              向 AI 提問投資策略、技術指標、個股分析
+            </p>
+          </div>
+          <div className="absolute bottom-5 right-5 text-indigo-400/50 group-hover:text-indigo-400 transition-colors text-xl">
+            →
+          </div>
         </button>
+
         <button
           onClick={() => navigate("/stock")}
-          className="bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl p-5 text-left transition-colors group"
+          className="group relative rounded-2xl p-7 text-left transition-all duration-200 overflow-hidden hover:scale-[1.02]"
+          style={{
+            background: "rgba(255,255,255,0.03)",
+            border: "1px solid var(--border)",
+          }}
         >
-          <div className="text-2xl mb-2">📈</div>
-          <h3 className="text-white font-semibold">股票分析</h3>
-          <p className="text-slate-400 text-sm mt-1">
-            查詢股票技術與基本面數據
-          </p>
+          <div
+            className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
+            style={{
+              background:
+                "radial-gradient(circle at 50% 50%, rgba(255,255,255,0.03), transparent 70%)",
+            }}
+          />
+          <div className="relative">
+            <div
+              className="w-10 h-10 rounded-xl flex items-center justify-center mb-5 text-lg"
+              style={{ background: "rgba(255,255,255,0.06)" }}
+            >
+              📈
+            </div>
+            <h3 className="text-sm font-semibold text-white mb-1">
+              股票行情分析
+            </h3>
+            <p className="text-xs text-slate-500 leading-relaxed">
+              即時股價、技術指標及基本面財務數據
+            </p>
+          </div>
+          <div className="absolute bottom-5 right-5 text-slate-700 group-hover:text-slate-500 transition-colors text-xl">
+            →
+          </div>
         </button>
       </div>
 
-      {/* Quick stock links */}
-      <div className="mb-8">
-        <h2 className="text-sm font-medium text-slate-400 mb-3 uppercase tracking-wider">
+      {/* Quick stock chips */}
+      <div className="mb-14">
+        <h2 className="text-xs font-medium text-slate-600 mb-4 tracking-widest uppercase">
           快速查詢股票
         </h2>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-3">
           {quickStocks.map((symbol) => (
             <button
               key={symbol}
               onClick={() => navigate(`/stock/${symbol}`)}
-              className="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-full text-sm text-slate-300 hover:text-white transition-colors"
+              className="px-5 py-2 rounded-full text-xs font-medium text-slate-400 hover:text-slate-100 transition-all hover:scale-105"
+              style={{
+                background: "rgba(255,255,255,0.04)",
+                border: "1px solid var(--border)",
+              }}
+              onMouseEnter={(e) => {
+                (e.target as HTMLElement).style.borderColor =
+                  "rgba(99,102,241,0.4)";
+                (e.target as HTMLElement).style.boxShadow =
+                  "0 0 12px rgba(99,102,241,0.15)";
+              }}
+              onMouseLeave={(e) => {
+                (e.target as HTMLElement).style.borderColor = "var(--border)";
+                (e.target as HTMLElement).style.boxShadow = "none";
+              }}
             >
               {symbol}
             </button>
@@ -73,22 +149,39 @@ export default function Dashboard() {
 
       {/* Quick questions */}
       <div>
-        <h2 className="text-sm font-medium text-slate-400 mb-3 uppercase tracking-wider">
-          常見問題
+        <h2 className="text-xs font-medium text-slate-600 mb-4 tracking-widest uppercase">
+          常見投資問題
         </h2>
-        <div className="space-y-2">
-          {quickQuestions.map((q) => (
+        <div className="space-y-3">
+          {quickQuestions.map((q, i) => (
             <button
               key={q}
               onClick={() =>
                 navigate("/chat", { state: { initialMessage: q } })
               }
-              className="w-full text-left px-4 py-3 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-sm text-slate-300 hover:text-white transition-colors flex items-center justify-between group"
+              className="group w-full text-left px-5 py-4 rounded-2xl text-sm text-slate-400 hover:text-slate-100 transition-all flex items-center justify-between"
+              style={{
+                background: "rgba(255,255,255,0.025)",
+                border: "1px solid var(--border)",
+                animationDelay: `${i * 60}ms`,
+              }}
             >
-              <span>{q}</span>
-              <span className="text-slate-600 group-hover:text-slate-400">
-                →
-              </span>
+              <div className="flex items-center gap-3">
+                <span className="w-5 h-5 rounded-lg flex items-center justify-center text-xs text-indigo-400/60 group-hover:text-indigo-400 transition-colors font-mono">
+                  {i + 1}
+                </span>
+                <span>{q}</span>
+              </div>
+              <svg
+                viewBox="0 0 16 16"
+                fill="currentColor"
+                className="w-3.5 h-3.5 text-slate-700 group-hover:text-slate-400 group-hover:translate-x-0.5 transition-all flex-shrink-0"
+              >
+                <path
+                  fillRule="evenodd"
+                  d="M4 8a.5.5 0 01.5-.5h5.793L8.146 5.354a.5.5 0 11.708-.708l3 3a.5.5 0 010 .708l-3 3a.5.5 0 01-.708-.708L10.293 8.5H4.5A.5.5 0 014 8z"
+                />
+              </svg>
             </button>
           ))}
         </div>
