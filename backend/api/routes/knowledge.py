@@ -2,12 +2,17 @@
 
 import logging
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
+from api.dependencies import verify_firebase_token
 from models.schemas import KnowledgeStats
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/api/knowledge", tags=["knowledge"])
+router = APIRouter(
+    prefix="/api/knowledge",
+    tags=["knowledge"],
+    dependencies=[Depends(verify_firebase_token)],
+)
 
 
 @router.get("/stats", response_model=KnowledgeStats)

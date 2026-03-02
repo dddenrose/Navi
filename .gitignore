@@ -47,3 +47,6 @@ dist/
 
 # Secrets
 .secrets/
+
+#changelog
+CHANGELOG.md

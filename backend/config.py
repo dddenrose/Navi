@@ -23,6 +23,10 @@ class Settings(BaseSettings):
     # Firestore
     firestore_collection_knowledge: str = "knowledge"
 
+    # Auth
+    auth_required: bool = True              # Set False in local dev to skip JWT
+    cors_origins: str = ""                  # Comma-separated allowed origins; empty = deny all cross-origin
+
     # Server
     host: str = "0.0.0.0"
     port: int = 8000

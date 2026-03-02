@@ -37,9 +37,9 @@
 ```
 ┌──────────────────┐         ┌───────────────────────────────┐
 │                  │  REST   │         Cloud Run              │
-│   Next.js        │────────▶│       FastAPI Backend          │
+│   React + Vite   │────────▶│       FastAPI Backend          │
 │   Frontend       │◀────────│                                │
-│   (Vercel)       │   SSE   │  ┌───────────┐ ┌───────────┐  │
+│ (Firebase Hosting)│   SSE   │  ┌───────────┐ ┌───────────┐  │
 │                  │         │  │ LangChain  │ │ Data      │  │
 └──────────────────┘         │  │ RAG Chain  │ │ Pipeline  │  │
                              │  └─────┬──┬──┘ └─────┬─────┘  │
@@ -91,23 +91,25 @@ Google Cloud Console
 
 ### Frontend
 
-| 類別     | 技術                          | 原因                                  |
-| -------- | ----------------------------- | ------------------------------------- |
-| 框架     | Next.js (App Router)          | 熟悉的技術棧                          |
-| UI       | shadcn/ui 或 Ant Design       | 快速搭建 Dashboard                    |
-| 圖表     | Recharts / Lightweight Charts | 股票 K 線圖                           |
-| 狀態管理 | Zustand                       | 輕量、零 boilerplate、適合 App Router |
-| 即時更新 | Server-Sent Events (SSE)      | LLM streaming response                |
+| 類別     | 技術                          | 原因                                   |
+| -------- | ----------------------------- | -------------------------------------- |
+| 框架     | React + TypeScript            | 純 Client-side SPA，無需 SSR，符合需求 |
+| 建構工具 | Vite                          | 極快 HMR、輕量 bundle、開發體驗佳      |
+| 路由     | react-router-dom v7           | SPA 路由標準解                         |
+| UI       | shadcn/ui                     | 快速搭建 Dashboard，Tailwind 相容      |
+| 圖表     | Recharts / Lightweight Charts | 股票 K 線圖                            |
+| 狀態管理 | Zustand                       | 輕量、零 boilerplate                   |
+| 即時更新 | Server-Sent Events (SSE)      | LLM streaming response                 |
 
 ### Infrastructure
 
-| 類別     | 技術             | 原因                         |
-| -------- | ---------------- | ---------------------------- |
-| 前端部署 | Vercel           | 已在使用                     |
-| 後端部署 | Google Cloud Run | Google 生態、按量計費        |
-| 資料庫   | Firestore        | 已有、原生支援 Vector Search |
-| 認證     | Firebase Auth    | 已有                         |
-| CI/CD    | GitHub Actions   | 免費                         |
+| 類別     | 技術             | 原因                                          |
+| -------- | ---------------- | --------------------------------------------- |
+| 前端部署 | Firebase Hosting | 全 Google 生態、靜態 SPA 免費額度大、CDN 全球 |
+| 後端部署 | Google Cloud Run | Google 生態、按量計費                         |
+| 資料庫   | Firestore        | 已有、原生支援 Vector Search                  |
+| 認證     | Firebase Auth    | 已有，與 Firebase Hosting 同專案無縫整合      |
+| CI/CD    | GitHub Actions   | 免費                                          |
 
 ---
 
@@ -330,21 +332,27 @@ navi/
 │       ├── test_stock_service.py
 │       └── test_agent.py
 │
-├── frontend/                      # Next.js Dashboard
-│   ├── app/
-│   │   ├── page.tsx               # 首頁 / Dashboard
-│   │   ├── chat/
-│   │   │   └── page.tsx           # AI 對話頁
-│   │   └── stock/
-│   │       └── [ticker]/
-│   │           └── page.tsx       # 個股分析頁
-│   ├── components/
-│   │   ├── ChatPanel/             # 對話面板（SSE streaming）
-│   │   ├── StockChart/            # K 線圖
-│   │   ├── IndicatorCard/         # 技術指標卡片
-│   │   └── NewsFeed/              # 新聞列表
-│   └── lib/
-│       └── api.ts                 # Backend API client
+├── frontend/                      # React + Vite SPA
+│   ├── src/
+│   │   ├── main.tsx               # 入口
+│   │   ├── App.tsx                # 路由設定
+│   │   ├── pages/
+│   │   │   ├── Dashboard.tsx      # 首頁 / Dashboard
+│   │   │   ├── Chat.tsx           # AI 對話頁
+│   │   │   └── Stock.tsx          # 個股分析頁
+│   │   ├── components/
+│   │   │   ├── ChatPanel/         # 對話面板（SSE streaming）
+│   │   │   ├── StockChart/        # K 線圖
+│   │   │   ├── IndicatorCard/     # 技術指標卡片
+│   │   │   └── NewsFeed/          # 新聞列表
+│   │   ├── lib/
+│   │   │   ├── api.ts             # Backend API client
+│   │   │   └── firebase.ts        # Firebase Auth 初始化
+│   │   └── store/
+│   │       └── auth.ts            # Zustand auth store
+│   ├── index.html
+│   ├── vite.config.ts
+│   └── firebase.json              # Firebase Hosting 設定
 │
 ├── docker-compose.yml             # 本地開發環境
 ├── cloudbuild.yaml                # Cloud Run 部署設定
@@ -607,15 +615,15 @@ executor = AgentExecutor(agent=agent, tools=tools, verbose=True)
 
 | #   | 任務                          | 產出                                                                                      |
 | --- | ----------------------------- | ----------------------------------------------------------------------------------------- |
-| 1   | Next.js 專案建置              | 基本頁面路由                                                                              |
-| 2   | Chat UI                       | Streaming 對話介面                                                                        |
+| 1   | React + Vite 專案建置         | 基本頁面路由（react-router-dom）                                                          |
+| 2   | Chat UI                       | Streaming 對話介面（SSE consumer）                                                        |
 | 3   | 股票圖表                      | K 線圖 + 技術指標                                                                         |
 | 4   | Dashboard 頁面                | 關鍵數據一覽                                                                              |
 | 5   | Firebase Auth 前端登入        | Google / Email 登入，取得 ID Token                                                        |
 | 6   | 後端 API 驗證（Firebase JWT） | `dependencies.py` 加入 `verify_token` Dependency，所有 `/api/*` 路由強制驗證 Bearer Token |
-| 7   | CORS 收斂                     | `allow_origins` 限縮為 Vercel 前端網域                                                    |
+| 7   | CORS 收斂                     | `allow_origins` 限縮為 Firebase Hosting 前端網域                                          |
 | 8   | Cloud Run 關閉公開存取        | 移除 `--allow-unauthenticated`，改由前端帶 Token 存取                                     |
-| 9   | Vercel 部署                   | 前端上線                                                                                  |
+| 9   | Firebase Hosting 部署         | `vite build` → `firebase deploy`，前端上線                                                |
 
 > **安全設計說明：**
 >
@@ -624,6 +632,7 @@ executor = AgentExecutor(agent=agent, tools=tools, verbose=True)
 > - 後端 `dependencies.py` 使用 Firebase Admin SDK 的 `auth.verify_id_token()` 驗證
 > - `/health` 保持公開（給 Cloud Run health check 用）
 > - `/docs`（Swagger UI）在正式環境關閉
+> - Firebase Hosting 與 Firebase Auth 同專案，無需額外 CORS 設定即可使用 Firebase SDK
 
 **✅ 驗收**：完整的 Web App，需登入才能使用，未登入呼叫 API 回傳 401
 
@@ -650,7 +659,7 @@ Firebase Firestore          → 免費額度（50K reads/day）
 Gemini 2.0 Flash API        → 免費額度（1,500 requests/day）
 text-embedding-004           → 免費額度
 Cloud Run                    → 免費額度（200萬次 requests/month）
-Vercel                       → 免費方案
+Firebase Hosting             → 免費額度（10GB storage / 360MB/day transfer）
 GitHub                       → 免費
 ──────────────────────────────────────────────
 總計：$0/月
@@ -662,7 +671,7 @@ GitHub                       → 免費
 Firebase Firestore           → ~$0-5（低用量）
 Gemini API                   → ~$3-5（超出免費額度部分）
 Cloud Run                    → ~$3-5（低 traffic）
-Vercel                       → 免費
+Firebase Hosting             → 免費（個人用量極低）
 ──────────────────────────────────────────────
 總計：~$5-15/月
 ```
@@ -673,7 +682,7 @@ Vercel                       → 免費
 Firebase Firestore           → ~$5-10
 Gemini API                   → ~$5-10
 Cloud Run                    → ~$5-10
-Vercel                       → 免費
+Firebase Hosting             → ~$1-3（超出免費額度）
 ──────────────────────────────────────────────
 總計：~$15-30/月
 ```
@@ -701,7 +710,7 @@ Vercel                       → 免費
 Phase 1 ──▶ Python 基礎、FastAPI、Embedding、Vector DB、RAG Pipeline
 Phase 2 ──▶ 資料處理（Pandas）、外部 API 整合、技術指標計算
 Phase 3 ──▶ LangChain Agent、Tool Calling、SSE Streaming、Docker、GCP 部署
-Phase 4 ──▶ 前後端整合、即時串流 UI、資料視覺化（K 線圖）
+Phase 4 ──▶ React + Vite、Firebase Auth、前後端整合、即時串流 UI、資料視覺化（K 線圖）
 Phase 5 ──▶ 爬蟲、排程任務、系統維運、效能優化
 ```
 

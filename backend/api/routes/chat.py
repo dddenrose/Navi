@@ -3,9 +3,10 @@
 import json
 import logging
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 
+from api.dependencies import verify_firebase_token
 from models.schemas import ChatRequest
 from services.agent_service import run_agent
 from services.conversation_service import (
@@ -42,7 +43,7 @@ async def _sse_generator(
 
 
 @router.post("/chat")
-async def chat(request: ChatRequest):
+async def chat(request: ChatRequest, _user: dict = Depends(verify_firebase_token)):
     """與 Navi 對話，回傳 SSE streaming response.
 
     - 首次對話不帶 conversation_id → 自動產生
@@ -63,13 +64,13 @@ async def chat(request: ChatRequest):
 
 
 @router.get("/conversations")
-async def get_conversations(limit: int = 20):
+async def get_conversations(limit: int = 20, _user: dict = Depends(verify_firebase_token)):
     """列出最近的對話紀錄."""
     return list_conversations(limit=limit)
 
 
 @router.delete("/conversations/{conversation_id}")
-async def remove_conversation(conversation_id: str):
+async def remove_conversation(conversation_id: str, _user: dict = Depends(verify_firebase_token)):
     """刪除指定對話."""
     deleted = delete_conversation(conversation_id)
     return {"deleted": deleted, "conversation_id": conversation_id}

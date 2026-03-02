@@ -3,8 +3,9 @@
 import logging
 from dataclasses import asdict
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
+from api.dependencies import verify_firebase_token
 from models.schemas import FundamentalResponse, StockOverview, TechnicalResponse
 from services.stock_service import (
     get_fundamental_data,
@@ -14,7 +15,11 @@ from services.stock_service import (
 )
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/api/stock", tags=["stock"])
+router = APIRouter(
+    prefix="/api/stock",
+    tags=["stock"],
+    dependencies=[Depends(verify_firebase_token)],
+)
 
 
 @router.get("/{ticker}", response_model=StockOverview)
