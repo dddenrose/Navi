@@ -4,17 +4,30 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from api.routes import chat, knowledge, stock
+from config import settings
+
+# 正式環境關閉 Swagger /docs 與 /redoc，避免暴露 API 結構
+_docs_url = "/docs" if settings.debug else None
+_redoc_url = "/redoc" if settings.debug else None
 
 app = FastAPI(
     title="Navi API",
     description="🧚 AI-Powered Stock Analyzer — Hey! Listen!",
     version="0.1.0",
+    docs_url=_docs_url,
+    redoc_url=_redoc_url,
 )
 
-# CORS — 開發期允許所有來源，上線後限縮
+# CORS — 由 CORS_ORIGINS 環境變數控制，逗號分隔
+# 範例：CORS_ORIGINS=https://navi.vercel.app,https://localhost:3000
+_allowed_origins: list[str] = (
+    [o.strip() for o in settings.cors_origins.split(",") if o.strip()]
+    if settings.cors_origins
+    else ["*"]  # 若未設定則開放（本機開發用）
+)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -33,4 +46,5 @@ async def root():
 
 @app.get("/health", tags=["health"])
 async def health():
+    """公開 endpoint，供 Cloud Run health check 使用."""
     return {"status": "ok"}
