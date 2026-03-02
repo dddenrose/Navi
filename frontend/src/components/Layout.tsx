@@ -72,7 +72,7 @@ export default function Layout() {
           className="px-6 pt-6 pb-5"
           style={{ borderBottom: "1px solid var(--border)" }}
         >
-          <div className="flex items-center gap-2.5">
+            <div className="flex items-center gap-3">
             <div
               className="w-8 h-8 rounded-lg flex items-center justify-center text-base flex-shrink-0"
               style={{
@@ -92,7 +92,7 @@ export default function Layout() {
         </div>
 
         {/* Nav items */}
-        <nav className="flex-1 px-4 py-5 space-y-1.5">
+        <nav className="flex-1 px-4 py-6 space-y-2">
           {navItems.map(({ to, label, icon }) => (
             <NavLink
               key={to}
