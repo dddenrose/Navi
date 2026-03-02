@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   LineChart,
@@ -15,6 +15,21 @@ import {
   getStockTechnicals,
   getStockFundamentals,
 } from "@/lib/api";
+import StatCard from "@/components/StatCard";
+
+// rendering-hoist-jsx: pure utility functions hoisted to module level
+// (defined inside component = recreated on every render)
+const fmtNum = (n?: number | null, decimals = 2) =>
+  n != null ? n.toFixed(decimals) : "-";
+const fmtPct = (n?: number | null) =>
+  n != null ? `${n.toFixed(2)}%` : "-";
+const fmtLarge = (n?: number | null) => {
+  if (n == null) return "-";
+  if (n >= 1e12) return `$${(n / 1e12).toFixed(2)}T`;
+  if (n >= 1e9) return `$${(n / 1e9).toFixed(2)}B`;
+  if (n >= 1e6) return `$${(n / 1e6).toFixed(2)}M`;
+  return `$${n.toFixed(0)}`;
+};
 
 interface StockPrice {
   symbol: string;
@@ -112,18 +127,8 @@ export default function Stock() {
     navigate(`/stock/${upper}`, { replace: true });
   };
 
-  const fmtNum = (n?: number | null, decimals = 2) =>
-    n != null ? n.toFixed(decimals) : "-";
-  const fmtPct = (n?: number | null) => (n != null ? `${n.toFixed(2)}%` : "-");
-  const fmtLarge = (n?: number | null) => {
-    if (n == null) return "-";
-    if (n >= 1e12) return `$${(n / 1e12).toFixed(2)}T`;
-    if (n >= 1e9) return `$${(n / 1e9).toFixed(2)}B`;
-    if (n >= 1e6) return `$${(n / 1e6).toFixed(2)}M`;
-    return `$${n.toFixed(0)}`;
-  };
-
-  const isPositive = (priceData?.change ?? 0) >= 0;
+  // rerender-derived-state: derive from state during render
+  const isPositive = useMemo(() => (priceData?.change ?? 0) >= 0, [priceData?.change]);
 
   return (
     <div className="px-10 py-10 max-w-5xl mx-auto animate-fade-up">
@@ -235,11 +240,11 @@ export default function Stock() {
                 </p>
               </div>
               <div className="text-right">
-                <div className="text-2xl font-bold text-white tracking-tight">
+                <div className="text-3xl font-bold text-white tracking-tight tabular-nums">
                   ${fmtNum(priceData.current_price)}
                 </div>
                 <div
-                  className={`text-sm font-medium mt-2 ${
+                  className={`text-sm font-medium tabular-nums mt-2 ${
                     isPositive ? "text-emerald-400" : "text-red-400"
                   }`}
                 >
@@ -336,19 +341,8 @@ export default function Stock() {
                 { label: "52週高點", value: `$${fmtNum(priceData.high_52w)}` },
                 { label: "52週低點", value: `$${fmtNum(priceData.low_52w)}` },
               ].map(({ label, value }) => (
-                <div
-                  key={label}
-                  className="rounded-2xl p-5"
-                  style={{
-                    background: "rgba(255,255,255,0.03)",
-                    border: "1px solid var(--border)",
-                  }}
-                >
-                  <p className="text-xs text-slate-600 mb-2">{label}</p>
-                  <p className="text-sm font-semibold text-slate-200">
-                    {value}
-                  </p>
-                </div>
+                // rerender-memo: StatCard is memoized
+                <StatCard key={label} label={label} value={value} />
               ))}
             </div>
           )}
@@ -577,19 +571,12 @@ export default function Stock() {
                   { label: "ROE", value: fmtPct(fundamentalData.roe) },
                   { label: "營收", value: fmtLarge(fundamentalData.revenue) },
                 ].map(({ label, value }) => (
-                  <div
+                  <StatCard
                     key={label}
-                    className="rounded-2xl p-5"
-                    style={{
-                      background: "rgba(255,255,255,0.03)",
-                      border: "1px solid var(--border)",
-                    }}
-                  >
-                    <p className="text-xs text-slate-500 mb-2">{label}</p>
-                    <p className="text-sm font-semibold text-slate-100">
-                      {value}
-                    </p>
-                  </div>
+                    label={label}
+                    value={value}
+                    valueColor="text-slate-100"
+                  />
                 ))}
               </div>
             </div>

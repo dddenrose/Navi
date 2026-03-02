@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "@/store/authStore";
 
@@ -14,12 +15,13 @@ export default function Dashboard() {
   const { user } = useAuthStore();
   const navigate = useNavigate();
 
-  const greeting = () => {
+  // rerender-derived-state-no-effect: derive during render, not in a function called every time
+  const greeting = useMemo(() => {
     const hour = new Date().getHours();
     if (hour < 12) return "早安";
     if (hour < 18) return "午安";
     return "晚安";
-  };
+  }, []);
 
   return (
     <div className="px-10 py-10 max-w-4xl mx-auto animate-fade-up">
@@ -34,7 +36,7 @@ export default function Dashboard() {
           })}
         </p>
         <h1 className="text-3xl font-semibold text-slate-100">
-          {greeting()}，
+          {greeting}，
           <span className="gradient-text">{user?.displayName ?? "投資人"}</span>
         </h1>
         <p className="text-slate-500 text-sm mt-3">

@@ -21,7 +21,7 @@ body {
   background-color: var(--bg-base);
   color: #f1f5f9;
   font-family:
-    "Inter",
+    "Plus Jakarta Sans",
     system-ui,
     -apple-system,
     sans-serif;
@@ -143,4 +143,11 @@ body {
   outline: none;
   border-color: var(--primary);
   box-shadow: 0 0 0 3px var(--glow);
+}
+
+/* ── Tabular numbers (JetBrains Mono for data) ───── */
+.tabular-nums {
+  font-family: "JetBrains Mono", monospace;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
 }

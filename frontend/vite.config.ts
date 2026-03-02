@@ -11,4 +11,17 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  build: {
+    // Split heavy vendor libs into separate chunks (bundle-dynamic-imports)
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          "vendor-charts": ["recharts"],
+          "vendor-firebase": ["firebase/app", "firebase/auth"],
+          "vendor-router": ["react-router-dom"],
+        },
+      },
+    },
+    chunkSizeWarningLimit: 600,
+  },
 });
