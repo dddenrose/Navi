@@ -605,16 +605,27 @@ executor = AgentExecutor(agent=agent, tools=tools, verbose=True)
 
 ### Phase 4 — 前端 Dashboard（第 8-10 週）
 
-| #   | 任務             | 產出               |
-| --- | ---------------- | ------------------ |
-| 1   | Next.js 專案建置 | 基本頁面路由       |
-| 2   | Chat UI          | Streaming 對話介面 |
-| 3   | 股票圖表         | K 線圖 + 技術指標  |
-| 4   | Dashboard 頁面   | 關鍵數據一覽       |
-| 5   | 認證整合         | Firebase Auth      |
-| 6   | Vercel 部署      | 前端上線           |
+| #   | 任務                          | 產出                                                                                      |
+| --- | ----------------------------- | ----------------------------------------------------------------------------------------- |
+| 1   | Next.js 專案建置              | 基本頁面路由                                                                              |
+| 2   | Chat UI                       | Streaming 對話介面                                                                        |
+| 3   | 股票圖表                      | K 線圖 + 技術指標                                                                         |
+| 4   | Dashboard 頁面                | 關鍵數據一覽                                                                              |
+| 5   | Firebase Auth 前端登入        | Google / Email 登入，取得 ID Token                                                        |
+| 6   | 後端 API 驗證（Firebase JWT） | `dependencies.py` 加入 `verify_token` Dependency，所有 `/api/*` 路由強制驗證 Bearer Token |
+| 7   | CORS 收斂                     | `allow_origins` 限縮為 Vercel 前端網域                                                    |
+| 8   | Cloud Run 關閉公開存取        | 移除 `--allow-unauthenticated`，改由前端帶 Token 存取                                     |
+| 9   | Vercel 部署                   | 前端上線                                                                                  |
 
-**✅ 驗收**：完整的 Web App，可以登入、對話、查看圖表
+> **安全設計說明：**
+>
+> - 前端登入後呼叫 `firebase.auth().currentUser.getIdToken()` 取得 JWT
+> - 每個 API 請求帶 `Authorization: Bearer <ID_TOKEN>` header
+> - 後端 `dependencies.py` 使用 Firebase Admin SDK 的 `auth.verify_id_token()` 驗證
+> - `/health` 保持公開（給 Cloud Run health check 用）
+> - `/docs`（Swagger UI）在正式環境關閉
+
+**✅ 驗收**：完整的 Web App，需登入才能使用，未登入呼叫 API 回傳 401
 
 ---
 
