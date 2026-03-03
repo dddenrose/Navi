@@ -8,7 +8,12 @@ const navItems = [
     to: "/dashboard",
     label: "總覽",
     icon: (
-      <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+      <svg
+        viewBox="0 0 20 20"
+        fill="currentColor"
+        className="w-4 h-4"
+        aria-hidden="true"
+      >
         <path d="M2 10a8 8 0 018-8v8h8a8 8 0 11-16 0z" />
         <path d="M12 2.252A8.014 8.014 0 0117.748 8H12V2.252z" />
       </svg>
@@ -18,7 +23,12 @@ const navItems = [
     to: "/chat",
     label: "對話",
     icon: (
-      <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+      <svg
+        viewBox="0 0 20 20"
+        fill="currentColor"
+        className="w-4 h-4"
+        aria-hidden="true"
+      >
         <path
           fillRule="evenodd"
           d="M18 10c0 3.866-3.582 7-8 7a8.841 8.841 0 01-4.083-.98L2 17l1.338-3.123C2.493 12.767 2 11.434 2 10c0-3.866 3.582-7 8-7s8 3.134 8 7zM7 9H5v2h2V9zm8 0h-2v2h2V9zM9 9h2v2H9V9z"
@@ -31,7 +41,12 @@ const navItems = [
     to: "/stock",
     label: "股票",
     icon: (
-      <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+      <svg
+        viewBox="0 0 20 20"
+        fill="currentColor"
+        className="w-4 h-4"
+        aria-hidden="true"
+      >
         <path
           fillRule="evenodd"
           d="M3 3a1 1 0 000 2v8a2 2 0 002 2h2.586l-1.293 1.293a1 1 0 101.414 1.414L10 15.414l2.293 2.293a1 1 0 001.414-1.414L12.414 15H15a2 2 0 002-2V5a1 1 0 100-2H3zm11 4a1 1 0 10-2 0v4a1 1 0 102 0V7zm-3 1a1 1 0 10-2 0v3a1 1 0 102 0V8zM8 9a1 1 0 00-2 0v2a1 1 0 102 0V9z"
@@ -98,7 +113,7 @@ export default function Layout() {
               key={to}
               to={to}
               className={({ isActive }) =>
-                `flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-150 ${
+                `flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors duration-150 ${
                   isActive
                     ? "text-white"
                     : "text-slate-500 hover:text-slate-200 hover:bg-white/5"
@@ -132,6 +147,8 @@ export default function Layout() {
             {user?.photoURL ? (
               <img
                 src={user.photoURL}
+                width={28}
+                height={28}
                 className="w-7 h-7 rounded-full flex-shrink-0 ring-1 ring-white/10"
                 alt="avatar"
               />
@@ -160,6 +177,7 @@ export default function Layout() {
               viewBox="0 0 20 20"
               fill="currentColor"
               className="w-3.5 h-3.5"
+              aria-hidden="true"
             >
               <path
                 fillRule="evenodd"
@@ -174,6 +192,7 @@ export default function Layout() {
 
       {/* Main content */}
       <main
+        id="main-content"
         className="flex-1 overflow-auto"
         style={{ background: "var(--bg-base)" }}
       >

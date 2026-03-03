@@ -30,6 +30,9 @@ export default function Chat() {
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  // rerender-use-ref-transient-values: accumulate streaming content in ref, flush via rAF
+  const streamContentRef = useRef("");
+  const rafRef = useRef<number | null>(null);
 
   // Scroll to bottom on new messages
   useEffect(() => {
@@ -84,20 +87,32 @@ export default function Chat() {
       conversationId: currentConvId,
       onChunk: (chunk) => {
         fullContent += chunk;
-        setMessages((prev) => {
-          const updated = [...prev];
-          const last = updated[updated.length - 1];
-          if (last.role === "assistant") {
-            updated[updated.length - 1] = {
-              ...last,
-              content: fullContent,
-              streaming: true,
-            };
-          }
-          return updated;
-        });
+        streamContentRef.current = fullContent;
+        if (rafRef.current == null) {
+          rafRef.current = requestAnimationFrame(() => {
+            rafRef.current = null;
+            const content = streamContentRef.current;
+            setMessages((prev) => {
+              const updated = [...prev];
+              const last = updated[updated.length - 1];
+              if (last.role === "assistant") {
+                updated[updated.length - 1] = {
+                  ...last,
+                  content,
+                  streaming: true,
+                };
+              }
+              return updated;
+            });
+          });
+        }
       },
       onDone: (convId) => {
+        // Flush any pending rAF
+        if (rafRef.current != null) {
+          cancelAnimationFrame(rafRef.current);
+          rafRef.current = null;
+        }
         setCurrentConvId(convId);
         navigate(`/chat/${convId}`, { replace: true });
         setMessages((prev) => {
@@ -176,23 +191,24 @@ export default function Chat() {
         >
           <button
             onClick={startNewChat}
-            className="w-full flex items-center justify-center gap-2 rounded-xl py-3 text-xs font-medium text-white transition-all hover:brightness-110"
+            className="w-full flex items-center justify-center gap-2 rounded-xl py-3 text-xs font-medium text-white transition-opacity hover:opacity-90"
             style={{ background: "linear-gradient(135deg, #6366f1, #8b5cf6)" }}
           >
             <svg
               viewBox="0 0 16 16"
               fill="currentColor"
               className="w-3.5 h-3.5"
+              aria-hidden="true"
             >
               <path d="M8 2a.5.5 0 01.5.5v5h5a.5.5 0 010 1h-5v5a.5.5 0 01-1 0v-5h-5a.5.5 0 010-1h5v-5A.5.5 0 018 2z" />
             </svg>
             新對話
           </button>
         </div>
-        <div className="flex-1 overflow-y-auto p-3 space-y-1.5">
+        <div className="flex-1 overflow-y-auto p-3 space-y-2">
           {sidebarLoading ? (
             <p className="text-xs text-slate-700 px-3 py-4 text-center">
-              載入中...
+              載入中…
             </p>
           ) : conversations.length === 0 ? (
             <p className="text-xs text-slate-700 px-3 py-4 text-center">
@@ -200,14 +216,15 @@ export default function Chat() {
             </p>
           ) : (
             conversations.map((conv) => (
-              <div
+              <button
+                type="button"
                 key={conv.conversation_id}
                 onClick={() => {
                   setCurrentConvId(conv.conversation_id);
                   navigate(`/chat/${conv.conversation_id}`);
                   setMessages([]);
                 }}
-                className="group flex items-center justify-between px-3 py-3.5 rounded-xl cursor-pointer transition-all"
+                className="group w-full flex items-center justify-between px-3 py-3.5 rounded-xl cursor-pointer transition-colors text-left"
                 style={
                   currentConvId === conv.conversation_id
                     ? {
@@ -232,14 +249,16 @@ export default function Chat() {
                   </p>
                 </div>
                 <button
+                  type="button"
                   onClick={(e) =>
                     handleDeleteConversation(conv.conversation_id, e)
                   }
-                  className="opacity-0 group-hover:opacity-100 text-slate-700 hover:text-red-400 transition-all ml-1 flex-shrink-0 text-xs"
+                  aria-label="刪除對話"
+                  className="opacity-0 group-hover:opacity-100 text-slate-700 hover:text-red-400 transition-opacity ml-1 flex-shrink-0 text-xs"
                 >
                   ✕
                 </button>
-              </div>
+              </button>
             ))
           )}
         </div>
@@ -249,7 +268,7 @@ export default function Chat() {
       <div className="flex-1 flex flex-col min-w-0">
         {/* Messages */}
         <div className="flex-1 overflow-y-auto px-8 py-8">
-          {messages.length === 0 && (
+          {messages.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-center animate-fade-in">
               <div
                 className="w-20 h-20 rounded-2xl flex items-center justify-center text-4xl mb-7"
@@ -261,15 +280,18 @@ export default function Chat() {
               >
                 🧭
               </div>
-              <h2 className="text-xl font-semibold text-slate-200 mb-3">
+              <h2
+                className="text-xl font-semibold text-slate-200 mb-3"
+                style={{ textWrap: "balance" }}
+              >
                 Navi 投資助理
               </h2>
               <p className="text-slate-500 text-sm max-w-xs leading-loose">
                 您好！我可以幫您分析股票、解釋技術指標，以及回答投資相關問題。
               </p>
             </div>
-          )}
-          <div className="max-w-3xl mx-auto space-y-6">
+          ) : null}
+          <div className="max-w-3xl mx-auto space-y-6" aria-live="polite">
             {messages.map((msg, i) => (
               <div
                 key={i}
@@ -279,6 +301,7 @@ export default function Chat() {
                 {msg.role === "assistant" && (
                   <div
                     className="w-7 h-7 rounded-lg flex items-center justify-center text-sm flex-shrink-0 mt-0.5"
+                    aria-hidden="true"
                     style={{
                       background: "linear-gradient(135deg, #6366f1, #8b5cf6)",
                     }}
@@ -321,28 +344,33 @@ export default function Chat() {
           style={{ borderTop: "1px solid var(--border)" }}
         >
           <div
-            className="flex gap-3 max-w-3xl mx-auto items-end rounded-2xl px-5 py-4 transition-all"
+            className="flex gap-3 max-w-3xl mx-auto items-end rounded-2xl px-5 py-4 transition-[border-color,box-shadow]"
             style={{
               background: "rgba(255,255,255,0.04)",
               border: `1px solid ${streaming ? "rgba(99,102,241,0.3)" : "var(--border)"}`,
               boxShadow: streaming ? "0 0 0 3px rgba(99,102,241,0.1)" : "none",
             }}
           >
+            <label htmlFor="chat-input" className="sr-only">
+              輸入問題
+            </label>
             <textarea
+              id="chat-input"
               ref={textareaRef}
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="輸入問題... (Enter 發送，Shift+Enter 換行)"
+              placeholder="輸入問題… (Enter 發送，Shift+Enter 換行)"
               disabled={streaming}
               rows={1}
-              className="flex-1 bg-transparent text-sm text-slate-200 placeholder-slate-700 resize-none focus:outline-none disabled:opacity-40"
+              className="flex-1 bg-transparent text-sm text-slate-200 placeholder-slate-700 resize-none focus:outline-none focus-visible:outline-none disabled:opacity-40"
               style={{ minHeight: "24px", maxHeight: "120px" }}
             />
             <button
               onClick={handleSend}
               disabled={!input.trim() || streaming}
-              className="flex-shrink-0 w-8 h-8 rounded-xl flex items-center justify-center transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+              aria-label="發送訊息"
+              className="flex-shrink-0 w-8 h-8 rounded-xl flex items-center justify-center transition-opacity disabled:opacity-30 disabled:cursor-not-allowed"
               style={{
                 background:
                   !input.trim() || streaming
@@ -359,6 +387,7 @@ export default function Chat() {
                   viewBox="0 0 20 20"
                   fill="currentColor"
                   className="w-3.5 h-3.5 text-slate-500"
+                  aria-hidden="true"
                 >
                   <path
                     fillRule="evenodd"
@@ -371,6 +400,7 @@ export default function Chat() {
                   viewBox="0 0 20 20"
                   fill="currentColor"
                   className="w-3.5 h-3.5 text-white"
+                  aria-hidden="true"
                 >
                   <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" />
                 </svg>
