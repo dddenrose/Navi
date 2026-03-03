@@ -76,7 +76,12 @@ export default function Login() {
           >
             <span className="text-3xl">🧭</span>
           </div>
-          <h1 className="text-2xl font-bold gradient-text">Navi</h1>
+          <h1
+            className="text-2xl font-bold gradient-text"
+            style={{ textWrap: "balance" }}
+          >
+            Navi
+          </h1>
           <p className="text-slate-500 text-sm mt-2.5 tracking-wide">
             AI 投資分析助理
           </p>
@@ -84,12 +89,17 @@ export default function Login() {
 
         {/* Card */}
         <div className="glass-md rounded-2xl p-8 shadow-2xl">
-          <h2 className="text-base font-semibold text-slate-200 mb-6">
+          <h2
+            className="text-base font-semibold text-slate-200 mb-6"
+            style={{ textWrap: "balance" }}
+          >
             登入帳號
           </h2>
 
           {error && (
             <div
+              role="alert"
+              aria-live="polite"
               className="mb-4 px-4 py-3 rounded-xl text-sm text-red-300"
               style={{
                 background: "rgba(239,68,68,0.08)",
@@ -102,26 +112,43 @@ export default function Login() {
 
           {/* Email/Password */}
           <form onSubmit={handleEmailSignIn} className="space-y-4 mb-5">
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="電子郵件"
-              required
-              className="input-field w-full rounded-xl px-4 py-3.5 text-sm text-slate-100 placeholder-slate-600 color-scheme-dark"
-            />
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="密碼"
-              required
-              className="input-field w-full rounded-xl px-4 py-3.5 text-sm text-slate-100 placeholder-slate-600"
-            />
+            <div>
+              <label htmlFor="login-email" className="sr-only">
+                電子郵件
+              </label>
+              <input
+                id="login-email"
+                type="email"
+                name="email"
+                autoComplete="email"
+                spellCheck={false}
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="電子郵件（例：user@example.com）…"
+                required
+                className="input-field w-full rounded-xl px-4 py-3.5 text-sm text-slate-100 placeholder-slate-600 color-scheme-dark"
+              />
+            </div>
+            <div>
+              <label htmlFor="login-password" className="sr-only">
+                密碼
+              </label>
+              <input
+                id="login-password"
+                type="password"
+                name="password"
+                autoComplete="current-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="密碼…"
+                required
+                className="input-field w-full rounded-xl px-4 py-3.5 text-sm text-slate-100 placeholder-slate-600"
+              />
+            </div>
             <button
               type="submit"
               disabled={submitting}
-              className="w-full rounded-xl py-3.5 text-sm font-semibold text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+              className="w-full rounded-xl py-3.5 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed"
               style={{
                 background: "linear-gradient(135deg, #6366f1, #8b5cf6)",
                 boxShadow: submitting
@@ -129,7 +156,7 @@ export default function Login() {
                   : "0 4px 20px rgba(99,102,241,0.35)",
               }}
             >
-              {submitting ? "登入中..." : "登入"}
+              {submitting ? "登入中…" : "登入"}
             </button>
           </form>
 
@@ -150,13 +177,13 @@ export default function Login() {
           <button
             onClick={handleGoogleSignIn}
             disabled={submitting}
-            className="w-full flex items-center justify-center gap-2.5 rounded-xl py-2.5 text-sm font-medium text-slate-200 transition-all disabled:opacity-40 hover:brightness-110"
+            className="w-full flex items-center justify-center gap-2.5 rounded-xl py-2.5 text-sm font-medium text-slate-200 transition-opacity hover:opacity-80 disabled:opacity-40"
             style={{
               background: "rgba(255,255,255,0.06)",
               border: "1px solid rgba(255,255,255,0.1)",
             }}
           >
-            <svg viewBox="0 0 24 24" className="w-4 h-4">
+            <svg viewBox="0 0 24 24" className="w-4 h-4" aria-hidden="true">
               <path
                 d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
                 fill="#4285F4"

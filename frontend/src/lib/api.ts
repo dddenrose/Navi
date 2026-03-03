@@ -14,6 +14,12 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
   };
 }
 
+/**
+ * Pre-fetch headers once, then pass to multiple API calls
+ * to avoid redundant getIdToken() round-trips.
+ */
+export { getAuthHeaders };
+
 // ─── Knowledge ──────────────────────────────────────────────────────────────
 
 export async function searchKnowledge(query: string) {
@@ -30,26 +36,37 @@ export async function searchKnowledge(query: string) {
 
 // ─── Stock ───────────────────────────────────────────────────────────────────
 
-export async function getStockPrice(symbol: string) {
-  const headers = await getAuthHeaders();
-  const res = await fetch(`${BASE_URL}/api/stock/price/${symbol}`, { headers });
-  if (!res.ok) throw new Error(await res.text());
-  return res.json();
-}
-
-export async function getStockTechnicals(symbol: string) {
-  const headers = await getAuthHeaders();
-  const res = await fetch(`${BASE_URL}/api/stock/technical/${symbol}`, {
-    headers,
+export async function getStockPrice(
+  symbol: string,
+  headers?: Record<string, string>,
+) {
+  const h = headers ?? (await getAuthHeaders());
+  const res = await fetch(`${BASE_URL}/api/stock/price/${symbol}`, {
+    headers: h,
   });
   if (!res.ok) throw new Error(await res.text());
   return res.json();
 }
 
-export async function getStockFundamentals(symbol: string) {
-  const headers = await getAuthHeaders();
+export async function getStockTechnicals(
+  symbol: string,
+  headers?: Record<string, string>,
+) {
+  const h = headers ?? (await getAuthHeaders());
+  const res = await fetch(`${BASE_URL}/api/stock/technical/${symbol}`, {
+    headers: h,
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+export async function getStockFundamentals(
+  symbol: string,
+  headers?: Record<string, string>,
+) {
+  const h = headers ?? (await getAuthHeaders());
   const res = await fetch(`${BASE_URL}/api/stock/fundamental/${symbol}`, {
-    headers,
+    headers: h,
   });
   if (!res.ok) throw new Error(await res.text());
   return res.json();

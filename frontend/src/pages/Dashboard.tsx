@@ -1,5 +1,4 @@
-import { useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { useAuthStore } from "@/store/authStore";
 
 const quickStocks = ["AAPL", "TSLA", "NVDA", "MSFT", "AMZN", "GOOGL"];
@@ -13,15 +12,10 @@ const quickQuestions = [
 
 export default function Dashboard() {
   const { user } = useAuthStore();
-  const navigate = useNavigate();
 
-  // rerender-derived-state-no-effect: derive during render, not in a function called every time
-  const greeting = useMemo(() => {
-    const hour = new Date().getHours();
-    if (hour < 12) return "早安";
-    if (hour < 18) return "午安";
-    return "晚安";
-  }, []);
+  // rerender-simple-expression-in-memo: trivial expression, no memo needed
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? "早安" : hour < 18 ? "午安" : "晚安";
 
   return (
     <div className="px-10 py-10 max-w-4xl mx-auto animate-fade-up">
@@ -35,7 +29,10 @@ export default function Dashboard() {
             day: "numeric",
           })}
         </p>
-        <h1 className="text-3xl font-semibold text-slate-100">
+        <h1
+          className="text-3xl font-semibold text-slate-100"
+          style={{ textWrap: "balance" }}
+        >
           {greeting}，
           <span className="gradient-text">{user?.displayName ?? "投資人"}</span>
         </h1>
@@ -46,9 +43,9 @@ export default function Dashboard() {
 
       {/* Quick actions */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-14">
-        <button
-          onClick={() => navigate("/chat")}
-          className="group relative rounded-2xl p-7 text-left transition-all duration-200 overflow-hidden hover:scale-[1.02]"
+        <Link
+          to="/chat"
+          className="group relative rounded-2xl p-7 text-left transition-transform duration-200 overflow-hidden hover:scale-[1.02]"
           style={{
             background:
               "linear-gradient(135deg, rgba(99,102,241,0.2), rgba(139,92,246,0.12))",
@@ -77,14 +74,17 @@ export default function Dashboard() {
               向 AI 提問投資策略、技術指標、個股分析
             </p>
           </div>
-          <div className="absolute bottom-5 right-5 text-indigo-400/50 group-hover:text-indigo-400 transition-colors text-xl">
+          <div
+            className="absolute bottom-5 right-5 text-indigo-400/50 group-hover:text-indigo-400 transition-colors text-xl"
+            aria-hidden="true"
+          >
             →
           </div>
-        </button>
+        </Link>
 
-        <button
-          onClick={() => navigate("/stock")}
-          className="group relative rounded-2xl p-7 text-left transition-all duration-200 overflow-hidden hover:scale-[1.02]"
+        <Link
+          to="/stock"
+          className="group relative rounded-2xl p-7 text-left transition-transform duration-200 overflow-hidden hover:scale-[1.02]"
           style={{
             background: "rgba(255,255,255,0.03)",
             border: "1px solid var(--border)",
@@ -111,57 +111,55 @@ export default function Dashboard() {
               即時股價、技術指標及基本面財務數據
             </p>
           </div>
-          <div className="absolute bottom-5 right-5 text-slate-700 group-hover:text-slate-500 transition-colors text-xl">
+          <div
+            className="absolute bottom-5 right-5 text-slate-700 group-hover:text-slate-500 transition-colors text-xl"
+            aria-hidden="true"
+          >
             →
           </div>
-        </button>
+        </Link>
       </div>
 
       {/* Quick stock chips */}
       <div className="mb-14">
-        <h2 className="text-xs font-medium text-slate-600 mb-5 tracking-widest uppercase">
+        <h2
+          className="text-xs font-medium text-slate-600 mb-5 tracking-widest uppercase"
+          style={{ textWrap: "balance" }}
+        >
           快速查詢股票
         </h2>
         <div className="flex flex-wrap gap-3">
           {quickStocks.map((symbol) => (
-            <button
+            <Link
               key={symbol}
-              onClick={() => navigate(`/stock/${symbol}`)}
-              className="px-5 py-2 rounded-full text-xs font-medium text-slate-400 hover:text-slate-100 transition-all hover:scale-105"
+              to={`/stock/${symbol}`}
+              className="stock-chip px-5 py-2 rounded-full text-xs font-medium text-slate-400 hover:text-slate-100 hover:scale-105"
               style={{
                 background: "rgba(255,255,255,0.04)",
                 border: "1px solid var(--border)",
               }}
-              onMouseEnter={(e) => {
-                (e.target as HTMLElement).style.borderColor =
-                  "rgba(99,102,241,0.4)";
-                (e.target as HTMLElement).style.boxShadow =
-                  "0 0 12px rgba(99,102,241,0.15)";
-              }}
-              onMouseLeave={(e) => {
-                (e.target as HTMLElement).style.borderColor = "var(--border)";
-                (e.target as HTMLElement).style.boxShadow = "none";
-              }}
             >
               {symbol}
-            </button>
+            </Link>
           ))}
         </div>
       </div>
 
       {/* Quick questions */}
       <div>
-        <h2 className="text-xs font-medium text-slate-600 mb-5 tracking-widest uppercase">
+        <h2
+          className="text-xs font-medium text-slate-600 mb-5 tracking-widest uppercase"
+          style={{ textWrap: "balance" }}
+        >
           常見投資問題
         </h2>
         <div className="space-y-3">
           {quickQuestions.map((q, i) => (
-            <button
+            <Link
               key={q}
-              onClick={() =>
-                navigate("/chat", { state: { initialMessage: q } })
-              }
-              className="group w-full text-left px-5 py-4 rounded-2xl text-sm text-slate-400 hover:text-slate-100 transition-all flex items-center justify-between"
+              to="/chat"
+              state={{ initialMessage: q }}
+              className="group w-full text-left px-5 py-4 rounded-2xl text-sm text-slate-400 hover:text-slate-100 transition-colors flex items-center justify-between"
               style={{
                 background: "rgba(255,255,255,0.025)",
                 border: "1px solid var(--border)",
@@ -177,14 +175,15 @@ export default function Dashboard() {
               <svg
                 viewBox="0 0 16 16"
                 fill="currentColor"
-                className="w-3.5 h-3.5 text-slate-700 group-hover:text-slate-400 group-hover:translate-x-0.5 transition-all flex-shrink-0"
+                className="w-3.5 h-3.5 text-slate-700 group-hover:text-slate-400 group-hover:translate-x-0.5 transition-[color,transform] flex-shrink-0"
+                aria-hidden="true"
               >
                 <path
                   fillRule="evenodd"
                   d="M4 8a.5.5 0 01.5-.5h5.793L8.146 5.354a.5.5 0 11.708-.708l3 3a.5.5 0 010 .708l-3 3a.5.5 0 01-.708-.708L10.293 8.5H4.5A.5.5 0 014 8z"
                 />
               </svg>
-            </button>
+            </Link>
           ))}
         </div>
       </div>

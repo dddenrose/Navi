@@ -11,10 +11,16 @@
   --glow: rgba(99, 102, 241, 0.25);
 }
 
-* {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
+@layer base {
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  html {
+    touch-action: manipulation;
+  }
 }
 
 body {
@@ -109,6 +115,16 @@ body {
   animation: orb-float-2 10s ease-in-out infinite;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-up,
+  .animate-fade-in,
+  .cursor-blink,
+  .orb-1,
+  .orb-2 {
+    animation: none;
+  }
+}
+
 /* ── Glass card ───────────────────────────────────── */
 .glass {
   background: rgba(255, 255, 255, 0.03);
@@ -139,10 +155,41 @@ body {
     border-color 0.2s,
     box-shadow 0.2s;
 }
-.input-field:focus {
+.input-field:focus-visible {
   outline: none;
   border-color: var(--primary);
   box-shadow: 0 0 0 3px var(--glow);
+}
+
+/* ── Global focus ring ────────────────────────────── */
+:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* ── Stock chip hover (replaces JS onMouseEnter/Leave) */
+.stock-chip {
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s,
+    color 0.2s,
+    transform 0.15s;
+}
+.stock-chip:hover {
+  border-color: rgba(99, 102, 241, 0.4) !important;
+  box-shadow: 0 0 12px rgba(99, 102, 241, 0.15);
+}
+
+/* ── Stock search input focus ─────────────────────── */
+.stock-search-input {
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s;
+}
+.stock-search-input:focus-visible {
+  outline: none;
+  border-color: rgba(99, 102, 241, 0.5);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
 }
 
 /* ── Tabular numbers (JetBrains Mono for data) ───── */
