@@ -38,7 +38,7 @@ steps:
       - "asia-east1"
       - "--platform"
       - "managed"
-      - "--allow-unauthenticated"
+      - "--no-allow-unauthenticated"
       - "--service-account"
       - "navi-backend@$PROJECT_ID.iam.gserviceaccount.com"
       - "--memory"
@@ -50,7 +50,7 @@ steps:
       - "--max-instances"
       - "3"
       - "--set-env-vars"
-      - "GOOGLE_CLOUD_PROJECT=$PROJECT_ID,AUTH_REQUIRED=true,DEBUG=false"
+      - "GOOGLE_CLOUD_PROJECT=$PROJECT_ID,AUTH_REQUIRED=true,DEBUG=false,CORS_ORIGINS=https://navi-stock-analyzer.web.app"
 
 images:
   - "asia-east1-docker.pkg.dev/$PROJECT_ID/navi/backend:$SHORT_SHA"
