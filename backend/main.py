@@ -3,7 +3,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from api.routes import chat, knowledge, stock
+from api.routes import chat, knowledge, portfolio, stock
 from config import settings
 
 # 正式環境關閉 Swagger /docs 與 /redoc，避免暴露 API 結構
@@ -38,6 +38,7 @@ app.add_middleware(
 app.include_router(chat.router)
 app.include_router(stock.router)
 app.include_router(knowledge.router)
+app.include_router(portfolio.router)
 
 
 @app.get("/", tags=["health"])
