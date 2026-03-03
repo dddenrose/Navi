@@ -21,8 +21,7 @@ import StatCard from "@/components/StatCard";
 // (defined inside component = recreated on every render)
 const fmtNum = (n?: number | null, decimals = 2) =>
   n != null ? n.toFixed(decimals) : "-";
-const fmtPct = (n?: number | null) =>
-  n != null ? `${n.toFixed(2)}%` : "-";
+const fmtPct = (n?: number | null) => (n != null ? `${n.toFixed(2)}%` : "-");
 const fmtLarge = (n?: number | null) => {
   if (n == null) return "-";
   if (n >= 1e12) return `$${(n / 1e12).toFixed(2)}T`;
@@ -128,7 +127,10 @@ export default function Stock() {
   };
 
   // rerender-derived-state: derive from state during render
-  const isPositive = useMemo(() => (priceData?.change ?? 0) >= 0, [priceData?.change]);
+  const isPositive = useMemo(
+    () => (priceData?.change ?? 0) >= 0,
+    [priceData?.change],
+  );
 
   return (
     <div className="px-10 py-10 max-w-5xl mx-auto animate-fade-up">
