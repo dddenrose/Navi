@@ -1,33 +1,32 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useState, useEffect, useCallback, lazy, Suspense } from "react";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  ReferenceLine,
-} from "recharts";
-import {
+  getAuthHeaders,
   getStockPrice,
   getStockTechnicals,
   getStockFundamentals,
 } from "@/lib/api";
 import StatCard from "@/components/StatCard";
 
+// bundle-dynamic-imports: defer ~240 kB recharts until chart is visible
+const RsiChart = lazy(() => import("@/components/RsiChart"));
+const PriceChart = lazy(() => import("@/components/PriceChart"));
+
 // rendering-hoist-jsx: pure utility functions hoisted to module level
-// (defined inside component = recreated on every render)
-const fmtNum = (n?: number | null, decimals = 2) =>
-  n != null ? n.toFixed(decimals) : "-";
-const fmtPct = (n?: number | null) => (n != null ? `${n.toFixed(2)}%` : "-");
+const numFmt = new Intl.NumberFormat("en-US", {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
+const fmtNum = (n?: number | null) => (n != null ? numFmt.format(n) : "-");
+const fmtPct = (n?: number | null) =>
+  n != null ? `${numFmt.format(n)}%` : "-";
 const fmtLarge = (n?: number | null) => {
   if (n == null) return "-";
-  if (n >= 1e12) return `$${(n / 1e12).toFixed(2)}T`;
-  if (n >= 1e9) return `$${(n / 1e9).toFixed(2)}B`;
-  if (n >= 1e6) return `$${(n / 1e6).toFixed(2)}M`;
-  return `$${n.toFixed(0)}`;
+  if (n >= 1e12) return `$${numFmt.format(n / 1e12)}T`;
+  if (n >= 1e9) return `$${numFmt.format(n / 1e9)}B`;
+  if (n >= 1e6) return `$${numFmt.format(n / 1e6)}M`;
+  return `$${new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(n)}`;
 };
 
 interface StockPrice {
@@ -75,10 +74,13 @@ type Tab = "overview" | "technical" | "fundamental";
 export default function Stock() {
   const { symbol: paramSymbol } = useParams();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [searchInput, setSearchInput] = useState(paramSymbol ?? "");
   const [symbol, setSymbol] = useState(paramSymbol ?? "");
-  const [activeTab, setActiveTab] = useState<Tab>("overview");
+  const activeTab = (searchParams.get("tab") as Tab) || "overview";
+  const setActiveTab = (tab: Tab) =>
+    setSearchParams({ tab }, { replace: true });
 
   const [priceData, setPriceData] = useState<StockPrice | null>(null);
   const [technicalData, setTechnicalData] = useState<Technicals | null>(null);
@@ -96,10 +98,12 @@ export default function Stock() {
     setFundamentalData(null);
 
     try {
+      // Fetch token once, share across parallel requests
+      const headers = await getAuthHeaders();
       const [price, tech, fund] = await Promise.allSettled([
-        getStockPrice(sym),
-        getStockTechnicals(sym),
-        getStockFundamentals(sym),
+        getStockPrice(sym, headers),
+        getStockTechnicals(sym, headers),
+        getStockFundamentals(sym, headers),
       ]);
 
       if (price.status === "fulfilled") setPriceData(price.value);
@@ -126,11 +130,8 @@ export default function Stock() {
     navigate(`/stock/${upper}`, { replace: true });
   };
 
-  // rerender-derived-state: derive from state during render
-  const isPositive = useMemo(
-    () => (priceData?.change ?? 0) >= 0,
-    [priceData?.change],
-  );
+  // rerender-simple-expression-in-memo: trivial boolean, no memo needed
+  const isPositive = (priceData?.change ?? 0) >= 0;
 
   return (
     <div className="px-10 py-10 max-w-5xl mx-auto animate-fade-up">
@@ -141,6 +142,7 @@ export default function Stock() {
             viewBox="0 0 20 20"
             fill="currentColor"
             className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-600 pointer-events-none"
+            aria-hidden="true"
           >
             <path
               fillRule="evenodd"
@@ -148,43 +150,41 @@ export default function Stock() {
               clipRule="evenodd"
             />
           </svg>
+          <label htmlFor="stock-search" className="sr-only">
+            股票代號
+          </label>
           <input
+            id="stock-search"
             type="text"
+            name="symbol"
+            autoComplete="off"
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value.toUpperCase())}
-            placeholder="輸入股票代號 (例: AAPL, TSLA, NVDA)"
-            className="w-full rounded-2xl pl-11 pr-5 py-4 text-sm text-slate-200 placeholder-slate-700"
+            placeholder="輸入股票代號（例：AAPL, TSLA, NVDA）…"
+            className="stock-search-input w-full rounded-2xl pl-11 pr-5 py-4 text-sm text-slate-200 placeholder-slate-700"
             style={{
               background: "rgba(255,255,255,0.04)",
               border: "1px solid var(--border)",
-              outline: "none",
-              transition: "border-color 0.2s, box-shadow 0.2s",
-            }}
-            onFocus={(e) => {
-              e.target.style.borderColor = "rgba(99,102,241,0.5)";
-              e.target.style.boxShadow = "0 0 0 3px rgba(99,102,241,0.12)";
-            }}
-            onBlur={(e) => {
-              e.target.style.borderColor = "var(--border)";
-              e.target.style.boxShadow = "none";
             }}
           />
         </div>
         <button
           type="submit"
           disabled={loading}
-          className="rounded-2xl px-7 py-4 text-sm font-semibold text-white transition-all disabled:opacity-40"
+          className="rounded-2xl px-7 py-4 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-40"
           style={{
             background: "linear-gradient(135deg, #6366f1, #8b5cf6)",
             boxShadow: loading ? "none" : "0 4px 16px rgba(99,102,241,0.3)",
           }}
         >
-          {loading ? "查詢中..." : "查詢"}
+          {loading ? "查詢中…" : "查詢"}
         </button>
       </form>
 
       {error && (
         <div
+          role="alert"
+          aria-live="polite"
           className="mb-8 px-5 py-4 rounded-2xl text-sm text-red-300"
           style={{
             background: "rgba(239,68,68,0.08)",
@@ -223,7 +223,10 @@ export default function Stock() {
             <div className="flex items-start justify-between flex-wrap gap-4">
               <div>
                 <div className="flex items-center gap-3 mb-2">
-                  <h1 className="text-xl font-bold text-white">
+                  <h1
+                    className="text-xl font-bold text-white"
+                    style={{ textWrap: "balance" }}
+                  >
                     {priceData.symbol}
                   </h1>
                   <span
@@ -260,40 +263,18 @@ export default function Stock() {
             {/* Price chart */}
             {priceData.history && priceData.history.length > 0 && (
               <div className="mt-6 h-48">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={priceData.history}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                    <XAxis
-                      dataKey="date"
-                      tick={{ fontSize: 10, fill: "#64748b" }}
-                      tickLine={false}
-                      axisLine={false}
-                    />
-                    <YAxis
-                      tick={{ fontSize: 10, fill: "#64748b" }}
-                      tickLine={false}
-                      axisLine={false}
-                      domain={["auto", "auto"]}
-                    />
-                    <Tooltip
-                      contentStyle={{
-                        background: "rgba(13,20,36,0.95)",
-                        border: "1px solid rgba(255,255,255,0.08)",
-                        borderRadius: "12px",
-                        backdropFilter: "blur(12px)",
-                      }}
-                      labelStyle={{ color: "#64748b", fontSize: "11px" }}
-                      itemStyle={{ color: "#818cf8", fontSize: "12px" }}
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="close"
-                      stroke={isPositive ? "#4ade80" : "#f87171"}
-                      strokeWidth={2}
-                      dot={false}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
+                <Suspense
+                  fallback={
+                    <div className="flex items-center justify-center h-full text-xs text-slate-600">
+                      圖表載入中…
+                    </div>
+                  }
+                >
+                  <PriceChart
+                    history={priceData.history}
+                    isPositive={isPositive}
+                  />
+                </Suspense>
               </div>
             )}
           </div>
@@ -310,7 +291,7 @@ export default function Stock() {
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
-                className="px-6 py-2.5 rounded-xl text-xs font-semibold tracking-wide transition-all"
+                className="px-6 py-2.5 rounded-xl text-xs font-semibold tracking-wide transition-colors"
                 style={
                   activeTab === tab
                     ? {
@@ -332,8 +313,8 @@ export default function Stock() {
           </div>
 
           {/* Tab content */}
-          {activeTab === "overview" && (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {activeTab === "overview" ? (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-5">
               {[
                 {
                   label: "成交量",
@@ -347,10 +328,8 @@ export default function Stock() {
                 <StatCard key={label} label={label} value={value} />
               ))}
             </div>
-          )}
-
-          {activeTab === "technical" && technicalData && (
-            <div className="space-y-5">
+          ) : activeTab === "technical" && technicalData ? (
+            <div className="space-y-6">
               {/* RSI */}
               {technicalData.rsi != null && (
                 <div
@@ -376,7 +355,7 @@ export default function Stock() {
                   </div>
                   <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
                     <div
-                      className={`h-full rounded-full transition-all ${
+                      className={`h-full rounded-full transition-[width] ${
                         technicalData.rsi > 70
                           ? "bg-red-400"
                           : technicalData.rsi < 30
@@ -473,45 +452,20 @@ export default function Stock() {
                   }}
                 >
                   <p className="text-xs text-slate-500 mb-3">RSI 視覺化</p>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart
-                      data={[{ name: "RSI", value: technicalData.rsi }]}
-                    >
-                      <ReferenceLine
-                        y={70}
-                        stroke="#f87171"
-                        strokeDasharray="3 3"
-                      />
-                      <ReferenceLine
-                        y={30}
-                        stroke="#4ade80"
-                        strokeDasharray="3 3"
-                      />
-                      <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                      <XAxis
-                        dataKey="name"
-                        tick={{ fontSize: 10, fill: "#64748b" }}
-                      />
-                      <YAxis
-                        domain={[0, 100]}
-                        tick={{ fontSize: 10, fill: "#64748b" }}
-                      />
-                      <Line
-                        type="monotone"
-                        dataKey="value"
-                        stroke="#818cf8"
-                        strokeWidth={2}
-                        dot
-                      />
-                    </LineChart>
-                  </ResponsiveContainer>
+                  <Suspense
+                    fallback={
+                      <div className="flex items-center justify-center h-full text-xs text-slate-600">
+                        圖表載入中…
+                      </div>
+                    }
+                  >
+                    <RsiChart rsi={technicalData.rsi} />
+                  </Suspense>
                 </div>
               )}
             </div>
-          )}
-
-          {activeTab === "fundamental" && fundamentalData && (
-            <div className="space-y-5">
+          ) : activeTab === "fundamental" && fundamentalData ? (
+            <div className="space-y-6">
               {fundamentalData.description && (
                 <div
                   className="rounded-2xl p-6"
@@ -541,7 +495,7 @@ export default function Stock() {
                 </div>
               )}
 
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-5">
                 {[
                   {
                     label: "本益比 (P/E)",
@@ -582,7 +536,7 @@ export default function Stock() {
                 ))}
               </div>
             </div>
-          )}
+          ) : null}
         </>
       )}
     </div>
