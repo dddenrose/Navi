@@ -50,9 +50,15 @@
                         ▼                ▼          ▼
                 ┌──────────────┐  ┌──────────┐  ┌────────────┐
                 │  Firestore   │  │ Gemini   │  │ yfinance   │
-                │  Vector      │  │ 2.0      │  │ 公開資訊    │
-                │  Search      │  │ Flash    │  │ 觀測站      │
-                └──────────────┘  └──────────┘  └────────────┘
+                │  Vector      │  │ 2.5 Pro  │  │ 公開資訊    │
+                │  Search      │  │          │  │ 觀測站      │
+                │  + Portfolio │  └──────────┘  ├────────────┤
+                │  + Alerts    │               │ TWSE/OTC   │
+                └──────────────┘               │ 籌碼面 API  │
+                                               ├────────────┤
+                                               │ Google News│
+                                               │ RSS Feed   │
+                                               └────────────┘
 ```
 
 ### 全 Google 生態系
@@ -67,9 +73,10 @@ Google Cloud Console
 │   └── Cloud Storage（檔案儲存）
 ├── Cloud Run（Python 後端部署）
 ├── Vertex AI
-│   ├── Gemini 2.0 Flash（LLM）
+│   ├── Gemini 2.5 Pro（LLM）
 │   └── text-embedding-004（Embedding）
-└── Cloud Scheduler（排程更新資料）
+├── Cloud Scheduler（排程更新資料 + 警報掃描 + 每日快照）
+└── Cloud Tasks（通知推送）
 ```
 
 ---
@@ -78,16 +85,16 @@ Google Cloud Console
 
 ### Backend
 
-| 類別      | 技術                     | 原因                               |
-| --------- | ------------------------ | ---------------------------------- |
-| 語言      | Python 3.12              | AI / 資料處理生態最完整            |
-| Web 框架  | FastAPI                  | 非同步、自動 API 文件、型別安全    |
-| AI 框架   | LangChain                | RAG chain / Agent / Tool calling   |
-| LLM       | Gemini 2.0 Flash         | Google 生態、免費額度大、速度快    |
-| Embedding | text-embedding-004       | Google 原生、搭配 Firestore Vector |
-| Vector DB | Firestore Vector Search  | 已有 Firebase 專案，零額外成本     |
-| 資料擷取  | yfinance / BeautifulSoup | 股價、財報、新聞                   |
-| 排程      | Cloud Scheduler          | 定時更新資料                       |
+| 類別      | 技術                     | 原因                                       |
+| --------- | ------------------------ | ------------------------------------------ |
+| 語言      | Python 3.12              | AI / 資料處理生態最完整                    |
+| Web 框架  | FastAPI                  | 非同步、自動 API 文件、型別安全            |
+| AI 框架   | LangChain                | RAG chain / Agent / Tool calling           |
+| LLM       | Gemini 2.5 Pro           | Google 生態、推理能力強、Tool Calling 精準 |
+| Embedding | text-embedding-004       | Google 原生、搭配 Firestore Vector         |
+| Vector DB | Firestore Vector Search  | 已有 Firebase 專案，零額外成本             |
+| 資料擷取  | yfinance / BeautifulSoup | 股價、財報、新聞                           |
+| 排程      | Cloud Scheduler          | 定時更新資料                               |
 
 ### Frontend
 
@@ -281,6 +288,92 @@ Navi 自動執行：
 └───────────────────────────────────────────────────┘
 ```
 
+### Feature 5：籌碼面分析（三大法人 + 融資融券）
+
+透過台灣證交所 / 櫃買中心 Open API，取得個股法人買賣超與融資融券數據，讓 Agent 能結合籌碼面進行更全面的分析。
+
+```
+用戶：「台積電外資最近在買還是在賣？」
+
+Navi 自動執行：
+  🔧 [Tool] get_institutional_data("2330") → 取得三大法人買賣超
+  🔧 [Tool] get_margin_data("2330")        → 取得融資融券變化
+  🤔 [分析] 綜合籌碼面判斷
+
+Navi：
+  🏦 台積電 (2330.TW) 籌碼面分析
+
+  三大法人（近 5 日）：
+  • 外資：連買 5 日，累計 +42,000 張
+  • 投信：小幅買超 +1,200 張
+  • 自營商：賣超 -800 張
+
+  融資融券：
+  • 融資餘額：45,000 張（使用率 28.5%）→ 偏低，散戶未過度追多
+  • 融券餘額：2,000 張 → 空方力道不強
+
+  📋 綜合判斷：法人持續站買方，融資使用率偏低，
+  籌碼面偏多，但需留意外資是否轉賣...
+```
+
+### Feature 6：投資組合追蹤
+
+使用者可輸入持股明細（股票、張數、成本），Navi 自動追蹤即時市值與損益，並可透過對話查詢組合狀態。
+
+```
+用戶：「我的投資組合現在表現怎麼樣？」
+
+Navi 自動執行：
+  🔧 [Tool] get_portfolio_summary(user_id)
+  🔧 [Tool] get_stock_price("2330.TW") × N 檔持股
+  🤔 [分析] 計算損益、佔比、風險
+
+Navi：
+  💼 你的投資組合概覽
+
+  總市值：$2,350,000 | 總成本：$1,980,000 | 損益：+$370,000 (+18.7%)
+
+  持股明細：
+  │ 股票     │ 張數 │ 成本    │ 現價    │ 損益      │ 佔比   │
+  │ 台積電   │ 2    │ $580   │ $892   │ +53.8%   │ 38.0%  │
+  │ 聯發科   │ 1    │ $780   │ $1,050 │ +34.6%   │ 22.3%  │
+  │ 鴻海     │ 5    │ $105   │ $168   │ +60.0%   │ 17.8%  │
+  ...
+
+  ⚠️ 風險提示：半導體產業佔比 60%，集中度偏高，建議分散...
+```
+
+### Feature 7：策略回測
+
+使用歷史數據模擬投資策略的績效表現，支援內建策略（均線交叉、RSI、MACD）與自訂條件。
+
+```
+用戶：「如果用均線交叉策略買台積電，過去一年績效如何？」
+
+Navi 自動執行：
+  🔧 [Tool] run_strategy_backtest("2330.TW", "ma_cross", "1y")
+  🤔 [分析] 解讀回測結果
+
+Navi：
+  📊 回測結果：均線交叉策略 × 台積電 (2330.TW)
+  📅 期間：2025-03-01 ~ 2026-03-01
+
+  💰 績效摘要：
+  • 初始資金：$1,000,000
+  • 最終淨值：$1,285,000
+  • 總報酬率：+28.5%（同期大盤 +15.2%）
+  • 年化報酬：28.5%
+  • 最大回撤：-12.3%
+  • 夏普比率：1.85
+  • 勝率：62.5%（5 勝 / 3 敗）
+  • 總交易次數：8 次
+
+  📈 [權益曲線圖]
+
+  📋 判斷：此策略在趨勢明確的台積電上表現優於大盤，
+  但最大回撤 12.3% 需注意風險承受度...
+```
+
 ---
 
 ## 6. 專案結構
@@ -297,7 +390,9 @@ navi/
 │   │   ├── routes/
 │   │   │   ├── chat.py            # 對話 API（含 SSE streaming）
 │   │   │   ├── stock.py           # 股票數據 API
-│   │   │   └── knowledge.py       # 知識庫管理 API
+│   │   │   ├── knowledge.py       # 知識庫管理 API
+│   │   │   ├── portfolio.py       # 投資組合 CRUD API
+│   │   │   └── backtest.py        # 回測 API
 │   │   └── dependencies.py        # 依賴注入
 │   │
 │   ├── services/
@@ -305,13 +400,22 @@ navi/
 │   │   ├── stock_service.py       # 股票數據擷取（yfinance）
 │   │   ├── embedding_service.py   # Embedding 處理
 │   │   ├── agent_service.py       # AI Agent（Phase 3）
-│   │   └── news_service.py        # 新聞擷取
+│   │   ├── news_service.py        # 新聞擷取（Google News RSS）
+│   │   ├── institutional_service.py # 三大法人買賣超（TWSE API）
+│   │   ├── margin_service.py      # 融資融券數據（TWSE/OTC API）
+│   │   ├── portfolio_service.py   # 投資組合管理（Firestore）
+│   │   └── backtest_service.py    # 回測引擎
 │   │
 │   ├── tools/                     # LangChain Tools（給 Agent 使用）
 │   │   ├── stock_price.py         # 查詢即時股價
 │   │   ├── technical_analysis.py  # 計算技術指標
 │   │   ├── fundamental_analysis.py# 基本面分析
-│   │   └── knowledge_search.py    # 知識庫搜尋
+│   │   ├── knowledge_search.py    # 知識庫搜尋
+│   │   ├── institutional.py       # 籌碼面（三大法人）
+│   │   ├── margin_trading.py      # 融資融券查詢
+│   │   ├── news_search.py         # 新聞搜尋
+│   │   ├── portfolio_tool.py      # 查詢使用者持股
+│   │   └── backtest_tool.py       # 回測策略
 │   │
 │   ├── models/
 │   │   ├── schemas.py             # Pydantic request/response models
@@ -326,6 +430,9 @@ navi/
 │   │   ├── technical_analysis/
 │   │   ├── fundamental_analysis/
 │   │   └── investment_theory/
+│   │
+│   ├── jobs/                      # 排程任務（Cloud Scheduler 觸發）
+│   │   └── portfolio_snapshot.py  # 每日收盤後持股淨值快照
 │   │
 │   └── tests/
 │       ├── test_rag.py
@@ -413,6 +520,47 @@ GET    /api/knowledge/search?q=估值方法
 GET    /api/knowledge/stats
        Description: 知識庫統計
        Response: { total_documents, categories, last_updated }
+
+# ========== 籌碼面 ==========
+
+GET    /api/stock/{ticker}/institutional
+       Description: 三大法人買賣超（外資、投信、自營商）
+       Response: { date, foreign, investment_trust, dealer, total_net, consecutive_days }
+
+GET    /api/stock/{ticker}/margin
+       Description: 融資融券資訊
+       Response: { margin_balance, margin_utilization, short_balance, day_trading_vol }
+
+# ========== 投資組合 ==========
+
+GET    /api/portfolio
+       Description: 取得使用者持股清單 + 即時市值損益
+       Response: { total_value, total_cost, total_pnl, holdings[] }
+
+POST   /api/portfolio/holdings
+       Description: 新增持股
+       Body: { ticker, shares, avg_cost, notes? }
+
+PUT    /api/portfolio/holdings/{id}
+       Description: 修改持股數量或成本
+
+DELETE /api/portfolio/holdings/{id}
+       Description: 刪除持股
+
+GET    /api/portfolio/performance?period=1mo
+       Description: 組合績效曲線（從每日快照）
+       Response: { dates[], values[], pnl_percent[] }
+
+# ========== 策略回測 ==========
+
+POST   /api/backtest
+       Description: 執行策略回測
+       Body:
+         ticker: string            # 股票代碼
+         strategy: string           # 策略名稱 (ma_cross / rsi / macd)
+         period?: string            # 回測期間 (3mo / 6mo / 1y / 2y)
+         initial_capital?: number   # 初始資金（預設 1,000,000）
+       Response: { total_return, max_drawdown, sharpe_ratio, win_rate, trades[], equity_curve[] }
 ```
 
 ---
@@ -638,15 +786,52 @@ executor = AgentExecutor(agent=agent, tools=tools, verbose=True)
 
 ---
 
-### Phase 5 — 進階功能（第 11-12 週）
+### Phase 5 — 即時數據 Tools 擴充（第 11-12 週）
 
-| #   | 任務            | 產出             |
-| --- | --------------- | ---------------- |
-| 1   | 新聞爬蟲        | 自動抓取財經新聞 |
-| 2   | Cloud Scheduler | 定時更新資料     |
-| 3   | 自選股清單      | 使用者追蹤股票   |
-| 4   | 知識庫持續擴充  | 更多文件和論文   |
-| 5   | 效能優化        | Cache, 回應速度  |
+> 核心目標：讓 Agent 能回答更多類型的問題，強化「LLM 單獨做不到」的即時數據優勢
+
+| #   | 任務                         | 產出                                                        |
+| --- | ---------------------------- | ----------------------------------------------------------- |
+| 1   | 籌碼面 Tool（三大法人）      | `institutional.py` + `institutional_service.py`（TWSE API） |
+| 2   | 融資融券 Tool                | `margin_trading.py` + `margin_service.py`（TWSE/OTC API）   |
+| 3   | 新聞搜尋 Tool                | `news_search.py` + `news_service.py`（Google News RSS）     |
+| 4   | 註冊 ALL_TOOLS + 更新 Prompt | Agent 能自動呼叫新工具                                      |
+| 5   | LLM 升級為 Gemini 2.5 Pro    | 更強的推理與 Tool Calling 能力                              |
+
+**✅ 驗收**：問「台積電外資最近在買還是賣？」「台積電最近有什麼新聞？」能得到即時數據回答
+
+---
+
+### Phase 6 — 投資組合追蹤（第 13-15 週）
+
+> 核心目標：建立使用者數據黏性，讓 Navi 成為個人投資管理工具
+
+| #   | 任務                             | 產出                                                       |
+| --- | -------------------------------- | ---------------------------------------------------------- |
+| 1   | 投資組合 CRUD API                | `portfolio.py` + `portfolio_service.py`（Firestore）       |
+| 2   | Portfolio Tool（Agent 可查持股） | `portfolio_tool.py` — Agent 能查詢使用者持股               |
+| 3   | 前端投資組合頁面                 | 持股明細、即時市值、損益一覽                               |
+| 4   | 每日快照排程                     | `jobs/portfolio_snapshot.py`（Cloud Scheduler 每日 14:00） |
+| 5   | 績效曲線                         | 前端歷史淨值圖表                                           |
+
+**✅ 驗收**：使用者可新增持股，問「我的投資組合表現如何？」Agent 能回傳即時損益分析
+
+---
+
+### Phase 7 — 策略回測引擎（第 16-18 週）
+
+> 核心目標：提供無法被 ChatGPT 取代的獨特功能
+
+| #   | 任務                          | 產出                                         |
+| --- | ----------------------------- | -------------------------------------------- |
+| 1   | 回測引擎                      | `backtest_service.py` — 逐日模擬、績效計算   |
+| 2   | 內建策略                      | 均線交叉 / RSI / MACD 三種策略               |
+| 3   | Backtest Tool（Agent 可回測） | `backtest_tool.py` — Agent 能執行回測並解讀  |
+| 4   | 回測 API                      | `backtest.py` — POST /api/backtest           |
+| 5   | 前端回測結果視覺化            | 權益曲線圖、交易紀錄表、績效指標卡片         |
+| 6   | 自訂策略支援                  | 使用者可組合條件（如 RSI < 30 且 MACD 金叉） |
+
+**✅ 驗收**：問「如果用均線交叉策略買台積電，過去一年績效如何？」能回傳完整回測報告 + 圖表
 
 ---
 
@@ -711,17 +896,29 @@ Phase 1 ──▶ Python 基礎、FastAPI、Embedding、Vector DB、RAG Pipeline
 Phase 2 ──▶ 資料處理（Pandas）、外部 API 整合、技術指標計算
 Phase 3 ──▶ LangChain Agent、Tool Calling、SSE Streaming、Docker、GCP 部署
 Phase 4 ──▶ React + Vite、Firebase Auth、前後端整合、即時串流 UI、資料視覺化（K 線圖）
-Phase 5 ──▶ 爬蟲、排程任務、系統維運、效能優化
+Phase 5 ──▶ 政府 Open API 整合（TWSE/OTC）、RSS 爬取、LLM 模型評估與升級
+Phase 6 ──▶ Firestore 子集合設計、Cloud Scheduler 排程、CRUD 全流程、資料黏性設計
+Phase 7 ──▶ 策略模式（Strategy Pattern）、回測引擎設計、績效指標計算、資料視覺化（權益曲線）
 ```
 
 ---
 
-## 13. 下一步
+## 13. 目前進度與下一步
 
-- [ ] 建立 GitHub Repo `navi`
-- [ ] 初始化 Python 環境（FastAPI + LangChain）
-- [ ] 撰寫第一批知識庫文件（3-5 篇技術分析基礎）
-- [ ] 完成第一個 RAG Query：問問題 → 回答
+### 已完成
+
+- [x] Phase 1 — 基礎建設 & RAG Pipeline
+- [x] Phase 2 — 股票數據整合（yfinance + 技術指標 + 基本面）
+- [x] Phase 3 — AI Agent + Streaming API + Cloud Run 部署
+- [ ] Phase 4 — 前端 Dashboard（🔧 進行中）
+
+### 下一步（Phase 5 起）
+
+- [ ] 新增籌碼面 Tool（三大法人 + 融資融券）
+- [ ] 新增新聞搜尋 Tool（Google News RSS）
+- [ ] LLM 升級為 Gemini 2.5 Pro
+- [ ] 投資組合 CRUD + Agent Tool
+- [ ] 策略回測引擎 + 視覺化
 
 ---
 
