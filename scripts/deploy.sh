@@ -47,13 +47,13 @@ gcloud run deploy "${SERVICE}" \
   --image="${IMAGE}" \
   --region="${REGION}" \
   --platform=managed \
-  --allow-unauthenticated \
+  --no-allow-unauthenticated \
   --service-account="navi-backend@${PROJECT_ID}.iam.gserviceaccount.com" \
   --memory=1Gi \
   --cpu=1 \
   --timeout=300 \
   --max-instances=3 \
-  --set-env-vars="GOOGLE_CLOUD_PROJECT=${PROJECT_ID}" \
+  --set-env-vars="GOOGLE_CLOUD_PROJECT=${PROJECT_ID},AUTH_REQUIRED=true,DEBUG=false,CORS_ORIGINS=https://navi-stock-analyzer.web.app" \
   --project="${PROJECT_ID}"
 
 # 5. Get URL

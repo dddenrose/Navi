@@ -19,11 +19,12 @@ app = FastAPI(
 )
 
 # CORS — 由 CORS_ORIGINS 環境變數控制，逗號分隔
-# 範例：CORS_ORIGINS=https://navi.vercel.app,https://localhost:3000
+# 正式環境：CORS_ORIGINS=https://navi-stock-analyzer.web.app
+# 本機開發：CORS_ORIGINS=http://localhost:5173
 _allowed_origins: list[str] = (
     [o.strip() for o in settings.cors_origins.split(",") if o.strip()]
     if settings.cors_origins
-    else ["*"]  # 若未設定則開放（本機開發用）
+    else (["*"] if settings.debug else [])  # 生產環境未設定 → 拒絕所有跨域
 )
 app.add_middleware(
     CORSMiddleware,
