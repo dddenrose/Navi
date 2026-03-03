@@ -16,6 +16,7 @@ dependencies = [
     "firebase-admin>=6.5.0",
     "google-cloud-aiplatform>=1.60.0",
     "yfinance>=0.2.40",
+    "requests>=2.31.0",
     "python-dotenv>=1.0.0",
     "pydantic-settings>=2.5.0",
 ]

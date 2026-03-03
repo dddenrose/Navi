@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     google_application_credentials: str = ""
 
     # Gemini LLM
-    gemini_model_name: str = "gemini-2.0-flash"
+    gemini_model_name: str = "gemini-2.5-pro"
 
     # Embedding
     embedding_model_name: str = "text-embedding-004"
