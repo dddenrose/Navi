@@ -10,6 +10,7 @@ interface Message {
 
 interface Conversation {
   conversation_id: string;
+  title: string;
   created_at: string;
   message_count: number;
 }
@@ -270,7 +271,7 @@ export default function Chat() {
                         : "text-slate-600 group-hover:text-slate-400"
                     }`}
                   >
-                    對話記錄
+                    {conv.title || "對話記錄"}
                   </p>
                   <p className="text-xs text-slate-700 mt-0.5">
                     {conv.message_count} 則訊息
