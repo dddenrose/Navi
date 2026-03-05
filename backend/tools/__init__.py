@@ -5,6 +5,7 @@ from tools.institutional import get_institutional
 from tools.knowledge_search import search_knowledge
 from tools.margin_trading import get_margin_trading
 from tools.news_search import search_financial_news
+from tools.portfolio_tool import get_portfolio
 from tools.stock_price import get_stock_price
 from tools.technical_analysis import analyze_technicals
 
@@ -16,6 +17,7 @@ ALL_TOOLS = [
     get_institutional,
     get_margin_trading,
     search_financial_news,
+    get_portfolio,
 ]
 
 __all__ = [
@@ -27,4 +29,5 @@ __all__ = [
     "get_institutional",
     "get_margin_trading",
     "search_financial_news",
+    "get_portfolio",
 ]

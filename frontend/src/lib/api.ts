@@ -191,3 +191,88 @@ export async function streamChat(options: ChatStreamOptions): Promise<void> {
     }
   }
 }
+
+// ─── Portfolio ────────────────────────────────────────────────────────────────
+
+export interface HoldingData {
+  id: string;
+  ticker: string;
+  name: string;
+  shares: number;
+  avg_cost: number;
+  notes: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface HoldingWithPrice extends HoldingData {
+  current_price: number | null;
+  market_value: number;
+  cost_basis: number;
+  pnl: number;
+  pnl_percent: number;
+  currency: string;
+}
+
+export interface PortfolioSummary {
+  total_value: number;
+  total_cost: number;
+  total_pnl: number;
+  total_pnl_percent: number;
+  holdings_count: number;
+  holdings: HoldingWithPrice[];
+}
+
+export async function getPortfolio(): Promise<PortfolioSummary> {
+  const headers = await getAuthHeaders();
+  const res = await fetch(`${BASE_URL}/api/portfolio`, { headers });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+export async function getPortfolioHoldings(): Promise<HoldingData[]> {
+  const headers = await getAuthHeaders();
+  const res = await fetch(`${BASE_URL}/api/portfolio/holdings`, { headers });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+export async function addHolding(data: {
+  ticker: string;
+  shares: number;
+  avg_cost: number;
+  name?: string;
+  notes?: string;
+}): Promise<HoldingData> {
+  const headers = await getAuthHeaders();
+  const res = await fetch(`${BASE_URL}/api/portfolio/holdings`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+export async function updateHolding(
+  holdingId: string,
+  data: { shares?: number; avg_cost?: number; notes?: string },
+): Promise<HoldingData> {
+  const headers = await getAuthHeaders();
+  const res = await fetch(`${BASE_URL}/api/portfolio/holdings/${holdingId}`, {
+    method: "PUT",
+    headers,
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+export async function deleteHolding(holdingId: string): Promise<void> {
+  const headers = await getAuthHeaders();
+  const res = await fetch(`${BASE_URL}/api/portfolio/holdings/${holdingId}`, {
+    method: "DELETE",
+    headers,
+  });
+  if (!res.ok) throw new Error(await res.text());
+}
