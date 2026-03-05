@@ -176,10 +176,38 @@ export default function Chat() {
   };
 
   return (
-    <div className="flex h-screen">
+    <div className="flex h-[calc(100vh-3.5rem)] md:h-screen">
+      {/* Mobile conversation toggle button */}
+      <button
+        onClick={() => {
+          const sidebar = document.getElementById("chat-sidebar");
+          sidebar?.classList.toggle("hidden");
+        }}
+        className="fixed bottom-24 left-4 z-30 md:hidden w-10 h-10 rounded-full flex items-center justify-center text-white shadow-lg"
+        style={{
+          background: "linear-gradient(135deg, #6366f1, #8b5cf6)",
+          boxShadow: "0 4px 16px rgba(99,102,241,0.4)",
+        }}
+        aria-label="切換對話列表"
+      >
+        <svg
+          viewBox="0 0 20 20"
+          fill="currentColor"
+          className="w-4 h-4"
+          aria-hidden="true"
+        >
+          <path
+            fillRule="evenodd"
+            d="M2 4.75A.75.75 0 012.75 4h14.5a.75.75 0 010 1.5H2.75A.75.75 0 012 4.75zM2 10a.75.75 0 01.75-.75h14.5a.75.75 0 010 1.5H2.75A.75.75 0 012 10zm0 5.25a.75.75 0 01.75-.75h14.5a.75.75 0 010 1.5H2.75a.75.75 0 01-.75-.75z"
+            clipRule="evenodd"
+          />
+        </svg>
+      </button>
+
       {/* Conversation history sidebar */}
       <div
-        className="w-60 flex flex-col flex-shrink-0"
+        id="chat-sidebar"
+        className="hidden md:flex w-60 flex-col flex-shrink-0"
         style={{
           background: "rgba(255,255,255,0.015)",
           borderRight: "1px solid var(--border)",
@@ -267,7 +295,7 @@ export default function Chat() {
       {/* Main chat area */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto px-8 py-8">
+        <div className="flex-1 overflow-y-auto px-4 py-6 md:px-8 md:py-8">
           {messages.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-center animate-fade-in">
               <div
@@ -340,7 +368,7 @@ export default function Chat() {
 
         {/* Input area */}
         <div
-          className="px-8 py-5"
+          className="px-4 py-4 md:px-8 md:py-5"
           style={{ borderTop: "1px solid var(--border)" }}
         >
           <div

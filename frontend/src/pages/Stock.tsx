@@ -134,9 +134,12 @@ export default function Stock() {
   const isPositive = (priceData?.change ?? 0) >= 0;
 
   return (
-    <div className="px-10 py-10 max-w-5xl mx-auto animate-fade-up">
+    <div className="px-4 py-6 md:px-10 md:py-10 max-w-5xl mx-auto animate-fade-up">
       {/* Search bar */}
-      <form onSubmit={handleSearch} className="flex gap-4 mb-10">
+      <form
+        onSubmit={handleSearch}
+        className="flex gap-3 md:gap-4 mb-8 md:mb-10"
+      >
         <div className="relative flex-1">
           <svg
             viewBox="0 0 20 20"
@@ -171,7 +174,7 @@ export default function Stock() {
         <button
           type="submit"
           disabled={loading}
-          className="rounded-2xl px-7 py-4 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-40"
+          className="rounded-2xl px-5 md:px-7 py-3 md:py-4 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-40 whitespace-nowrap"
           style={{
             background: "linear-gradient(135deg, #6366f1, #8b5cf6)",
             boxShadow: loading ? "none" : "0 4px 16px rgba(99,102,241,0.3)",
@@ -245,7 +248,7 @@ export default function Stock() {
                 </p>
               </div>
               <div className="text-right">
-                <div className="text-3xl font-bold text-white tracking-tight tabular-nums">
+                <div className="text-2xl md:text-3xl font-bold text-white tracking-tight tabular-nums">
                   ${fmtNum(priceData.current_price)}
                 </div>
                 <div
@@ -314,7 +317,7 @@ export default function Stock() {
 
           {/* Tab content */}
           {activeTab === "overview" ? (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-5">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-5">
               {[
                 {
                   label: "成交量",
@@ -382,7 +385,7 @@ export default function Stock() {
                   }}
                 >
                   <p className="text-sm text-slate-400 mb-4">MACD</p>
-                  <div className="grid grid-cols-3 gap-5">
+                  <div className="grid grid-cols-3 gap-3 md:gap-5">
                     {[
                       { label: "MACD", value: fmtNum(technicalData.macd.macd) },
                       {
@@ -420,7 +423,7 @@ export default function Stock() {
                 }}
               >
                 <p className="text-sm text-slate-400 mb-4">移動平均線</p>
-                <div className="grid grid-cols-3 gap-5">
+                <div className="grid grid-cols-3 gap-3 md:gap-5">
                   {[
                     { label: "SMA 20", value: technicalData.sma_20 },
                     { label: "SMA 50", value: technicalData.sma_50 },
@@ -495,7 +498,7 @@ export default function Stock() {
                 </div>
               )}
 
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-5">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-5">
                 {[
                   {
                     label: "本益比 (P/E)",

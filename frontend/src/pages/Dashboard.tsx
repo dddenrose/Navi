@@ -18,9 +18,9 @@ export default function Dashboard() {
   const greeting = hour < 12 ? "早安" : hour < 18 ? "午安" : "晚安";
 
   return (
-    <div className="px-10 py-10 max-w-4xl mx-auto animate-fade-up">
+    <div className="px-4 py-6 md:px-10 md:py-10 max-w-4xl mx-auto animate-fade-up">
       {/* Header */}
-      <div className="mb-14">
+      <div className="mb-8 md:mb-14">
         <p className="text-sm text-slate-600 mb-3 tracking-widest uppercase">
           {new Date().toLocaleDateString("zh-TW", {
             weekday: "long",
@@ -30,7 +30,7 @@ export default function Dashboard() {
           })}
         </p>
         <h1
-          className="text-3xl font-semibold text-slate-100"
+          className="text-2xl md:text-3xl font-semibold text-slate-100"
           style={{ textWrap: "balance" }}
         >
           {greeting}，
@@ -42,7 +42,7 @@ export default function Dashboard() {
       </div>
 
       {/* Quick actions */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-14">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-5 mb-10 md:mb-14">
         <Link
           to="/chat"
           className="group relative rounded-2xl p-7 text-left transition-transform duration-200 overflow-hidden hover:scale-[1.02]"
@@ -121,9 +121,9 @@ export default function Dashboard() {
       </div>
 
       {/* Quick stock chips */}
-      <div className="mb-14">
+      <div className="mb-10 md:mb-14">
         <h2
-          className="text-xs font-medium text-slate-600 mb-5 tracking-widest uppercase"
+          className="text-xs font-medium text-slate-600 mb-4 md:mb-5 tracking-widest uppercase"
           style={{ textWrap: "balance" }}
         >
           快速查詢股票

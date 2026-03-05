@@ -329,9 +329,9 @@ export default function Portfolio() {
   const hasHoldings = summary && summary.holdings_count > 0;
 
   return (
-    <div className="px-10 py-10 max-w-5xl mx-auto animate-fade-up">
+    <div className="px-4 py-6 md:px-10 md:py-10 max-w-5xl mx-auto animate-fade-up">
       {/* Header */}
-      <div className="flex items-center justify-between mb-10">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8 md:mb-10">
         <div>
           <h1 className="text-2xl font-semibold text-white">💼 投資組合</h1>
           <p className="text-sm text-slate-500 mt-1">即時市值、損益追蹤</p>
@@ -349,7 +349,7 @@ export default function Portfolio() {
 
       {/* Summary cards */}
       {hasHoldings && summary && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4 mb-8 md:mb-10">
           <div
             className="rounded-2xl p-5"
             style={{

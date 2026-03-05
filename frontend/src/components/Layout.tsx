@@ -1,4 +1,5 @@
-import { NavLink, Outlet } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { signOut } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { useAuthStore } from "@/store/authStore";
@@ -78,6 +79,13 @@ const navItems = [
 
 export default function Layout() {
   const { user } = useAuthStore();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const location = useLocation();
+
+  // Close sidebar on route change (mobile)
+  useEffect(() => {
+    setSidebarOpen(false);
+  }, [location.pathname]);
 
   const handleSignOut = async () => {
     await signOut(auth);
@@ -93,9 +101,74 @@ export default function Layout() {
       className="flex min-h-screen text-slate-100"
       style={{ background: "var(--bg-base)" }}
     >
+      {/* Mobile top bar */}
+      <div
+        className="fixed top-0 left-0 right-0 z-40 flex items-center h-14 px-4 md:hidden"
+        style={{
+          background: "var(--bg-surface)",
+          borderBottom: "1px solid var(--border)",
+        }}
+      >
+        <button
+          onClick={() => setSidebarOpen(!sidebarOpen)}
+          className="w-9 h-9 rounded-lg flex items-center justify-center text-slate-400 hover:text-white transition-colors"
+          style={{ background: "rgba(255,255,255,0.05)" }}
+          aria-label="切換選單"
+        >
+          {sidebarOpen ? (
+            <svg
+              viewBox="0 0 20 20"
+              fill="currentColor"
+              className="w-5 h-5"
+              aria-hidden="true"
+            >
+              <path
+                fillRule="evenodd"
+                d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+                clipRule="evenodd"
+              />
+            </svg>
+          ) : (
+            <svg
+              viewBox="0 0 20 20"
+              fill="currentColor"
+              className="w-5 h-5"
+              aria-hidden="true"
+            >
+              <path
+                fillRule="evenodd"
+                d="M3 5a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM3 10a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM3 15a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z"
+                clipRule="evenodd"
+              />
+            </svg>
+          )}
+        </button>
+        <div className="flex items-center gap-2 ml-3">
+          <div
+            className="w-6 h-6 rounded-md flex items-center justify-center text-xs"
+            style={{
+              background: "linear-gradient(135deg, #6366f1, #8b5cf6)",
+            }}
+          >
+            🧭
+          </div>
+          <span className="text-sm font-bold gradient-text">Navi</span>
+        </div>
+      </div>
+
+      {/* Overlay backdrop (mobile) */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/50 md:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
       {/* Sidebar */}
       <aside
-        className="w-64 flex flex-col flex-shrink-0"
+        className={`fixed md:static inset-y-0 left-0 z-50 w-64 flex flex-col flex-shrink-0 transform transition-transform duration-200 ease-out md:translate-x-0 ${
+          sidebarOpen ? "translate-x-0" : "-translate-x-full"
+        }`}
         style={{
           background: "var(--bg-surface)",
           borderRight: "1px solid var(--border)",
@@ -212,7 +285,7 @@ export default function Layout() {
       {/* Main content */}
       <main
         id="main-content"
-        className="flex-1 overflow-auto"
+        className="flex-1 overflow-auto pt-14 md:pt-0"
         style={{ background: "var(--bg-base)" }}
       >
         <Outlet />

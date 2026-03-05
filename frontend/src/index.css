@@ -198,3 +198,28 @@ body {
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.01em;
 }
+
+/* ── Mobile responsive utilities ──────────────────── */
+@media (max-width: 767px) {
+  /* Prevent horizontal overflow on mobile */
+  body {
+    overflow-x: hidden;
+  }
+
+  /* Slightly larger tap targets for touch */
+  button,
+  a {
+    min-height: 36px;
+  }
+
+  /* Chat sidebar toggle animation */
+  #chat-sidebar.hidden {
+    display: none !important;
+  }
+
+  /* Stock tabs scrollable on mobile */
+  .stock-tabs-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
