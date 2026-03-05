@@ -80,9 +80,13 @@ function MetricCard({
       }}
     >
       <p className="text-xs text-slate-500 mb-1.5">{label}</p>
-      <p className={`text-sm md:text-base font-semibold tabular-nums ${valueColor}`}>
+      <p
+        className={`text-sm md:text-base font-semibold tabular-nums ${valueColor}`}
+      >
         {value}
-        {suffix && <span className="text-xs text-slate-500 ml-1">{suffix}</span>}
+        {suffix && (
+          <span className="text-xs text-slate-500 ml-1">{suffix}</span>
+        )}
       </p>
     </div>
   );
@@ -100,7 +104,9 @@ function TradeRow({ trade, idx }: { trade: BacktestTrade; idx: number }) {
         background: idx % 2 === 0 ? "transparent" : "rgba(255,255,255,0.015)",
       }}
     >
-      <td className="py-3 px-3 text-xs text-slate-400 tabular-nums">{trade.date}</td>
+      <td className="py-3 px-3 text-xs text-slate-400 tabular-nums">
+        {trade.date}
+      </td>
       <td className="py-3 px-3">
         <span
           className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
@@ -190,7 +196,9 @@ export default function Backtest() {
         >
           {/* Ticker input */}
           <div>
-            <label className="block text-xs text-slate-500 mb-1.5">股票代碼</label>
+            <label className="block text-xs text-slate-500 mb-1.5">
+              股票代碼
+            </label>
             <input
               value={ticker}
               onChange={(e) => setTicker(e.target.value)}
@@ -248,7 +256,9 @@ export default function Backtest() {
           {/* Period & Capital */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs text-slate-500 mb-1.5">回測期間</label>
+              <label className="block text-xs text-slate-500 mb-1.5">
+                回測期間
+              </label>
               <div className="flex gap-2">
                 {PERIODS.map((p) => (
                   <button
@@ -361,7 +371,8 @@ export default function Backtest() {
                 {result.ticker}
               </h2>
               <span className="text-sm text-slate-400">
-                {STRATEGIES.find((s) => s.name === result.strategy)?.label ?? result.strategy}
+                {STRATEGIES.find((s) => s.name === result.strategy)?.label ??
+                  result.strategy}
               </span>
             </div>
             <p className="text-xs text-slate-500">
@@ -389,21 +400,24 @@ export default function Backtest() {
             <MetricCard
               label="夏普比率"
               value={fmt(result.sharpe_ratio, 2)}
-              valueColor={result.sharpe_ratio > 1 ? "text-emerald-400" : "text-slate-300"}
+              valueColor={
+                result.sharpe_ratio > 1 ? "text-emerald-400" : "text-slate-300"
+              }
             />
             <MetricCard
               label="勝率"
               value={`${fmt(result.win_rate, 1)}%`}
-              valueColor={result.win_rate >= 50 ? "text-emerald-400" : "text-amber-400"}
+              valueColor={
+                result.win_rate >= 50 ? "text-emerald-400" : "text-amber-400"
+              }
             />
-            <MetricCard
-              label="交易次數"
-              value={`${result.total_trades}`}
-            />
+            <MetricCard label="交易次數" value={`${result.total_trades}`} />
             <MetricCard
               label="最終淨值"
               value={`$${fmt(result.final_equity)}`}
-              valueColor={pnlColor(result.final_equity - result.initial_capital)}
+              valueColor={pnlColor(
+                result.final_equity - result.initial_capital,
+              )}
             />
             <MetricCard
               label="Buy & Hold"
@@ -428,15 +442,25 @@ export default function Backtest() {
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={result.equity_curve}>
                     <defs>
-                      <linearGradient id="equityGrad" x1="0" y1="0" x2="0" y2="1">
+                      <linearGradient
+                        id="equityGrad"
+                        x1="0"
+                        y1="0"
+                        x2="0"
+                        y2="1"
+                      >
                         <stop
                           offset="5%"
-                          stopColor={result.total_return >= 0 ? "#4ade80" : "#f87171"}
+                          stopColor={
+                            result.total_return >= 0 ? "#4ade80" : "#f87171"
+                          }
                           stopOpacity={0.3}
                         />
                         <stop
                           offset="95%"
-                          stopColor={result.total_return >= 0 ? "#4ade80" : "#f87171"}
+                          stopColor={
+                            result.total_return >= 0 ? "#4ade80" : "#f87171"
+                          }
                           stopOpacity={0}
                         />
                       </linearGradient>
@@ -455,7 +479,9 @@ export default function Backtest() {
                       axisLine={false}
                       domain={["auto", "auto"]}
                       tickFormatter={(v: number) =>
-                        v >= 1_000_000 ? `${(v / 1_000_000).toFixed(1)}M` : `${(v / 1000).toFixed(0)}K`
+                        v >= 1_000_000
+                          ? `${(v / 1_000_000).toFixed(1)}M`
+                          : `${(v / 1000).toFixed(0)}K`
                       }
                     />
                     <Tooltip
@@ -466,7 +492,10 @@ export default function Backtest() {
                         backdropFilter: "blur(12px)",
                       }}
                       labelStyle={{ color: "#64748b", fontSize: "11px" }}
-                      formatter={(value: number | undefined) => [`$${fmt(value ?? 0)}`, "淨值"]}
+                      formatter={(value: number | undefined) => [
+                        `$${fmt(value ?? 0)}`,
+                        "淨值",
+                      ]}
                     />
                     <ReferenceLine
                       y={result.initial_capital}
@@ -509,8 +538,16 @@ export default function Backtest() {
                   <AreaChart data={result.equity_curve}>
                     <defs>
                       <linearGradient id="ddGrad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#f87171" stopOpacity={0.3} />
-                        <stop offset="95%" stopColor="#f87171" stopOpacity={0} />
+                        <stop
+                          offset="5%"
+                          stopColor="#f87171"
+                          stopOpacity={0.3}
+                        />
+                        <stop
+                          offset="95%"
+                          stopColor="#f87171"
+                          stopOpacity={0}
+                        />
                       </linearGradient>
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
@@ -536,7 +573,10 @@ export default function Backtest() {
                         backdropFilter: "blur(12px)",
                       }}
                       labelStyle={{ color: "#64748b", fontSize: "11px" }}
-                      formatter={(value: number | undefined) => [`-${fmt(value ?? 0, 2)}%`, "回撤"]}
+                      formatter={(value: number | undefined) => [
+                        `-${fmt(value ?? 0, 2)}%`,
+                        "回撤",
+                      ]}
                     />
                     <Area
                       type="monotone"
@@ -591,7 +631,11 @@ export default function Backtest() {
                   </thead>
                   <tbody>
                     {result.trades.map((trade, idx) => (
-                      <TradeRow key={`${trade.date}-${trade.action}`} trade={trade} idx={idx} />
+                      <TradeRow
+                        key={`${trade.date}-${trade.action}`}
+                        trade={trade}
+                        idx={idx}
+                      />
                     ))}
                   </tbody>
                 </table>
@@ -601,7 +645,8 @@ export default function Backtest() {
 
           {/* Disclaimer */}
           <p className="text-[11px] text-slate-600 text-center pb-4">
-            ⚠️ 回測結果基於歷史數據，不代表未來績效。所有分析僅供學習與研究用途，不構成投資建議。
+            ⚠️
+            回測結果基於歷史數據，不代表未來績效。所有分析僅供學習與研究用途，不構成投資建議。
           </p>
         </div>
       )}

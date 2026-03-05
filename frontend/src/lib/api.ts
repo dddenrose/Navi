@@ -329,10 +329,15 @@ export interface StrategyInfo {
   name: string;
   label: string;
   description: string;
-  params: Record<string, { type: string; default: number | string; description: string }>;
+  params: Record<
+    string,
+    { type: string; default: number | string; description: string }
+  >;
 }
 
-export async function runBacktest(req: BacktestRequest): Promise<BacktestResult> {
+export async function runBacktest(
+  req: BacktestRequest,
+): Promise<BacktestResult> {
   const headers = await getAuthHeaders();
   const res = await fetch(`${BASE_URL}/api/backtest`, {
     method: "POST",
