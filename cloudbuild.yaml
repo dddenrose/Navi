@@ -38,7 +38,7 @@ steps:
       - "asia-east1"
       - "--platform"
       - "managed"
-      - "--no-allow-unauthenticated"
+      - "--allow-unauthenticated"
       - "--service-account"
       - "navi-backend@$PROJECT_ID.iam.gserviceaccount.com"
       - "--memory"

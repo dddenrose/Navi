@@ -1,0 +1,17 @@
+# Cloud Build — Run backend tests (triggered on PR to main)
+# Usage: gcloud builds submit --config cloudbuild-test.yaml .
+
+steps:
+  - name: "python:3.12-slim"
+    entrypoint: bash
+    args:
+      - "-c"
+      - |
+        cd backend
+        pip install --quiet -e ".[dev]" 2>&1 | tail -5
+        python -m pytest tests/ -v --tb=short
+    env:
+      - "PYTHONUNBUFFERED=1"
+
+options:
+  logging: CLOUD_LOGGING_ONLY
