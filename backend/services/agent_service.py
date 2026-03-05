@@ -88,12 +88,14 @@ def _get_session_history(session_id: str) -> InMemoryChatMessageHistory:
 async def run_agent(
     question: str,
     conversation_id: str | None = None,
+    user_id: str = "",
 ) -> AsyncGenerator[str, None]:
     """Run the tool-calling agent and stream the response.
 
     Args:
         question: User's natural language question.
         conversation_id: Optional conversation ID for multi-turn memory.
+        user_id: Firebase uid of the requesting user.
 
     Yields:
         Text chunks from the agent's response.
@@ -144,7 +146,7 @@ async def run_agent(
         # Persist conversation to Firestore
         if conversation_id and full_output:
             try:
-                save_history(conversation_id, question, full_output)
+                save_history(conversation_id, question, full_output, user_id=user_id)
             except Exception as e:
                 logger.warning("Failed to save history for %s: %s", conversation_id, e)
 
@@ -156,9 +158,10 @@ async def run_agent(
 async def run_agent_sync(
     question: str,
     conversation_id: str | None = None,
+    user_id: str = "",
 ) -> str:
     """Non-streaming version — returns the full response as a string."""
     chunks = []
-    async for chunk in run_agent(question, conversation_id):
+    async for chunk in run_agent(question, conversation_id, user_id=user_id):
         chunks.append(chunk)
     return "".join(chunks)

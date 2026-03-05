@@ -2,7 +2,7 @@ import { auth } from "./firebase";
 
 const BASE_URL =
   import.meta.env.VITE_API_BASE_URL ||
-  "https://navi-backend-wankxbiojq-de.a.run.app";
+  "https://navi-backend-58156810941.asia-east1.run.app";
 
 async function getAuthHeaders(): Promise<Record<string, string>> {
   const user = auth.currentUser;
