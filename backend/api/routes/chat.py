@@ -30,6 +30,7 @@ async def _sse_generator(
 ):
     """Wrap Agent streaming output in SSE format."""
     # Auto-generate conversation_id if not provided
+    # just  test trigger
     cid = conversation_id or new_conversation_id()
 
     # Send conversation_id as the first event so the client can track it
