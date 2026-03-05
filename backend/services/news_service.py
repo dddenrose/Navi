@@ -11,10 +11,16 @@ from email.utils import parsedate_to_datetime
 from urllib.parse import quote
 
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 logger = logging.getLogger(__name__)
 
 _GOOGLE_NEWS_RSS = "https://news.google.com/rss/search"
+
+# Session with limited retries for fast failure
+_news_session = requests.Session()
+_news_session.mount("https://", HTTPAdapter(max_retries=Retry(total=0)))
 
 
 @dataclass
@@ -108,9 +114,9 @@ def search_news(query: str, max_results: int = 8, lang: str = "zh-TW") -> NewsRe
     url = f"{_GOOGLE_NEWS_RSS}?q={encoded_query}&hl={lang}&gl=TW&ceid=TW:zh-Hant"
 
     try:
-        resp = requests.get(
+        resp = _news_session.get(
             url,
-            timeout=10,
+            timeout=(3, 5),
             headers={
                 "User-Agent": "Navi/1.0 (Stock Analyzer)",
                 "Accept": "application/rss+xml, application/xml, text/xml",

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 
@@ -86,7 +87,7 @@ def _fetch_twse_margin(date_str: str, ticker: str) -> MarginDaily | None:
                 "selectType": "ALL",
                 "response": "json",
             },
-            timeout=10,
+            timeout=(3, 5),
             headers={"User-Agent": "Navi/1.0"},
         )
         resp.raise_for_status()
@@ -153,13 +154,29 @@ def get_margin_data(ticker: str, days: int = 5) -> MarginSummary:
 
     dates = _recent_trading_dates(days + 5)
 
+    # Parallel fetch TWSE API for all dates
     records: list[MarginDaily] = []
+    with ThreadPoolExecutor(max_workers=5) as executor:
+        future_to_date = {
+            executor.submit(_fetch_twse_margin, d, norm_ticker): d
+            for d in dates
+        }
+        date_records: dict[str, MarginDaily] = {}
+        for future in as_completed(future_to_date):
+            d = future_to_date[future]
+            try:
+                rec = future.result()
+                if rec is not None:
+                    date_records[d] = rec
+            except Exception:
+                pass
+
+    # Sort by date descending and take only `days` records
     for d in dates:
         if len(records) >= days:
             break
-        rec = _fetch_twse_margin(d, norm_ticker)
-        if rec is not None:
-            records.append(rec)
+        if d in date_records:
+            records.append(date_records[d])
 
     if not records:
         summary.error = f"無法取得 {ticker} 的融資融券資料，可能為非交易日或資料尚未公布。"
@@ -172,12 +189,12 @@ def get_margin_data(ticker: str, days: int = 5) -> MarginSummary:
         summary.margin_change = records[0].margin_balance - records[-1].margin_balance
         summary.short_change = records[0].short_balance - records[-1].short_balance
 
-    # Company name
+    # Company name from cached ticker info
     try:
-        from services.stock_service import get_stock_overview
+        from services.stock_service import _get_ticker_info
 
-        overview = get_stock_overview(ticker)
-        summary.name = overview.name
+        info = _get_ticker_info(norm_ticker)
+        summary.name = info.get("shortName") or info.get("longName") or ""
     except Exception:
         pass
 

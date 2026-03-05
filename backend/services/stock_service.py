@@ -3,12 +3,36 @@
 from __future__ import annotations
 
 import logging
+import time
 from dataclasses import dataclass, field
 from datetime import datetime
+from functools import lru_cache
 
 import yfinance as yf
 
 logger = logging.getLogger(__name__)
+
+# ── Cache ────────────────────────────────────────────────────────────────────
+
+# TTL cache for yf.Ticker.info (avoid redundant API calls within same request)
+_info_cache: dict[str, tuple[float, dict]] = {}
+_INFO_CACHE_TTL = 300  # 5 minutes
+
+
+def _get_ticker_info(ticker: str) -> dict:
+    """Get yf.Ticker.info with simple TTL cache."""
+    now = time.time()
+    if ticker in _info_cache:
+        cached_time, cached_info = _info_cache[ticker]
+        if now - cached_time < _INFO_CACHE_TTL:
+            return cached_info
+    try:
+        info = yf.Ticker(ticker).info
+    except Exception as e:
+        logger.warning("Failed to fetch info for %s: %s", ticker, e)
+        info = {}
+    _info_cache[ticker] = (now, info)
+    return info
 
 # ── Ticker 正規化 ────────────────────────────────────────────────────────────
 
@@ -57,10 +81,12 @@ def normalize_ticker(raw: str) -> str:
     return raw
 
 
+@lru_cache(maxsize=256)
 def _resolve_tw_ticker(code: str) -> str:
     """自動偵測台股代碼是上市 (.TW) 或上櫃 (.TWO)。
 
     先嘗試 .TW，如果沒有數據就嘗試 .TWO。
+    結果以 lru_cache 快取，避免每次 tool call 都重跑。
     """
     for suffix in [".TW", ".TWO"]:
         ticker = f"{code}{suffix}"
@@ -163,12 +189,8 @@ class FundamentalData:
 def get_stock_overview(ticker: str) -> StockOverviewData:
     """取得股票基本概覽。"""
     ticker = normalize_ticker(ticker)
-    stock = yf.Ticker(ticker)
-
-    try:
-        info = stock.info
-    except Exception as e:
-        logger.warning("Failed to fetch info for %s: %s", ticker, e)
+    info = _get_ticker_info(ticker)
+    if not info:
         return StockOverviewData(ticker=ticker)
 
     price = info.get("currentPrice") or info.get("regularMarketPrice")
@@ -373,12 +395,8 @@ def get_technical_indicators(ticker: str, period: str = "3mo") -> TechnicalIndic
 def get_fundamental_data(ticker: str) -> FundamentalData:
     """取得基本面財報數據。"""
     ticker = normalize_ticker(ticker)
-    stock = yf.Ticker(ticker)
-
-    try:
-        info = stock.info
-    except Exception as e:
-        logger.warning("Failed to fetch info for %s: %s", ticker, e)
+    info = _get_ticker_info(ticker)
+    if not info:
         return FundamentalData(ticker=ticker)
 
     return FundamentalData(

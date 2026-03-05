@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 
@@ -83,7 +84,7 @@ def _fetch_twse_institutional(date_str: str, ticker: str) -> InstitutionalDaily 
                 "selectType": "ALL",
                 "response": "json",
             },
-            timeout=10,
+            timeout=(3, 5),
             headers={"User-Agent": "Navi/1.0"},
         )
         resp.raise_for_status()
@@ -152,13 +153,29 @@ def get_institutional_data(ticker: str, days: int = 5) -> InstitutionalSummary:
 
     dates = _recent_trading_dates(days + 5)  # fetch extra dates in case of holidays
 
+    # Parallel fetch TWSE API for all dates
     records: list[InstitutionalDaily] = []
+    with ThreadPoolExecutor(max_workers=5) as executor:
+        future_to_date = {
+            executor.submit(_fetch_twse_institutional, d, norm_ticker): d
+            for d in dates
+        }
+        date_records: dict[str, InstitutionalDaily] = {}
+        for future in as_completed(future_to_date):
+            d = future_to_date[future]
+            try:
+                rec = future.result()
+                if rec is not None:
+                    date_records[d] = rec
+            except Exception:
+                pass
+
+    # Sort by date descending and take only `days` records
     for d in dates:
         if len(records) >= days:
             break
-        rec = _fetch_twse_institutional(d, norm_ticker)
-        if rec is not None:
-            records.append(rec)
+        if d in date_records:
+            records.append(date_records[d])
 
     if not records:
         summary.error = f"無法取得 {ticker} 的法人買賣超資料，可能為非交易日或資料尚未公布。"
@@ -171,12 +188,12 @@ def get_institutional_data(ticker: str, days: int = 5) -> InstitutionalSummary:
     summary.total_net = sum(r.total_net for r in records)
     summary.foreign_consecutive_days = _calc_consecutive_days(records)
 
-    # Try to get company name
+    # Get company name from cached ticker info
     try:
-        from services.stock_service import get_stock_overview
+        from services.stock_service import _get_ticker_info
 
-        overview = get_stock_overview(ticker)
-        summary.name = overview.name
+        info = _get_ticker_info(norm_ticker)
+        summary.name = info.get("shortName") or info.get("longName") or ""
     except Exception:
         pass
 
