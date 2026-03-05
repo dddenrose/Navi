@@ -276,3 +276,76 @@ export async function deleteHolding(holdingId: string): Promise<void> {
   });
   if (!res.ok) throw new Error(await res.text());
 }
+
+// ─── Backtest ─────────────────────────────────────────────────────────────────
+
+export interface BacktestTrade {
+  date: string;
+  action: "buy" | "sell";
+  price: number;
+  shares: number;
+  value: number;
+  reason: string;
+}
+
+export interface EquityPoint {
+  date: string;
+  equity: number;
+  drawdown: number;
+}
+
+export interface BacktestResult {
+  ticker: string;
+  strategy: string;
+  period: string;
+  start_date: string;
+  end_date: string;
+  initial_capital: number;
+  final_equity: number;
+  total_return: number;
+  annualized_return: number;
+  max_drawdown: number;
+  sharpe_ratio: number;
+  win_rate: number;
+  total_trades: number;
+  winning_trades: number;
+  losing_trades: number;
+  avg_win: number;
+  avg_loss: number;
+  benchmark_return: number;
+  trades: BacktestTrade[];
+  equity_curve: EquityPoint[];
+  error: string;
+}
+
+export interface BacktestRequest {
+  ticker: string;
+  strategy: string;
+  period: string;
+  initial_capital: number;
+}
+
+export interface StrategyInfo {
+  name: string;
+  label: string;
+  description: string;
+  params: Record<string, { type: string; default: number | string; description: string }>;
+}
+
+export async function runBacktest(req: BacktestRequest): Promise<BacktestResult> {
+  const headers = await getAuthHeaders();
+  const res = await fetch(`${BASE_URL}/api/backtest`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(req),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+export async function getStrategies(): Promise<{ strategies: StrategyInfo[] }> {
+  const headers = await getAuthHeaders();
+  const res = await fetch(`${BASE_URL}/api/backtest/strategies`, { headers });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}

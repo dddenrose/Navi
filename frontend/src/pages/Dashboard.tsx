@@ -118,6 +118,44 @@ export default function Dashboard() {
             →
           </div>
         </Link>
+
+        <Link
+          to="/backtest"
+          className="group relative rounded-2xl p-7 text-left transition-transform duration-200 overflow-hidden hover:scale-[1.02]"
+          style={{
+            background:
+              "linear-gradient(135deg, rgba(245,158,11,0.12), rgba(251,191,36,0.06))",
+            border: "1px solid rgba(245,158,11,0.2)",
+          }}
+        >
+          <div
+            className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
+            style={{
+              background:
+                "radial-gradient(circle at 50% 50%, rgba(245,158,11,0.08), transparent 70%)",
+            }}
+          />
+          <div className="relative">
+            <div
+              className="w-10 h-10 rounded-xl flex items-center justify-center mb-5 text-lg"
+              style={{ background: "rgba(245,158,11,0.2)" }}
+            >
+              📊
+            </div>
+            <h3 className="text-base font-semibold text-white mb-2.5">
+              策略回測
+            </h3>
+            <p className="text-sm text-slate-500 leading-relaxed">
+              用歷史數據驗證均線交叉、RSI、MACD 策略績效
+            </p>
+          </div>
+          <div
+            className="absolute bottom-5 right-5 text-amber-600/50 group-hover:text-amber-500 transition-colors text-xl"
+            aria-hidden="true"
+          >
+            →
+          </div>
+        </Link>
       </div>
 
       {/* Quick stock chips */}

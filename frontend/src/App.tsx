@@ -11,6 +11,7 @@ const Dashboard = lazy(() => import("@/pages/Dashboard"));
 const Chat = lazy(() => import("@/pages/Chat"));
 const Stock = lazy(() => import("@/pages/Stock"));
 const Portfolio = lazy(() => import("@/pages/Portfolio"));
+const Backtest = lazy(() => import("@/pages/Backtest"));
 
 function PageFallback() {
   return (
@@ -51,6 +52,7 @@ export default function App() {
             <Route path="stock" element={<Stock />} />
             <Route path="stock/:symbol" element={<Stock />} />
             <Route path="portfolio" element={<Portfolio />} />
+            <Route path="backtest" element={<Backtest />} />
           </Route>
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>
