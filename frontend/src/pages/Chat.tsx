@@ -82,6 +82,7 @@ export default function Chat() {
     ]);
     setStreaming(true);
 
+    streamContentRef.current = "";
     let fullContent = "";
 
     await streamChat({
@@ -117,11 +118,17 @@ export default function Chat() {
         }
         setCurrentConvId(convId);
         navigate(`/chat/${convId}`, { replace: true });
+        // Flush final accumulated content from ref to state
+        const finalContent = streamContentRef.current;
         setMessages((prev) => {
           const updated = [...prev];
           const last = updated[updated.length - 1];
           if (last.role === "assistant") {
-            updated[updated.length - 1] = { ...last, streaming: false };
+            updated[updated.length - 1] = {
+              ...last,
+              content: finalContent,
+              streaming: false,
+            };
           }
           return updated;
         });
