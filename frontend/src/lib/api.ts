@@ -41,7 +41,7 @@ export async function getStockPrice(
   headers?: Record<string, string>,
 ) {
   const h = headers ?? (await getAuthHeaders());
-  const res = await fetch(`${BASE_URL}/api/stock/price/${symbol}`, {
+  const res = await fetch(`${BASE_URL}/api/stock/${symbol}`, {
     headers: h,
   });
   if (!res.ok) throw new Error(await res.text());
@@ -53,7 +53,7 @@ export async function getStockTechnicals(
   headers?: Record<string, string>,
 ) {
   const h = headers ?? (await getAuthHeaders());
-  const res = await fetch(`${BASE_URL}/api/stock/technical/${symbol}`, {
+  const res = await fetch(`${BASE_URL}/api/stock/${symbol}/technical`, {
     headers: h,
   });
   if (!res.ok) throw new Error(await res.text());
@@ -65,7 +65,7 @@ export async function getStockFundamentals(
   headers?: Record<string, string>,
 ) {
   const h = headers ?? (await getAuthHeaders());
-  const res = await fetch(`${BASE_URL}/api/stock/fundamental/${symbol}`, {
+  const res = await fetch(`${BASE_URL}/api/stock/${symbol}/fundamental`, {
     headers: h,
   });
   if (!res.ok) throw new Error(await res.text());
