@@ -185,7 +185,7 @@ export default function Layout() {
 
       {/* Sidebar */}
       <aside
-        className={`fixed md:static inset-y-0 left-0 z-50 flex flex-col flex-shrink-0 transform transition-all duration-200 ease-out md:translate-x-0 ${
+        className={`fixed md:sticky md:top-0 md:h-screen inset-y-0 left-0 z-50 flex flex-col shrink-0 transform transition-all duration-200 ease-out md:translate-x-0 ${
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         }`}
         style={{
@@ -223,7 +223,9 @@ export default function Layout() {
         </div>
 
         {/* Nav items */}
-        <nav className={`flex-1 ${collapsed ? "px-2" : "px-4"} py-6 space-y-2`}>
+        <nav
+          className={`flex-1 overflow-y-auto ${collapsed ? "px-2" : "px-4"} py-6 space-y-2`}
+        >
           {navItems.map(({ to, label, icon }) => (
             <NavLink
               key={to}
