@@ -16,7 +16,7 @@ const StatCard = memo(function StatCard({
     <div
       className="rounded-2xl p-5"
       style={{
-        background: "rgba(255,255,255,0.03)",
+        background: "var(--card-bg)",
         border: "1px solid var(--border)",
       }}
     >

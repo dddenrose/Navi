@@ -75,7 +75,10 @@ function AddHoldingModal({
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)" }}
+      style={{
+        background: "var(--modal-overlay)",
+        backdropFilter: "blur(4px)",
+      }}
     >
       <form
         onSubmit={handleSubmit}
@@ -99,7 +102,7 @@ function AddHoldingModal({
               required
               className="w-full rounded-xl px-4 py-2.5 text-sm text-white placeholder:text-slate-600 outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/40"
               style={{
-                background: "rgba(255,255,255,0.04)",
+                background: "var(--overlay-bg)",
                 border: "1px solid var(--border)",
               }}
             />
@@ -119,7 +122,7 @@ function AddHoldingModal({
                 step="any"
                 className="w-full rounded-xl px-4 py-2.5 text-sm text-white placeholder:text-slate-600 outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/40"
                 style={{
-                  background: "rgba(255,255,255,0.04)",
+                  background: "var(--overlay-bg)",
                   border: "1px solid var(--border)",
                 }}
               />
@@ -138,7 +141,7 @@ function AddHoldingModal({
                 step="any"
                 className="w-full rounded-xl px-4 py-2.5 text-sm text-white placeholder:text-slate-600 outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/40"
                 style={{
-                  background: "rgba(255,255,255,0.04)",
+                  background: "var(--overlay-bg)",
                   border: "1px solid var(--border)",
                 }}
               />
@@ -154,7 +157,7 @@ function AddHoldingModal({
               placeholder="台積電"
               className="w-full rounded-xl px-4 py-2.5 text-sm text-white placeholder:text-slate-600 outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/40"
               style={{
-                background: "rgba(255,255,255,0.04)",
+                background: "var(--overlay-bg)",
                 border: "1px solid var(--border)",
               }}
             />
@@ -167,7 +170,7 @@ function AddHoldingModal({
               placeholder="長期投資"
               className="w-full rounded-xl px-4 py-2.5 text-sm text-white placeholder:text-slate-600 outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/40"
               style={{
-                background: "rgba(255,255,255,0.04)",
+                background: "var(--overlay-bg)",
                 border: "1px solid var(--border)",
               }}
             />
@@ -182,7 +185,7 @@ function AddHoldingModal({
             onClick={onClose}
             className="flex-1 rounded-xl px-4 py-2.5 text-sm text-slate-400 hover:text-white transition-colors"
             style={{
-              background: "rgba(255,255,255,0.04)",
+              background: "var(--overlay-bg)",
               border: "1px solid var(--border)",
             }}
           >
@@ -353,7 +356,7 @@ export default function Portfolio() {
           <div
             className="rounded-2xl p-5"
             style={{
-              background: "rgba(255,255,255,0.03)",
+              background: "var(--card-bg)",
               border: "1px solid var(--border)",
             }}
           >
@@ -365,7 +368,7 @@ export default function Portfolio() {
           <div
             className="rounded-2xl p-5"
             style={{
-              background: "rgba(255,255,255,0.03)",
+              background: "var(--card-bg)",
               border: "1px solid var(--border)",
             }}
           >
@@ -411,7 +414,7 @@ export default function Portfolio() {
         <div
           className="rounded-2xl overflow-hidden"
           style={{
-            background: "rgba(255,255,255,0.03)",
+            background: "var(--card-bg)",
             border: "1px solid var(--border)",
           }}
         >
@@ -459,7 +462,7 @@ export default function Portfolio() {
         <div
           className="rounded-2xl p-16 text-center"
           style={{
-            background: "rgba(255,255,255,0.03)",
+            background: "var(--card-bg)",
             border: "1px solid var(--border)",
           }}
         >

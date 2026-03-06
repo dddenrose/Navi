@@ -75,7 +75,7 @@ function MetricCard({
     <div
       className="rounded-2xl p-4 md:p-5"
       style={{
-        background: "rgba(255,255,255,0.03)",
+        background: "var(--card-bg)",
         border: "1px solid var(--border)",
       }}
     >
@@ -206,7 +206,7 @@ export default function Backtest() {
               required
               className="w-full max-w-sm rounded-xl px-4 py-2.5 text-sm text-white placeholder:text-slate-600 outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/40"
               style={{
-                background: "rgba(255,255,255,0.04)",
+                background: "var(--overlay-bg)",
                 border: "1px solid var(--border)",
               }}
             />
@@ -298,7 +298,7 @@ export default function Backtest() {
                 step="100000"
                 className="w-full max-w-[200px] rounded-xl px-4 py-2.5 text-sm text-white placeholder:text-slate-600 outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/40 tabular-nums"
                 style={{
-                  background: "rgba(255,255,255,0.04)",
+                  background: "var(--overlay-bg)",
                   border: "1px solid var(--border)",
                 }}
               />
@@ -465,16 +465,16 @@ export default function Backtest() {
                         />
                       </linearGradient>
                     </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" />
                     <XAxis
                       dataKey="date"
-                      tick={{ fontSize: 10, fill: "#64748b" }}
+                      tick={{ fontSize: 10, fill: "var(--chart-tick)" }}
                       tickLine={false}
                       axisLine={false}
                       interval="preserveStartEnd"
                     />
                     <YAxis
-                      tick={{ fontSize: 10, fill: "#64748b" }}
+                      tick={{ fontSize: 10, fill: "var(--chart-tick)" }}
                       tickLine={false}
                       axisLine={false}
                       domain={["auto", "auto"]}
@@ -486,12 +486,12 @@ export default function Backtest() {
                     />
                     <Tooltip
                       contentStyle={{
-                        background: "rgba(13,20,36,0.95)",
-                        border: "1px solid rgba(255,255,255,0.08)",
+                        background: "var(--tooltip-bg)",
+                        border: "1px solid var(--tooltip-border)",
                         borderRadius: "12px",
                         backdropFilter: "blur(12px)",
                       }}
-                      labelStyle={{ color: "#64748b", fontSize: "11px" }}
+                      labelStyle={{ color: "var(--chart-tick)", fontSize: "11px" }}
                       formatter={(value: number | undefined) => [
                         `$${fmt(value ?? 0)}`,
                         "淨值",
@@ -550,16 +550,16 @@ export default function Backtest() {
                         />
                       </linearGradient>
                     </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" />
                     <XAxis
                       dataKey="date"
-                      tick={{ fontSize: 10, fill: "#64748b" }}
+                      tick={{ fontSize: 10, fill: "var(--chart-tick)" }}
                       tickLine={false}
                       axisLine={false}
                       interval="preserveStartEnd"
                     />
                     <YAxis
-                      tick={{ fontSize: 10, fill: "#64748b" }}
+                      tick={{ fontSize: 10, fill: "var(--chart-tick)" }}
                       tickLine={false}
                       axisLine={false}
                       domain={[0, "auto"]}
@@ -567,12 +567,12 @@ export default function Backtest() {
                     />
                     <Tooltip
                       contentStyle={{
-                        background: "rgba(13,20,36,0.95)",
-                        border: "1px solid rgba(255,255,255,0.08)",
+                        background: "var(--tooltip-bg)",
+                        border: "1px solid var(--tooltip-border)",
                         borderRadius: "12px",
                         backdropFilter: "blur(12px)",
                       }}
-                      labelStyle={{ color: "#64748b", fontSize: "11px" }}
+                      labelStyle={{ color: "var(--chart-tick)", fontSize: "11px" }}
                       formatter={(value: number | undefined) => [
                         `-${fmt(value ?? 0, 2)}%`,
                         "回撤",

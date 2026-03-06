@@ -44,23 +44,20 @@ export default function Login() {
     <div
       className="relative min-h-screen flex items-center justify-center px-4 overflow-hidden"
       style={{
-        background:
-          "linear-gradient(135deg, #080e1f 0%, #0d1424 50%, #0a0f1e 100%)",
+        background: "var(--login-bg)",
       }}
     >
       {/* Ambient orbs */}
       <div
         className="orb-1 absolute top-1/4 -left-32 w-80 h-80 rounded-full pointer-events-none"
         style={{
-          background:
-            "radial-gradient(circle, rgba(99,102,241,0.18) 0%, transparent 70%)",
+          background: `radial-gradient(circle, var(--login-orb1) 0%, transparent 70%)`,
         }}
       />
       <div
         className="orb-2 absolute bottom-1/4 -right-32 w-96 h-96 rounded-full pointer-events-none"
         style={{
-          background:
-            "radial-gradient(circle, rgba(139,92,246,0.14) 0%, transparent 70%)",
+          background: `radial-gradient(circle, var(--login-orb2) 0%, transparent 70%)`,
         }}
       />
 
@@ -164,12 +161,12 @@ export default function Login() {
           <div className="flex items-center gap-3 my-6">
             <div
               className="flex-1 h-px"
-              style={{ background: "rgba(255,255,255,0.07)" }}
+              style={{ background: "var(--divider)" }}
             />
             <span className="text-xs text-slate-600">或</span>
             <div
               className="flex-1 h-px"
-              style={{ background: "rgba(255,255,255,0.07)" }}
+              style={{ background: "var(--divider)" }}
             />
           </div>
 
@@ -179,8 +176,8 @@ export default function Login() {
             disabled={submitting}
             className="w-full flex items-center justify-center gap-2.5 rounded-xl py-2.5 text-sm font-medium text-slate-200 transition-opacity hover:opacity-80 disabled:opacity-40"
             style={{
-              background: "rgba(255,255,255,0.06)",
-              border: "1px solid rgba(255,255,255,0.1)",
+              background: "var(--overlay-subtle)",
+              border: "1px solid var(--border-light)",
             }}
           >
             <svg viewBox="0 0 24 24" className="w-4 h-4" aria-hidden="true">

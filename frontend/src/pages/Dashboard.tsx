@@ -86,7 +86,7 @@ export default function Dashboard() {
           to="/stock"
           className="group relative rounded-2xl p-7 text-left transition-transform duration-200 overflow-hidden hover:scale-[1.02]"
           style={{
-            background: "rgba(255,255,255,0.03)",
+            background: "var(--card-bg)",
             border: "1px solid var(--border)",
           }}
         >
@@ -94,13 +94,13 @@ export default function Dashboard() {
             className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
             style={{
               background:
-                "radial-gradient(circle at 50% 50%, rgba(255,255,255,0.03), transparent 70%)",
+                "radial-gradient(circle at 50% 50%, var(--card-bg-hover), transparent 70%)",
             }}
           />
           <div className="relative">
             <div
               className="w-10 h-10 rounded-xl flex items-center justify-center mb-5 text-lg"
-              style={{ background: "rgba(255,255,255,0.06)" }}
+              style={{ background: "var(--overlay-subtle)" }}
             >
               📈
             </div>
@@ -173,7 +173,7 @@ export default function Dashboard() {
               to={`/stock/${symbol}`}
               className="stock-chip px-5 py-2 rounded-full text-xs font-medium text-slate-400 hover:text-slate-100 hover:scale-105"
               style={{
-                background: "rgba(255,255,255,0.04)",
+                background: "var(--overlay-bg)",
                 border: "1px solid var(--border)",
               }}
             >
@@ -199,7 +199,7 @@ export default function Dashboard() {
               state={{ initialMessage: q }}
               className="group w-full text-left px-5 py-4 rounded-2xl text-sm text-slate-400 hover:text-slate-100 transition-colors flex items-center justify-between"
               style={{
-                background: "rgba(255,255,255,0.025)",
+                background: "var(--card-bg)",
                 border: "1px solid var(--border)",
                 animationDelay: `${i * 60}ms`,
               }}

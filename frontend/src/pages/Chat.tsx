@@ -28,6 +28,7 @@ export default function Chat() {
   );
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [sidebarLoading, setSidebarLoading] = useState(true);
+  const [chatSidebarOpen, setChatSidebarOpen] = useState(true);
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -178,12 +179,9 @@ export default function Chat() {
 
   return (
     <div className="flex h-[calc(100vh-3.5rem)] md:h-screen">
-      {/* Mobile conversation toggle button */}
+      {/* Sidebar toggle button (mobile: fixed bottom-left, desktop: top of chat area) */}
       <button
-        onClick={() => {
-          const sidebar = document.getElementById("chat-sidebar");
-          sidebar?.classList.toggle("hidden");
-        }}
+        onClick={() => setChatSidebarOpen(!chatSidebarOpen)}
         className="fixed bottom-24 left-4 z-30 md:hidden w-10 h-10 rounded-full flex items-center justify-center text-white shadow-lg"
         style={{
           background: "linear-gradient(135deg, #6366f1, #8b5cf6)",
@@ -207,11 +205,14 @@ export default function Chat() {
 
       {/* Conversation history sidebar */}
       <div
-        id="chat-sidebar"
-        className="hidden md:flex w-60 flex-col flex-shrink-0"
+        className={`flex-col flex-shrink-0 transition-all duration-200 ease-out ${
+          chatSidebarOpen
+            ? "w-60 flex"
+            : "w-0 overflow-hidden hidden md:flex md:w-0"
+        }`}
         style={{
-          background: "rgba(255,255,255,0.015)",
-          borderRight: "1px solid var(--border)",
+          background: "var(--sidebar-bg)",
+          borderRight: chatSidebarOpen ? "1px solid var(--border)" : "none",
         }}
       >
         <div
@@ -295,6 +296,31 @@ export default function Chat() {
 
       {/* Main chat area */}
       <div className="flex-1 flex flex-col min-w-0">
+        {/* Desktop sidebar toggle */}
+        <div
+          className="hidden md:flex items-center h-12 px-4 flex-shrink-0"
+          style={{ borderBottom: "1px solid var(--border)" }}
+        >
+          <button
+            onClick={() => setChatSidebarOpen(!chatSidebarOpen)}
+            className="flex items-center gap-2 px-2.5 py-1.5 text-xs text-slate-500 hover:text-slate-200 rounded-lg transition-colors hover:bg-white/5"
+            aria-label={chatSidebarOpen ? "隱藏對話記錄" : "顯示對話記錄"}
+          >
+            <svg
+              viewBox="0 0 20 20"
+              fill="currentColor"
+              className={`w-4 h-4 transition-transform duration-200 ${chatSidebarOpen ? "" : "rotate-180"}`}
+              aria-hidden="true"
+            >
+              <path
+                fillRule="evenodd"
+                d="M3 5a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM3 10a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM3 15a1 1 0 011-1h6a1 1 0 110 2H4a1 1 0 01-1-1z"
+                clipRule="evenodd"
+              />
+            </svg>
+            {chatSidebarOpen ? "隱藏記錄" : "對話記錄"}
+          </button>
+        </div>
         {/* Messages */}
         <div className="flex-1 overflow-y-auto px-4 py-6 md:px-8 md:py-8">
           {messages.length === 0 ? (
@@ -350,9 +376,9 @@ export default function Chat() {
                           color: "white",
                         }
                       : {
-                          background: "rgba(255,255,255,0.04)",
+                          background: "var(--overlay-bg)",
                           border: "1px solid var(--border)",
-                          color: "#e2e8f0",
+                          color: "var(--text-link)",
                         }
                   }
                 >
@@ -375,7 +401,7 @@ export default function Chat() {
           <div
             className="flex gap-3 max-w-3xl mx-auto items-end rounded-2xl px-5 py-4 transition-[border-color,box-shadow]"
             style={{
-              background: "rgba(255,255,255,0.04)",
+              background: "var(--overlay-bg)",
               border: `1px solid ${streaming ? "rgba(99,102,241,0.3)" : "var(--border)"}`,
               boxShadow: streaming ? "0 0 0 3px rgba(99,102,241,0.1)" : "none",
             }}
@@ -403,7 +429,7 @@ export default function Chat() {
               style={{
                 background:
                   !input.trim() || streaming
-                    ? "rgba(255,255,255,0.06)"
+                    ? "var(--overlay-subtle)"
                     : "linear-gradient(135deg, #6366f1, #8b5cf6)",
                 boxShadow:
                   !input.trim() || streaming

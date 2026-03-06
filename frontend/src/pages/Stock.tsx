@@ -166,7 +166,7 @@ export default function Stock() {
             placeholder="輸入股票代號（例：AAPL, TSLA, NVDA）…"
             className="stock-search-input w-full rounded-2xl pl-11 pr-5 py-4 text-sm text-slate-200 placeholder-slate-700"
             style={{
-              background: "rgba(255,255,255,0.04)",
+              background: "var(--overlay-bg)",
               border: "1px solid var(--border)",
             }}
           />
@@ -203,7 +203,7 @@ export default function Stock() {
           <div
             className="w-16 h-16 rounded-2xl flex items-center justify-center text-3xl mb-5"
             style={{
-              background: "rgba(255,255,255,0.04)",
+              background: "var(--overlay-bg)",
               border: "1px solid var(--border)",
             }}
           >
@@ -219,7 +219,7 @@ export default function Stock() {
           <div
             className="rounded-2xl p-7 mb-8"
             style={{
-              background: "rgba(255,255,255,0.03)",
+              background: "var(--card-bg)",
               border: "1px solid var(--border)",
             }}
           >
@@ -286,7 +286,7 @@ export default function Stock() {
           <div
             className="flex gap-1 mb-7 p-1.5 w-fit rounded-2xl"
             style={{
-              background: "rgba(255,255,255,0.04)",
+              background: "var(--overlay-bg)",
               border: "1px solid var(--border)",
             }}
           >
@@ -301,9 +301,12 @@ export default function Stock() {
                         background:
                           "linear-gradient(135deg, rgba(99,102,241,0.3), rgba(139,92,246,0.2))",
                         border: "1px solid rgba(99,102,241,0.3)",
-                        color: "#e2e8f0",
+                        color: "var(--text-secondary)",
                       }
-                    : { color: "#475569", border: "1px solid transparent" }
+                    : {
+                        color: "var(--text-dim)",
+                        border: "1px solid transparent",
+                      }
                 }
               >
                 {tab === "overview"
@@ -338,7 +341,7 @@ export default function Stock() {
                 <div
                   className="rounded-2xl p-6"
                   style={{
-                    background: "rgba(255,255,255,0.03)",
+                    background: "var(--card-bg)",
                     border: "1px solid var(--border)",
                   }}
                 >
@@ -380,7 +383,7 @@ export default function Stock() {
                 <div
                   className="rounded-2xl p-6"
                   style={{
-                    background: "rgba(255,255,255,0.03)",
+                    background: "var(--card-bg)",
                     border: "1px solid var(--border)",
                   }}
                 >
@@ -418,7 +421,7 @@ export default function Stock() {
               <div
                 className="rounded-2xl p-6"
                 style={{
-                  background: "rgba(255,255,255,0.03)",
+                  background: "var(--card-bg)",
                   border: "1px solid var(--border)",
                 }}
               >
@@ -450,7 +453,7 @@ export default function Stock() {
                 <div
                   className="rounded-2xl p-6 h-52"
                   style={{
-                    background: "rgba(255,255,255,0.03)",
+                    background: "var(--card-bg)",
                     border: "1px solid var(--border)",
                   }}
                 >
@@ -473,7 +476,7 @@ export default function Stock() {
                 <div
                   className="rounded-2xl p-6"
                   style={{
-                    background: "rgba(255,255,255,0.03)",
+                    background: "var(--card-bg)",
                     border: "1px solid var(--border)",
                   }}
                 >

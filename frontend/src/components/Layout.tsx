@@ -1,8 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { signOut } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { useAuthStore } from "@/store/authStore";
+import { useThemeStore } from "@/store/themeStore";
 
 const navItems = [
   {
@@ -93,13 +94,17 @@ const navItems = [
 
 export default function Layout() {
   const { user } = useAuthStore();
+  const { theme, toggleTheme } = useThemeStore();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
 
   // Close sidebar on route change (mobile)
-  useEffect(() => {
+  const [prevPathname, setPrevPathname] = useState(location.pathname);
+  if (location.pathname !== prevPathname) {
+    setPrevPathname(location.pathname);
     setSidebarOpen(false);
-  }, [location.pathname]);
+  }
 
   const handleSignOut = async () => {
     await signOut(auth);
@@ -112,8 +117,8 @@ export default function Layout() {
 
   return (
     <div
-      className="flex min-h-screen text-slate-100"
-      style={{ background: "var(--bg-base)" }}
+      className="flex min-h-screen"
+      style={{ background: "var(--bg-base)", color: "var(--text-primary)" }}
     >
       {/* Mobile top bar */}
       <div
@@ -126,7 +131,7 @@ export default function Layout() {
         <button
           onClick={() => setSidebarOpen(!sidebarOpen)}
           className="w-9 h-9 rounded-lg flex items-center justify-center text-slate-400 hover:text-white transition-colors"
-          style={{ background: "rgba(255,255,255,0.05)" }}
+          style={{ background: "var(--card-bg-hover)" }}
           aria-label="切換選單"
         >
           {sidebarOpen ? (
@@ -180,20 +185,23 @@ export default function Layout() {
 
       {/* Sidebar */}
       <aside
-        className={`fixed md:static inset-y-0 left-0 z-50 w-64 flex flex-col flex-shrink-0 transform transition-transform duration-200 ease-out md:translate-x-0 ${
+        className={`fixed md:static inset-y-0 left-0 z-50 flex flex-col flex-shrink-0 transform transition-all duration-200 ease-out md:translate-x-0 ${
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         }`}
         style={{
+          width: collapsed ? "68px" : "256px",
           background: "var(--bg-surface)",
           borderRight: "1px solid var(--border)",
         }}
       >
         {/* Logo */}
         <div
-          className="px-6 pt-6 pb-5"
+          className={`pt-6 pb-5 ${collapsed ? "px-3" : "px-6"}`}
           style={{ borderBottom: "1px solid var(--border)" }}
         >
-          <div className="flex items-center gap-3">
+          <div
+            className={`flex items-center ${collapsed ? "justify-center" : "gap-3"}`}
+          >
             <div
               className="w-8 h-8 rounded-lg flex items-center justify-center text-base flex-shrink-0"
               style={{
@@ -203,23 +211,26 @@ export default function Layout() {
             >
               🧭
             </div>
-            <div>
-              <span className="text-sm font-bold gradient-text">Navi</span>
-              <p className="text-xs text-slate-600 leading-none mt-0.5">
-                AI 投資助理
-              </p>
-            </div>
+            {!collapsed && (
+              <div>
+                <span className="text-sm font-bold gradient-text">Navi</span>
+                <p className="text-xs text-slate-600 leading-none mt-0.5">
+                  AI 投資助理
+                </p>
+              </div>
+            )}
           </div>
         </div>
 
         {/* Nav items */}
-        <nav className="flex-1 px-4 py-6 space-y-2">
+        <nav className={`flex-1 ${collapsed ? "px-2" : "px-4"} py-6 space-y-2`}>
           {navItems.map(({ to, label, icon }) => (
             <NavLink
               key={to}
               to={to}
+              title={collapsed ? label : undefined}
               className={({ isActive }) =>
-                `flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors duration-150 ${
+                `flex items-center ${collapsed ? "justify-center" : "gap-3"} ${collapsed ? "px-0 py-3" : "px-4 py-3"} rounded-xl text-sm font-medium transition-colors duration-150 ${
                   isActive
                     ? "text-white"
                     : "text-slate-500 hover:text-slate-200 hover:bg-white/5"
@@ -236,48 +247,96 @@ export default function Layout() {
               }
             >
               {icon}
-              {label}
+              {!collapsed && label}
             </NavLink>
           ))}
         </nav>
 
+        {/* Collapse toggle (desktop only) */}
+        <div className="hidden md:flex px-3 pb-2">
+          <button
+            onClick={() => setCollapsed(!collapsed)}
+            className={`${collapsed ? "w-full justify-center" : "ml-auto"} flex items-center gap-2 px-2 py-2 text-xs text-slate-600 hover:text-slate-200 rounded-lg transition-colors hover:bg-white/5`}
+            aria-label={collapsed ? "展開側邊欄" : "收合側邊欄"}
+            title={collapsed ? "展開側邊欄" : "收合側邊欄"}
+          >
+            <svg
+              viewBox="0 0 20 20"
+              fill="currentColor"
+              className={`w-4 h-4 transition-transform duration-200 ${collapsed ? "rotate-180" : ""}`}
+              aria-hidden="true"
+            >
+              <path
+                fillRule="evenodd"
+                d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z"
+                clipRule="evenodd"
+              />
+            </svg>
+            {!collapsed && <span>收合</span>}
+          </button>
+        </div>
+
         {/* User info + sign out */}
         <div
-          className="px-4 py-5"
+          className={`${collapsed ? "px-2" : "px-4"} py-5`}
           style={{ borderTop: "1px solid var(--border)" }}
         >
-          <div
-            className="flex items-center gap-2.5 px-3 py-3 rounded-xl mb-2"
-            style={{ background: "rgba(255,255,255,0.03)" }}
-          >
-            {user?.photoURL ? (
-              <img
-                src={user.photoURL}
-                width={28}
-                height={28}
-                className="w-7 h-7 rounded-full flex-shrink-0 ring-1 ring-white/10"
-                alt="avatar"
-              />
-            ) : (
-              <div
-                className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
-                style={{
-                  background: "linear-gradient(135deg, #6366f1, #8b5cf6)",
-                }}
-              >
-                {initials}
+          {!collapsed ? (
+            <div
+              className="flex items-center gap-2.5 px-3 py-3 rounded-xl mb-2"
+              style={{ background: "var(--card-bg)" }}
+            >
+              {user?.photoURL ? (
+                <img
+                  src={user.photoURL}
+                  width={28}
+                  height={28}
+                  className="w-7 h-7 rounded-full flex-shrink-0 ring-1 ring-white/10"
+                  alt="avatar"
+                />
+              ) : (
+                <div
+                  className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
+                  style={{
+                    background: "linear-gradient(135deg, #6366f1, #8b5cf6)",
+                  }}
+                >
+                  {initials}
+                </div>
+              )}
+              <div className="min-w-0">
+                <p className="text-xs font-medium text-slate-300 truncate">
+                  {user?.displayName ?? "使用者"}
+                </p>
+                <p className="text-xs text-slate-600 truncate">{user?.email}</p>
               </div>
-            )}
-            <div className="min-w-0">
-              <p className="text-xs font-medium text-slate-300 truncate">
-                {user?.displayName ?? "使用者"}
-              </p>
-              <p className="text-xs text-slate-600 truncate">{user?.email}</p>
             </div>
-          </div>
+          ) : (
+            <div className="flex justify-center mb-2">
+              {user?.photoURL ? (
+                <img
+                  src={user.photoURL}
+                  width={28}
+                  height={28}
+                  className="w-7 h-7 rounded-full ring-1 ring-white/10"
+                  alt="avatar"
+                />
+              ) : (
+                <div
+                  className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold"
+                  style={{
+                    background: "linear-gradient(135deg, #6366f1, #8b5cf6)",
+                  }}
+                >
+                  {initials}
+                </div>
+              )}
+            </div>
+          )}
           <button
             onClick={handleSignOut}
-            className="w-full flex items-center gap-2 px-3 py-2.5 text-xs text-slate-600 hover:text-red-400 rounded-xl transition-colors hover:bg-red-400/5"
+            title={collapsed ? "登出" : undefined}
+            className={`w-full flex items-center ${collapsed ? "justify-center" : "gap-2"} px-3 py-2.5 text-xs text-slate-600 hover:text-red-400 rounded-xl transition-colors hover:bg-red-400/5`}
           >
             <svg
               viewBox="0 0 20 20"
@@ -291,7 +350,44 @@ export default function Layout() {
                 clipRule="evenodd"
               />
             </svg>
-            登出
+            {!collapsed && "登出"}
+          </button>
+          <button
+            onClick={toggleTheme}
+            title={
+              collapsed
+                ? theme === "dark"
+                  ? "淺色模式"
+                  : "暗色模式"
+                : undefined
+            }
+            className={`w-full flex items-center ${collapsed ? "justify-center" : "gap-2"} px-3 py-2.5 text-xs text-slate-600 hover:text-slate-200 rounded-xl transition-colors hover:bg-white/5 mt-1`}
+            aria-label={theme === "dark" ? "切換至淺色模式" : "切換至暗色模式"}
+          >
+            {theme === "dark" ? (
+              <svg
+                viewBox="0 0 20 20"
+                fill="currentColor"
+                className="w-3.5 h-3.5"
+                aria-hidden="true"
+              >
+                <path
+                  fillRule="evenodd"
+                  d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z"
+                  clipRule="evenodd"
+                />
+              </svg>
+            ) : (
+              <svg
+                viewBox="0 0 20 20"
+                fill="currentColor"
+                className="w-3.5 h-3.5"
+                aria-hidden="true"
+              >
+                <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z" />
+              </svg>
+            )}
+            {!collapsed && (theme === "dark" ? "淺色模式" : "暗色模式")}
           </button>
         </div>
       </aside>
