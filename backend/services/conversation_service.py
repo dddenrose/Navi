@@ -110,6 +110,22 @@ def delete_conversation(conversation_id: str, user_id: str = "") -> bool:
     return True
 
 
+def get_conversation_messages(conversation_id: str, user_id: str = "") -> list[dict] | None:
+    """Get all messages for a conversation (with ownership check).
+
+    Returns list of message dicts, or None if not found / not authorized.
+    """
+    db = get_db()
+    doc_ref = db.collection(COLLECTION).document(conversation_id)
+    doc = doc_ref.get()
+    if not doc.exists:
+        return None
+    data = doc.to_dict() or {}
+    if user_id and data.get("user_id", "") != user_id:
+        return None
+    return data.get("messages", [])
+
+
 def list_conversations(user_id: str, limit: int = 20) -> list[dict]:
     """List recent conversations for a specific user."""
     db = get_db()
