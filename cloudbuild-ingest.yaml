@@ -1,0 +1,20 @@
+# Cloud Build — Ingest knowledge base into Firestore Vector Search
+# Triggered by pushing a tag matching: knowledge-v*
+# Usage (manual): gcloud builds submit --config cloudbuild-ingest.yaml .
+
+steps:
+  - name: "python:3.12-slim"
+    id: "ingest-knowledge"
+    entrypoint: "bash"
+    args:
+      - "-c"
+      - |
+        pip install --no-cache-dir uv &&
+        cd backend &&
+        uv pip install --system --no-cache -r pyproject.toml &&
+        python data_pipeline/ingest_knowledge.py --force
+    env:
+      - "GOOGLE_CLOUD_PROJECT=$PROJECT_ID"
+
+options:
+  logging: CLOUD_LOGGING_ONLY

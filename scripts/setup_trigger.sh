@@ -102,7 +102,7 @@ gcloud iam service-accounts create "navi-cloudbuild" \
   --project="${PROJECT_ID}"
 
 # 授予所需的 IAM 角色
-for ROLE in roles/run.admin roles/iam.serviceAccountUser roles/artifactregistry.writer roles/cloudbuild.builds.builder roles/logging.logWriter; do
+for ROLE in roles/run.admin roles/iam.serviceAccountUser roles/artifactregistry.writer roles/cloudbuild.builds.builder roles/logging.logWriter roles/datastore.user roles/aiplatform.user; do
   gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
     --member="serviceAccount:${CB_SA}" \
     --role="${ROLE}" \
@@ -120,7 +120,7 @@ API_BASE="https://cloudbuild.googleapis.com/v1/projects/${PROJECT_ID}/locations/
 
 # ── 3. 建立 / 更新 Trigger：push to main → 部署 production ──────────────────
 echo ""
-echo "▶ 建立 Trigger [1/2]：push to main → deploy production..."
+echo "▶ 建立 Trigger [1/3]：push to main → deploy production..."
 
 # 先刪除已有的同類 trigger（idempotent，API 會在 name 加後綴所以用 description 匹配）
 EXISTING_ID="$(gcloud builds triggers list \
@@ -154,7 +154,7 @@ else: print('   ✅ 建立成功:', d.get('name'))
 "
 
 # ── 4. 建立 Trigger：PR to main → 只跑測試（防禦性 CI）──────────────────────
-echo "▶ 建立 Trigger [2/2]：PR to main → run tests..."
+echo "▶ 建立 Trigger [2/3]：PR to main → run tests..."
 
 EXISTING_ID="$(gcloud builds triggers list \
   --region="${TRIGGER_REGION}" --project="${PROJECT_ID}" \
@@ -188,7 +188,38 @@ if 'error' in d: print('   ❌ 失敗:', d['error'].get('message',d)); sys.exit(
 else: print('   ✅ 建立成功:', d.get('name'))
 "
 
-# ── 5. 列出已建立的 triggers ─────────────────────────────────────────────────
+# ── 5. 建立 Trigger：tag knowledge-v* → ingest knowledge base ────────────────
+echo "▶ 建立 Trigger [3/3]：tag knowledge-v* → ingest knowledge base..."
+
+EXISTING_ID="$(gcloud builds triggers list \
+  --region="${TRIGGER_REGION}" --project="${PROJECT_ID}" \
+  --format='value(id)' --filter='description~"Tag knowledge"' 2>/dev/null || true)"
+for TID in ${EXISTING_ID}; do
+  gcloud builds triggers delete "${TID}" \
+    --region="${TRIGGER_REGION}" --project="${PROJECT_ID}" --quiet
+done
+
+RESPONSE="$(curl -s -X POST \
+  -H "Authorization: Bearer ${ACCESS_TOKEN}" \
+  -H "Content-Type: application/json" \
+  "${API_BASE}" \
+  -d "{
+    \"description\": \"Tag knowledge-v*: ingest knowledge base into RAG\",
+    \"serviceAccount\": \"${SERVICE_ACCOUNT}\",
+    \"filename\": \"cloudbuild-ingest.yaml\",
+    \"repositoryEventConfig\": {
+      \"repository\": \"${REPO_RESOURCE}\",
+      \"push\": { \"tag\": \"^knowledge-v.*$\" }
+    }
+  }")"
+echo "${RESPONSE}" | python3 -c "
+import sys,json
+d=json.load(sys.stdin)
+if 'error' in d: print('   ❌ 失敗:', d['error'].get('message',d)); sys.exit(1)
+else: print('   ✅ 建立成功:', d.get('name'))
+"
+
+# ── 6. 列出已建立的 triggers ─────────────────────────────────────────────────
 echo ""
 echo "✅ 所有 Trigger 設定完成！"
 echo ""
