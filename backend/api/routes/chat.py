@@ -11,6 +11,7 @@ from models.schemas import ChatRequest
 from services.agent_service import run_agent
 from services.conversation_service import (
     delete_conversation,
+    get_conversation_messages,
     list_conversations,
     new_conversation_id,
 )
@@ -71,6 +72,16 @@ async def chat(request: ChatRequest, user: dict = Depends(verify_firebase_token)
 
 
 # ── Conversation management ─────────────────────────────────────────────────
+
+
+@router.get("/conversations/{conversation_id}/messages")
+async def get_conversation_history(conversation_id: str, user: dict = Depends(verify_firebase_token)):
+    """取得指定對話的訊息歷史."""
+    messages = get_conversation_messages(conversation_id, user_id=_get_uid(user))
+    if messages is None:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    return {"messages": messages}
 
 
 @router.get("/conversations")

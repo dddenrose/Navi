@@ -81,6 +81,18 @@ export async function getConversations() {
   return res.json();
 }
 
+export async function getConversationMessages(
+  conversationId: string,
+): Promise<{ messages: { role: string; content: string }[] }> {
+  const headers = await getAuthHeaders();
+  const res = await fetch(
+    `${BASE_URL}/api/chat/conversations/${conversationId}/messages`,
+    { headers },
+  );
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
 export async function deleteConversation(conversationId: string) {
   const headers = await getAuthHeaders();
   const res = await fetch(

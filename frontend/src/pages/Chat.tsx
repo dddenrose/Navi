@@ -1,6 +1,11 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useLocation, useNavigate } from "react-router-dom";
-import { streamChat, getConversations, deleteConversation } from "@/lib/api";
+import {
+  streamChat,
+  getConversations,
+  getConversationMessages,
+  deleteConversation,
+} from "@/lib/api";
 
 interface Message {
   role: "user" | "assistant";
@@ -57,6 +62,30 @@ export default function Chat() {
   useEffect(() => {
     loadConversations();
   }, [loadConversations]);
+
+  // Load messages when selecting / navigating to a conversation
+  useEffect(() => {
+    if (!currentConvId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await getConversationMessages(currentConvId);
+        if (cancelled) return;
+        const loaded: Message[] = (data.messages ?? []).map(
+          (m: { role: string; content: string }) => ({
+            role: m.role === "human" ? "user" : "assistant",
+            content: m.content,
+          }),
+        );
+        setMessages(loaded);
+      } catch {
+        // conversation may have been deleted or inaccessible
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [currentConvId]);
 
   // Handle initial message from Dashboard quick questions
   useEffect(() => {
@@ -259,7 +288,6 @@ export default function Chat() {
                 onClick={() => {
                   setCurrentConvId(conv.conversation_id);
                   navigate(`/chat/${conv.conversation_id}`);
-                  setMessages([]);
                 }}
                 className="group w-full flex items-center justify-between px-3 py-3.5 rounded-xl cursor-pointer transition-colors text-left"
                 style={

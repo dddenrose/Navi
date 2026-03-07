@@ -1,4 +1,4 @@
-"""Tool: 基本面分析（PE, PB, ROE, EPS 等財報數據）."""
+"""Tool: 基本面分析（PE, PB, ROE, EPS 等財報數據 + 合理價位估算）."""
 
 from langchain_core.tools import tool
 
@@ -7,7 +7,7 @@ from services.stock_service import get_fundamental_data
 
 @tool
 def analyze_fundamentals(ticker: str) -> str:
-    """取得股票的基本面財報數據，包含估值指標、獲利能力、成長性等。
+    """取得股票的基本面財報數據，包含估值指標、獲利能力、成長性，以及基於本益比的合理價位估算（便宜價/合理價/昂貴價）。
 
     Args:
         ticker: 股票代碼，可以是中文名稱（台積電）、數字代碼（2330）或美股代碼（AAPL）。
@@ -43,5 +43,18 @@ def analyze_fundamentals(ticker: str) -> str:
 
     if data.sector:
         parts.extend(["", f"產業：{data.sector} / {data.industry}"])
+
+    # 合理價位估算
+    if data.fair_price is not None:
+        parts.extend([
+            "",
+            "🎯【合理價位估算】",
+            f"  🟢 便宜價：{_num(data.cheap_price)}  （PE {_num(data.pe_low, 1)}）",
+            f"  🟡 合理價：{_num(data.fair_price)}  （PE {_num(data.pe_mid, 1)}）",
+            f"  🔴 昂貴價：{_num(data.expensive_price)}  （PE {_num(data.pe_high, 1)}）",
+            f"  📝 {data.valuation_note}",
+        ])
+    elif data.valuation_note:
+        parts.extend(["", f"⚠️ 估值說明：{data.valuation_note}"])
 
     return "\n".join(parts)

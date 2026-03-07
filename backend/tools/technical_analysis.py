@@ -1,7 +1,5 @@
 """Tool: 技術指標分析（MA, RSI, MACD, KD, 布林通道）."""
 
-from dataclasses import asdict
-
 from langchain_core.tools import tool
 
 from services.stock_service import get_technical_indicators
@@ -9,7 +7,7 @@ from services.stock_service import get_technical_indicators
 
 @tool
 def analyze_technicals(ticker: str, period: str = "3mo") -> str:
-    """計算股票的技術指標，包含均線、RSI、MACD、KD、布林通道，並給出綜合判斷。
+    """計算股票的技術指標，包含均線、RSI、MACD、KD、布林通道、支撐壓力位，並給出綜合判斷。
 
     Args:
         ticker: 股票代碼，可以是中文名稱（台積電）、數字代碼（2330）或美股代碼（AAPL）。
@@ -20,7 +18,7 @@ def analyze_technicals(ticker: str, period: str = "3mo") -> str:
     if data.current_price is None:
         return f"無法取得 {ticker} 的歷史數據，無法計算技術指標。"
 
-    parts = [f"📊 {data.ticker} 技術面分析（期間：{data.period}）", ""]
+    parts = [f"📊 {data.ticker} 技術面分析（期間：{data.period}）現價：{data.current_price}", ""]
 
     # 均線
     if data.ma_trend:
@@ -37,7 +35,10 @@ def analyze_technicals(ticker: str, period: str = "3mo") -> str:
 
     # MACD
     if data.macd is not None:
-        parts.append(f"MACD：DIF={data.macd:.4f}, DEA={data.macd_signal:.4f}, 柱狀={data.macd_histogram:.4f} — {data.macd_cross}")
+        parts.append(
+            f"MACD：DIF={data.macd:.4f}, DEA={data.macd_signal:.4f},"
+            f" 柱狀={data.macd_histogram:.4f} — {data.macd_cross}"
+        )
 
     # KD
     if data.k_value is not None:
@@ -45,7 +46,36 @@ def analyze_technicals(ticker: str, period: str = "3mo") -> str:
 
     # 布林通道
     if data.bb_upper is not None:
-        parts.append(f"布林通道：上={data.bb_upper}, 中={data.bb_middle}, 下={data.bb_lower} — {data.bb_position}")
+        parts.append(
+            f"布林通道：上={data.bb_upper}, 中={data.bb_middle},"
+            f" 下={data.bb_lower} — {data.bb_position}"
+        )
+
+    # 費波那契
+    if data.fibonacci_levels:
+        fib_str = "  |  ".join(f"{k} → {v}" for k, v in data.fibonacci_levels.items())
+        parts.append(f"費波那契回撤（區間高={data.swing_high} / 低={data.swing_low}）：{fib_str}")
+
+    # 支撐位
+    if data.supports:
+        parts.append("")
+        parts.append("🟢 支撐位（由強到弱，最近優先）：")
+        for i, (label, val) in enumerate(data.supports[:5], 1):
+            parts.append(f"  S{i}. {label}")
+
+    # 壓力位
+    if data.resistances:
+        parts.append("")
+        parts.append("🔴 壓力位（由近到遠）：")
+        for i, (label, val) in enumerate(data.resistances[:5], 1):
+            parts.append(f"  R{i}. {label}")
+
+    # 停損建議
+    if data.stop_loss is not None:
+        parts.append("")
+        parts.append(f"🛑 建議停損：{data.stop_loss}（{data.stop_loss_note}）")
+    if data.risk_reward_note:
+        parts.append(f"📊 {data.risk_reward_note}")
 
     # 綜合
     if data.summary:
