@@ -34,6 +34,8 @@ class StockOverview(BaseModel):
     market_cap: int | None = None
     currency: str = ""
     exchange: str = ""
+    high_52w: float | None = None
+    low_52w: float | None = None
 
 
 class TechnicalResponse(BaseModel):
@@ -63,6 +65,16 @@ class TechnicalResponse(BaseModel):
     bb_middle: float | None = None
     bb_lower: float | None = None
     bb_position: str = ""
+    # 支撐/阻力
+    supports: list[tuple[str, float]] = []
+    resistances: list[tuple[str, float]] = []
+    fibonacci_levels: dict[str, float] = {}
+    swing_high: float | None = None
+    swing_low: float | None = None
+    # 停損
+    stop_loss: float | None = None
+    stop_loss_note: str = ""
+    risk_reward_note: str = ""
     # 綜合
     summary: str = ""
 
@@ -87,9 +99,15 @@ class FundamentalResponse(BaseModel):
     eps: float | None = None
     forward_eps: float | None = None
     dividend_yield: float | None = None
+    # 合理價位估算
+    cheap_price: float | None = None
+    fair_price: float | None = None
+    expensive_price: float | None = None
+    valuation_note: str = ""
     # 分類
     sector: str = ""
     industry: str = ""
+    description: str = ""
 
 
 # ── Knowledge ────────────────────────────────────────────────────────────────

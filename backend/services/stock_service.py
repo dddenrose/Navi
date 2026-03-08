@@ -194,6 +194,29 @@ def _resolve_tw_ticker(code: str) -> str:
     return f"{code}.TW"
 
 
+def search_tw_stocks(q: str, limit: int = 10) -> list[dict]:
+    """搜尋台股，支援代碼或名稱模糊查詢，回傳最多 limit 筆。"""
+    listing = _fetch_tw_stock_listing()
+    q_norm = q.strip().lower()
+    if not q_norm:
+        return []
+
+    results: list[dict] = []
+    for name, code in listing.items():
+        if q_norm in code.lower() or q_norm in name.lower():
+            market_suffix = _tw_listing_market.get(code, ".TW")
+            results.append({
+                "code": code,
+                "name": name,
+                "ticker": f"{code}{market_suffix}",
+                "market": "上市" if market_suffix == ".TW" else "上櫃",
+            })
+        if len(results) >= limit:
+            break
+
+    return results
+
+
 # ── Data Classes ─────────────────────────────────────────────────────────────
 
 
@@ -210,6 +233,8 @@ class StockOverviewData:
     market_cap: int | None = None
     currency: str = ""
     exchange: str = ""
+    high_52w: float | None = None   # 52 週最高價
+    low_52w: float | None = None    # 52 週最低價
 
 
 @dataclass
@@ -325,6 +350,8 @@ def get_stock_overview(ticker: str) -> StockOverviewData:
         market_cap=info.get("marketCap"),
         currency=info.get("currency", ""),
         exchange=info.get("exchange", ""),
+        high_52w=info.get("fiftyTwoWeekHigh"),
+        low_52w=info.get("fiftyTwoWeekLow"),
     )
 
 
