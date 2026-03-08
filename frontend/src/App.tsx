@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { useAuthStore } from "@/store/authStore";
+import ErrorBoundary from "@/components/ErrorBoundary";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import Layout from "@/components/Layout";
 import Login from "@/pages/Login";
@@ -34,29 +35,80 @@ export default function App() {
 
   return (
     <BrowserRouter>
-      <Suspense fallback={<PageFallback />}>
-        <Routes>
-          <Route path="/login" element={<Login />} />
-          <Route
-            path="/"
-            element={
-              <ProtectedRoute>
-                <Layout />
-              </ProtectedRoute>
-            }
-          >
-            <Route index element={<Navigate to="/dashboard" replace />} />
-            <Route path="dashboard" element={<Dashboard />} />
-            <Route path="chat" element={<Chat />} />
-            <Route path="chat/:conversationId" element={<Chat />} />
-            <Route path="stock" element={<Stock />} />
-            <Route path="stock/:symbol" element={<Stock />} />
-            <Route path="portfolio" element={<Portfolio />} />
-            <Route path="backtest" element={<Backtest />} />
-          </Route>
-          <Route path="*" element={<Navigate to="/dashboard" replace />} />
-        </Routes>
-      </Suspense>
+      <ErrorBoundary>
+        <Suspense fallback={<PageFallback />}>
+          <Routes>
+            <Route path="/login" element={<Login />} />
+            <Route
+              path="/"
+              element={
+                <ProtectedRoute>
+                  <Layout />
+                </ProtectedRoute>
+              }
+            >
+              <Route index element={<Navigate to="/dashboard" replace />} />
+              <Route
+                path="dashboard"
+                element={
+                  <ErrorBoundary>
+                    <Dashboard />
+                  </ErrorBoundary>
+                }
+              />
+              <Route
+                path="chat"
+                element={
+                  <ErrorBoundary>
+                    <Chat />
+                  </ErrorBoundary>
+                }
+              />
+              <Route
+                path="chat/:conversationId"
+                element={
+                  <ErrorBoundary>
+                    <Chat />
+                  </ErrorBoundary>
+                }
+              />
+              <Route
+                path="stock"
+                element={
+                  <ErrorBoundary>
+                    <Stock />
+                  </ErrorBoundary>
+                }
+              />
+              <Route
+                path="stock/:symbol"
+                element={
+                  <ErrorBoundary>
+                    <Stock />
+                  </ErrorBoundary>
+                }
+              />
+              <Route
+                path="portfolio"
+                element={
+                  <ErrorBoundary>
+                    <Portfolio />
+                  </ErrorBoundary>
+                }
+              />
+              <Route
+                path="backtest"
+                element={
+                  <ErrorBoundary>
+                    <Backtest />
+                  </ErrorBoundary>
+                }
+              />
+            </Route>
+            <Route path="*" element={<Navigate to="/dashboard" replace />} />
+          </Routes>
+        </Suspense>
+      </ErrorBoundary>
     </BrowserRouter>
   );
 }

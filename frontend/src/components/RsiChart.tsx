@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import {
   LineChart,
   Line,
@@ -7,6 +8,7 @@ import {
   ResponsiveContainer,
   ReferenceLine,
 } from "recharts";
+import { useThemeStore } from "@/store/themeStore";
 
 interface RsiChartProps {
   rsi: number;
@@ -14,9 +16,15 @@ interface RsiChartProps {
 
 export default function RsiChart({ rsi }: RsiChartProps) {
   const data = [{ name: "RSI", value: rsi }];
-  const root = getComputedStyle(document.documentElement);
-  const grid = root.getPropertyValue("--chart-grid").trim() || "#334155";
-  const tick = root.getPropertyValue("--chart-tick").trim() || "#64748b";
+  // Read CSS variables once per theme change, not on every render
+  const { theme } = useThemeStore();
+  const { grid, tick } = useMemo(() => {
+    const root = getComputedStyle(document.documentElement);
+    return {
+      grid: root.getPropertyValue("--chart-grid").trim() || "#334155",
+      tick: root.getPropertyValue("--chart-tick").trim() || "#64748b",
+    };
+  }, [theme]);
 
   return (
     <ResponsiveContainer width="100%" height="100%">

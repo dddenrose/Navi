@@ -14,21 +14,7 @@ import {
   type BacktestResult,
   type BacktestTrade,
 } from "@/lib/api";
-
-// ── Helpers ──────────────────────────────────────────────────────────────────
-
-function fmt(n: number, decimals = 0) {
-  return n.toLocaleString("en-US", {
-    minimumFractionDigits: decimals,
-    maximumFractionDigits: decimals,
-  });
-}
-
-function pnlColor(n: number) {
-  if (n > 0) return "text-emerald-400";
-  if (n < 0) return "text-red-400";
-  return "text-slate-400";
-}
+import { fmt, pnlColor } from "@/lib/format";
 
 const STRATEGIES = [
   {
@@ -465,7 +451,10 @@ export default function Backtest() {
                         />
                       </linearGradient>
                     </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" />
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      stroke="var(--chart-grid)"
+                    />
                     <XAxis
                       dataKey="date"
                       tick={{ fontSize: 10, fill: "var(--chart-tick)" }}
@@ -491,7 +480,10 @@ export default function Backtest() {
                         borderRadius: "12px",
                         backdropFilter: "blur(12px)",
                       }}
-                      labelStyle={{ color: "var(--chart-tick)", fontSize: "11px" }}
+                      labelStyle={{
+                        color: "var(--chart-tick)",
+                        fontSize: "11px",
+                      }}
                       formatter={(value: number | undefined) => [
                         `$${fmt(value ?? 0)}`,
                         "淨值",
@@ -550,7 +542,10 @@ export default function Backtest() {
                         />
                       </linearGradient>
                     </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" />
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      stroke="var(--chart-grid)"
+                    />
                     <XAxis
                       dataKey="date"
                       tick={{ fontSize: 10, fill: "var(--chart-tick)" }}
@@ -572,7 +567,10 @@ export default function Backtest() {
                         borderRadius: "12px",
                         backdropFilter: "blur(12px)",
                       }}
-                      labelStyle={{ color: "var(--chart-tick)", fontSize: "11px" }}
+                      labelStyle={{
+                        color: "var(--chart-tick)",
+                        fontSize: "11px",
+                      }}
                       formatter={(value: number | undefined) => [
                         `-${fmt(value ?? 0, 2)}%`,
                         "回撤",
