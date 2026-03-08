@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import {
   LineChart,
   Line,
@@ -7,6 +8,7 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
+import { useThemeStore } from "@/store/themeStore";
 
 interface PriceChartProps {
   history: Array<{ date: string; close: number }>;
@@ -14,14 +16,20 @@ interface PriceChartProps {
 }
 
 export default function PriceChart({ history, isPositive }: PriceChartProps) {
-  const root = getComputedStyle(document.documentElement);
-  const grid = root.getPropertyValue("--chart-grid").trim() || "#334155";
-  const tick = root.getPropertyValue("--chart-tick").trim() || "#64748b";
-  const tooltipBg =
-    root.getPropertyValue("--tooltip-bg").trim() || "rgba(13,20,36,0.95)";
-  const tooltipBorder =
-    root.getPropertyValue("--tooltip-border").trim() ||
-    "rgba(255,255,255,0.08)";
+  // Read CSS variables once per theme change, not on every render
+  const { theme } = useThemeStore();
+  const { grid, tick, tooltipBg, tooltipBorder } = useMemo(() => {
+    const root = getComputedStyle(document.documentElement);
+    return {
+      grid: root.getPropertyValue("--chart-grid").trim() || "#334155",
+      tick: root.getPropertyValue("--chart-tick").trim() || "#64748b",
+      tooltipBg:
+        root.getPropertyValue("--tooltip-bg").trim() || "rgba(13,20,36,0.95)",
+      tooltipBorder:
+        root.getPropertyValue("--tooltip-border").trim() ||
+        "rgba(255,255,255,0.08)",
+    };
+  }, [theme]);
 
   return (
     <ResponsiveContainer width="100%" height="100%">

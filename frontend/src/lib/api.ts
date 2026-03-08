@@ -4,7 +4,7 @@ const BASE_URL =
   import.meta.env.VITE_API_BASE_URL ||
   "https://navi-backend-58156810941.asia-east1.run.app";
 
-async function getAuthHeaders(): Promise<Record<string, string>> {
+export async function getAuthHeaders(): Promise<Record<string, string>> {
   const user = auth.currentUser;
   if (!user) throw new Error("Not authenticated");
   const token = await user.getIdToken();
@@ -15,23 +15,26 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
 }
 
 /**
- * Pre-fetch headers once, then pass to multiple API calls
- * to avoid redundant getIdToken() round-trips.
+ * Unified fetch wrapper: handles auth headers, base URL, and error unwrapping.
+ * Pass pre-fetched `headers` to avoid redundant getIdToken() calls when
+ * firing multiple parallel requests (e.g. Stock page parallel fetches).
  */
-export { getAuthHeaders };
+async function apiFetch<T>(
+  path: string,
+  init: RequestInit = {},
+  headers?: Record<string, string>,
+): Promise<T> {
+  const h = headers ?? (await getAuthHeaders());
+  const res = await fetch(`${BASE_URL}${path}`, { ...init, headers: h });
+  if (!res.ok) throw new Error(await res.text());
+  const text = await res.text();
+  return (text ? JSON.parse(text) : undefined) as T;
+}
 
 // ─── Knowledge ──────────────────────────────────────────────────────────────
 
 export async function searchKnowledge(query: string) {
-  const headers = await getAuthHeaders();
-  const res = await fetch(
-    `${BASE_URL}/api/knowledge/search?query=${encodeURIComponent(query)}`,
-    {
-      headers,
-    },
-  );
-  if (!res.ok) throw new Error(await res.text());
-  return res.json();
+  return apiFetch(`/api/knowledge/search?query=${encodeURIComponent(query)}`);
 }
 
 // ─── Stock ───────────────────────────────────────────────────────────────────
@@ -40,60 +43,51 @@ export async function getStockPrice(
   symbol: string,
   headers?: Record<string, string>,
 ) {
-  const h = headers ?? (await getAuthHeaders());
-  const res = await fetch(`${BASE_URL}/api/stock/${symbol}`, {
-    headers: h,
-  });
-  if (!res.ok) throw new Error(await res.text());
-  return res.json();
+  return apiFetch(`/api/stock/${encodeURIComponent(symbol)}`, {}, headers);
 }
 
 export async function getStockTechnicals(
   symbol: string,
   headers?: Record<string, string>,
 ) {
-  const h = headers ?? (await getAuthHeaders());
-  const res = await fetch(`${BASE_URL}/api/stock/${symbol}/technical`, {
-    headers: h,
-  });
-  if (!res.ok) throw new Error(await res.text());
-  return res.json();
+  return apiFetch(
+    `/api/stock/${encodeURIComponent(symbol)}/technical`,
+    {},
+    headers,
+  );
 }
 
 export async function getStockFundamentals(
   symbol: string,
   headers?: Record<string, string>,
 ) {
-  const h = headers ?? (await getAuthHeaders());
-  const res = await fetch(`${BASE_URL}/api/stock/${symbol}/fundamental`, {
-    headers: h,
-  });
-  if (!res.ok) throw new Error(await res.text());
-  return res.json();
+  return apiFetch(
+    `/api/stock/${encodeURIComponent(symbol)}/fundamental`,
+    {},
+    headers,
+  );
 }
 
 export async function getStockInstitutional(
   symbol: string,
   headers?: Record<string, string>,
 ) {
-  const h = headers ?? (await getAuthHeaders());
-  const res = await fetch(`${BASE_URL}/api/stock/${symbol}/institutional`, {
-    headers: h,
-  });
-  if (!res.ok) throw new Error(await res.text());
-  return res.json();
+  return apiFetch(
+    `/api/stock/${encodeURIComponent(symbol)}/institutional`,
+    {},
+    headers,
+  );
 }
 
 export async function getStockMargin(
   symbol: string,
   headers?: Record<string, string>,
 ) {
-  const h = headers ?? (await getAuthHeaders());
-  const res = await fetch(`${BASE_URL}/api/stock/${symbol}/margin`, {
-    headers: h,
-  });
-  if (!res.ok) throw new Error(await res.text());
-  return res.json();
+  return apiFetch(
+    `/api/stock/${encodeURIComponent(symbol)}/margin`,
+    {},
+    headers,
+  );
 }
 
 export interface StockSuggestion {
@@ -104,47 +98,34 @@ export interface StockSuggestion {
 }
 
 export async function searchStocks(q: string): Promise<StockSuggestion[]> {
-  const h = await getAuthHeaders();
-  const res = await fetch(
-    `${BASE_URL}/api/stock/search?q=${encodeURIComponent(q)}`,
-    { headers: h },
-  );
-  if (!res.ok) return [];
-  return res.json();
+  try {
+    return await apiFetch<StockSuggestion[]>(
+      `/api/stock/search?q=${encodeURIComponent(q)}`,
+    );
+  } catch {
+    return [];
+  }
 }
 
 // ─── Conversations ───────────────────────────────────────────────────────────
 
 export async function getConversations() {
-  const headers = await getAuthHeaders();
-  const res = await fetch(`${BASE_URL}/api/chat/conversations`, { headers });
-  if (!res.ok) throw new Error(await res.text());
-  return res.json();
+  return apiFetch(`/api/chat/conversations`);
 }
 
 export async function getConversationMessages(
   conversationId: string,
 ): Promise<{ messages: { role: string; content: string }[] }> {
-  const headers = await getAuthHeaders();
-  const res = await fetch(
-    `${BASE_URL}/api/chat/conversations/${conversationId}/messages`,
-    { headers },
+  return apiFetch(
+    `/api/chat/conversations/${encodeURIComponent(conversationId)}/messages`,
   );
-  if (!res.ok) throw new Error(await res.text());
-  return res.json();
 }
 
 export async function deleteConversation(conversationId: string) {
-  const headers = await getAuthHeaders();
-  const res = await fetch(
-    `${BASE_URL}/api/chat/conversations/${conversationId}`,
-    {
-      method: "DELETE",
-      headers,
-    },
+  return apiFetch(
+    `/api/chat/conversations/${encodeURIComponent(conversationId)}`,
+    { method: "DELETE" },
   );
-  if (!res.ok) throw new Error(await res.text());
-  return res.json();
 }
 
 // ─── Chat (SSE Streaming) ────────────────────────────────────────────────────
@@ -277,17 +258,11 @@ export interface PortfolioSummary {
 }
 
 export async function getPortfolio(): Promise<PortfolioSummary> {
-  const headers = await getAuthHeaders();
-  const res = await fetch(`${BASE_URL}/api/portfolio`, { headers });
-  if (!res.ok) throw new Error(await res.text());
-  return res.json();
+  return apiFetch(`/api/portfolio`);
 }
 
 export async function getPortfolioHoldings(): Promise<HoldingData[]> {
-  const headers = await getAuthHeaders();
-  const res = await fetch(`${BASE_URL}/api/portfolio/holdings`, { headers });
-  if (!res.ok) throw new Error(await res.text());
-  return res.json();
+  return apiFetch(`/api/portfolio/holdings`);
 }
 
 export async function addHolding(data: {
@@ -297,37 +272,26 @@ export async function addHolding(data: {
   name?: string;
   notes?: string;
 }): Promise<HoldingData> {
-  const headers = await getAuthHeaders();
-  const res = await fetch(`${BASE_URL}/api/portfolio/holdings`, {
+  return apiFetch(`/api/portfolio/holdings`, {
     method: "POST",
-    headers,
     body: JSON.stringify(data),
   });
-  if (!res.ok) throw new Error(await res.text());
-  return res.json();
 }
 
 export async function updateHolding(
   holdingId: string,
   data: { shares?: number; avg_cost?: number; notes?: string },
 ): Promise<HoldingData> {
-  const headers = await getAuthHeaders();
-  const res = await fetch(`${BASE_URL}/api/portfolio/holdings/${holdingId}`, {
+  return apiFetch(`/api/portfolio/holdings/${encodeURIComponent(holdingId)}`, {
     method: "PUT",
-    headers,
     body: JSON.stringify(data),
   });
-  if (!res.ok) throw new Error(await res.text());
-  return res.json();
 }
 
 export async function deleteHolding(holdingId: string): Promise<void> {
-  const headers = await getAuthHeaders();
-  const res = await fetch(`${BASE_URL}/api/portfolio/holdings/${holdingId}`, {
+  await apiFetch(`/api/portfolio/holdings/${encodeURIComponent(holdingId)}`, {
     method: "DELETE",
-    headers,
   });
-  if (!res.ok) throw new Error(await res.text());
 }
 
 // ─── Backtest ─────────────────────────────────────────────────────────────────
@@ -391,19 +355,12 @@ export interface StrategyInfo {
 export async function runBacktest(
   req: BacktestRequest,
 ): Promise<BacktestResult> {
-  const headers = await getAuthHeaders();
-  const res = await fetch(`${BASE_URL}/api/backtest`, {
+  return apiFetch(`/api/backtest`, {
     method: "POST",
-    headers,
     body: JSON.stringify(req),
   });
-  if (!res.ok) throw new Error(await res.text());
-  return res.json();
 }
 
 export async function getStrategies(): Promise<{ strategies: StrategyInfo[] }> {
-  const headers = await getAuthHeaders();
-  const res = await fetch(`${BASE_URL}/api/backtest/strategies`, { headers });
-  if (!res.ok) throw new Error(await res.text());
-  return res.json();
+  return apiFetch(`/api/backtest/strategies`);
 }

@@ -6,27 +6,7 @@ import {
   type PortfolioSummary,
   type HoldingWithPrice,
 } from "@/lib/api";
-
-// ── Helpers ──────────────────────────────────────────────────────────────────
-
-function fmt(n: number, decimals = 0) {
-  return n.toLocaleString("en-US", {
-    minimumFractionDigits: decimals,
-    maximumFractionDigits: decimals,
-  });
-}
-
-function pnlColor(n: number) {
-  if (n > 0) return "text-emerald-400";
-  if (n < 0) return "text-red-400";
-  return "text-slate-400";
-}
-
-function pnlBg(n: number) {
-  if (n > 0) return "rgba(52,211,153,0.08)";
-  if (n < 0) return "rgba(248,113,113,0.08)";
-  return "rgba(255,255,255,0.03)";
-}
+import { fmt, pnlColor, pnlBg } from "@/lib/format";
 
 // ── Add Holding Modal ────────────────────────────────────────────────────────
 
