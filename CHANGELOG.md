@@ -13,6 +13,27 @@
 
 ---
 
+## [0.4.0] - 2026-03-08
+
+### Added
+
+- **ErrorBoundary 元件**：全域 + 每頁獨立隔離，防止任一頁面錯誤導致整個 App 白屏；提供中文 fallback UI 與「重試」按鈕
+
+### Changed
+
+- **Stock.tsx 垂直切割**：從 1442 行縮減至 405 行（slim coordinator），UI 邏輯分拆為四個獨立 tab 元件
+  - `pages/stock/StockOverviewTab.tsx`：概覽頁（成交量、市值、52週高低）
+  - `pages/stock/StockTechnicalTab.tsx`：技術分析頁（RSI、MACD、KD、MA、布林通道、RSI 圖表、支撐/阻力、費波那契、停損建議）
+  - `pages/stock/StockFundamentalTab.tsx`：基本面頁（估值指標 12 格、便宜/合理/昂貴價格）
+  - `pages/stock/StockInstitutionalTab.tsx`：籌碼面頁（三大法人、融資融券）
+- **新增 `lib/format.ts`**：集中管理所有數字格式化工具（`fmtNum`、`fmtPct`、`fmtPrice`、`fmtLarge`、`fmt`、`pnlColor`、`pnlBg`），消除 Portfolio / Backtest / Stock 重複定義
+- **新增 `types/stock.ts`**：集中管理股票相關型別（`StockPrice`、`Technicals`、`Fundamentals`、`InstitutionalData`、`MarginData` 等）
+- **`api.ts` 重構**：新增 `apiFetch<T>` 泛型 wrapper，消除 12+ 處重複的 fetch / error-unwrap / JSON parse 樣板
+- **`PriceChart` / `RsiChart` 效能修正**：CSS 變數讀取從每次 render 的 `getComputedStyle` 改為 `useMemo` keyed on `theme`，移除不必要的 layout reflow
+- **`Portfolio.tsx` / `Backtest.tsx`**：移除本地 `fmt` / `pnlColor` 重複定義，改從 `@/lib/format` 匯入
+
+---
+
 ## [0.3.0] - 2026-03-08
 
 ### Added
