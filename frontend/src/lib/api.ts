@@ -1,4 +1,11 @@
 import { auth } from "./firebase";
+import type {
+  StockPrice,
+  Technicals,
+  Fundamentals,
+  InstitutionalData,
+  MarginData,
+} from "@/types/stock";
 
 const BASE_URL =
   import.meta.env.VITE_API_BASE_URL ||
@@ -42,15 +49,15 @@ export async function searchKnowledge(query: string) {
 export async function getStockPrice(
   symbol: string,
   headers?: Record<string, string>,
-) {
-  return apiFetch(`/api/stock/${encodeURIComponent(symbol)}`, {}, headers);
+): Promise<StockPrice> {
+  return apiFetch<StockPrice>(`/api/stock/${encodeURIComponent(symbol)}`, {}, headers);
 }
 
 export async function getStockTechnicals(
   symbol: string,
   headers?: Record<string, string>,
-) {
-  return apiFetch(
+): Promise<Technicals> {
+  return apiFetch<Technicals>(
     `/api/stock/${encodeURIComponent(symbol)}/technical`,
     {},
     headers,
@@ -60,8 +67,8 @@ export async function getStockTechnicals(
 export async function getStockFundamentals(
   symbol: string,
   headers?: Record<string, string>,
-) {
-  return apiFetch(
+): Promise<Fundamentals> {
+  return apiFetch<Fundamentals>(
     `/api/stock/${encodeURIComponent(symbol)}/fundamental`,
     {},
     headers,
@@ -71,8 +78,8 @@ export async function getStockFundamentals(
 export async function getStockInstitutional(
   symbol: string,
   headers?: Record<string, string>,
-) {
-  return apiFetch(
+): Promise<InstitutionalData> {
+  return apiFetch<InstitutionalData>(
     `/api/stock/${encodeURIComponent(symbol)}/institutional`,
     {},
     headers,
@@ -82,8 +89,8 @@ export async function getStockInstitutional(
 export async function getStockMargin(
   symbol: string,
   headers?: Record<string, string>,
-) {
-  return apiFetch(
+): Promise<MarginData> {
+  return apiFetch<MarginData>(
     `/api/stock/${encodeURIComponent(symbol)}/margin`,
     {},
     headers,
@@ -109,8 +116,15 @@ export async function searchStocks(q: string): Promise<StockSuggestion[]> {
 
 // ─── Conversations ───────────────────────────────────────────────────────────
 
-export async function getConversations() {
-  return apiFetch(`/api/chat/conversations`);
+export interface Conversation {
+  conversation_id: string;
+  title: string;
+  created_at: string;
+  message_count: number;
+}
+
+export async function getConversations(): Promise<{ conversations: Conversation[] }> {
+  return apiFetch<{ conversations: Conversation[] }>(`/api/chat/conversations`);
 }
 
 export async function getConversationMessages(
