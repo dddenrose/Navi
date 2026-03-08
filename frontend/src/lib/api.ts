@@ -72,6 +72,47 @@ export async function getStockFundamentals(
   return res.json();
 }
 
+export async function getStockInstitutional(
+  symbol: string,
+  headers?: Record<string, string>,
+) {
+  const h = headers ?? (await getAuthHeaders());
+  const res = await fetch(`${BASE_URL}/api/stock/${symbol}/institutional`, {
+    headers: h,
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+export async function getStockMargin(
+  symbol: string,
+  headers?: Record<string, string>,
+) {
+  const h = headers ?? (await getAuthHeaders());
+  const res = await fetch(`${BASE_URL}/api/stock/${symbol}/margin`, {
+    headers: h,
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+export interface StockSuggestion {
+  code: string;
+  name: string;
+  ticker: string;
+  market: string;
+}
+
+export async function searchStocks(q: string): Promise<StockSuggestion[]> {
+  const h = await getAuthHeaders();
+  const res = await fetch(
+    `${BASE_URL}/api/stock/search?q=${encodeURIComponent(q)}`,
+    { headers: h },
+  );
+  if (!res.ok) return [];
+  return res.json();
+}
+
 // ─── Conversations ───────────────────────────────────────────────────────────
 
 export async function getConversations() {
