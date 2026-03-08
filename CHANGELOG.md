@@ -13,6 +13,24 @@
 
 ---
 
+## [0.3.0] - 2026-03-08
+
+### Added
+
+- **股票搜尋自動完成**：輸入代碼或中文名稱即時顯示下拉選單，支援 TWSE / TPEx 全部股票
+- **技術分析高價值欄位**：前端新增支撐/阻力位表格、費波那契回檔、停損建議與風報比面板
+- **籌碼面分頁**：新增「籌碼面」Tab，包含三大法人買賣超（逐日明細 + 匯總卡片）與融資融券數據（餘額、增減、使用率）
+- **法人買賣超 API**：`GET /api/stock/{ticker}/institutional` 端點，取得 TWSE/TPEx 三大法人逐日買賣超資料
+- **融資融券 API**：`GET /api/stock/{ticker}/margin` 端點，取得 TWSE 融資融券逐日明細
+- **52 週高低點**：概覽頁新增 52 週最高 / 最低價顯示
+
+### Changed
+
+- **TechnicalResponse schema 擴充**：新增 `supports`、`resistances`、`fibonacci_levels`、`swing_high`、`swing_low`、`stop_loss`、`stop_loss_note`、`risk_reward_note` 欄位
+- **Stock.tsx 完整重構**：4 個分頁（概覽 / 技術分析 / 基本面 / 籌碼面），台股 UI 適配（NT$ 前綴、上市/上櫃標籤）
+
+---
+
 ## [0.2.0] - 2026-03-07
 
 ### Added
@@ -63,6 +81,7 @@
 
 ---
 
-[Unreleased]: https://github.com/dddenrose/Navi/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/dddenrose/Navi/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/dddenrose/Navi/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/dddenrose/Navi/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/dddenrose/Navi/releases/tag/v0.1.0
