@@ -50,7 +50,11 @@ export async function getStockPrice(
   symbol: string,
   headers?: Record<string, string>,
 ): Promise<StockPrice> {
-  return apiFetch<StockPrice>(`/api/stock/${encodeURIComponent(symbol)}`, {}, headers);
+  return apiFetch<StockPrice>(
+    `/api/stock/${encodeURIComponent(symbol)}`,
+    {},
+    headers,
+  );
 }
 
 export async function getStockTechnicals(
@@ -123,7 +127,9 @@ export interface Conversation {
   message_count: number;
 }
 
-export async function getConversations(): Promise<{ conversations: Conversation[] }> {
+export async function getConversations(): Promise<{
+  conversations: Conversation[];
+}> {
   return apiFetch<{ conversations: Conversation[] }>(`/api/chat/conversations`);
 }
 
@@ -149,16 +155,28 @@ export interface ChatMessage {
   content: string;
 }
 
+export type ThinkingStep =
+  | {
+      type: "intent";
+      intent: string;
+      ticker?: string | null;
+      confidence: number;
+    }
+  | { type: "tool_start"; tool: string; input?: Record<string, unknown> }
+  | { type: "tool_end"; tool: string };
+
 export interface ChatStreamOptions {
   message: string;
   conversationId?: string;
   onChunk: (text: string) => void;
+  onThinkingStep: (step: ThinkingStep) => void;
   onDone: (conversationId: string) => void;
   onError: (error: string) => void;
 }
 
 export async function streamChat(options: ChatStreamOptions): Promise<void> {
-  const { message, conversationId, onChunk, onDone, onError } = options;
+  const { message, conversationId, onChunk, onThinkingStep, onDone, onError } =
+    options;
 
   const user = auth.currentUser;
   if (!user) {
@@ -216,8 +234,23 @@ export async function streamChat(options: ChatStreamOptions): Promise<void> {
           const parsed = JSON.parse(data);
 
           // First event: {"conversation_id": "xxx"}
-          if (parsed.conversation_id && !parsed.text && !parsed.error) {
+          if (
+            parsed.conversation_id &&
+            !parsed.text &&
+            !parsed.error &&
+            !parsed.type
+          ) {
             capturedConvId = parsed.conversation_id;
+            continue;
+          }
+
+          // Thinking events: {"type": "intent" | "tool_start" | "tool_end", ...}
+          if (
+            parsed.type === "intent" ||
+            parsed.type === "tool_start" ||
+            parsed.type === "tool_end"
+          ) {
+            onThinkingStep(parsed as ThinkingStep);
             continue;
           }
 

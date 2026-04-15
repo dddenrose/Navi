@@ -40,7 +40,11 @@ async def _sse_generator(
 
     try:
         async for chunk in run_agent(question, conversation_id=cid, user_id=user_id):
-            data = json.dumps({"text": chunk}, ensure_ascii=False)
+            if isinstance(chunk, str):
+                data = json.dumps({"text": chunk}, ensure_ascii=False)
+            else:
+                # ThinkingEvent dict — already contains "type" key
+                data = json.dumps(chunk, ensure_ascii=False)
             yield f"data: {data}\n\n"
         yield "data: [DONE]\n\n"
     except Exception as e:
