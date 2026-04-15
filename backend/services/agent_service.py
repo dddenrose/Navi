@@ -4,6 +4,7 @@ import asyncio
 import json
 import logging
 from collections.abc import AsyncGenerator
+from typing import Any, Literal, TypedDict
 
 import vertexai
 from langchain.agents import AgentExecutor, create_tool_calling_agent
@@ -21,6 +22,31 @@ from services.conversation_service import (
 from tools import ALL_TOOLS
 
 logger = logging.getLogger(__name__)
+
+# ── Thinking Event Types ─────────────────────────────────────────────────────
+
+
+class IntentEvent(TypedDict):
+    type: Literal["intent"]
+    intent: str
+    ticker: str | None
+    confidence: float
+
+
+class ToolStartEvent(TypedDict):
+    type: Literal["tool_start"]
+    tool: str
+    input: dict[str, Any]
+
+
+class ToolEndEvent(TypedDict):
+    type: Literal["tool_end"]
+    tool: str
+
+
+ThinkingEvent = IntentEvent | ToolStartEvent | ToolEndEvent
+StreamChunk = str | ThinkingEvent
+
 
 # ── Prompt ───────────────────────────────────────────────────────────────────
 
@@ -251,9 +277,17 @@ async def _run_prefetch_mode(
     llm: ChatVertexAI,
     conversation_id: str | None,
     user_id: str,
-) -> AsyncGenerator[str, None]:
+) -> AsyncGenerator[StreamChunk, None]:
     """預取模式：平行呼叫工具 → 組裝結果 → 直接串流 LLM 回答。"""
+    # Emit tool_start events for all parallel tools
+    for name in tool_names:
+        yield ToolStartEvent(type="tool_start", tool=name, input={"ticker": ticker})
+
     tool_results = await _prefetch_tool_results(ticker, tool_names)
+
+    # Emit tool_end events after all tools complete
+    for name in tool_names:
+        yield ToolEndEvent(type="tool_end", tool=name)
 
     format_instructions = (
         _ENTRY_FORMAT if intent == "entry_analysis" else _COMPREHENSIVE_FORMAT
@@ -300,7 +334,7 @@ async def _run_agent_mode(
     llm: ChatVertexAI,
     conversation_id: str | None,
     user_id: str,
-) -> AsyncGenerator[str, None]:
+) -> AsyncGenerator[StreamChunk, None]:
     """Agent 模式：透過 system-level 指令引導工具呼叫。"""
     directive = _INTENT_TOOL_DIRECTIVES.get(intent, "")
     system_prompt = AGENT_SYSTEM_PROMPT
@@ -339,7 +373,15 @@ async def _run_agent_mode(
             version="v2",
         ):
             kind = event["event"]
-            if kind == "on_chat_model_stream":
+            if kind == "on_tool_start":
+                yield ToolStartEvent(
+                    type="tool_start",
+                    tool=event["name"],
+                    input=event["data"].get("input", {}),
+                )
+            elif kind == "on_tool_end":
+                yield ToolEndEvent(type="tool_end", tool=event["name"])
+            elif kind == "on_chat_model_stream":
                 content = event["data"]["chunk"].content
                 if content:
                     full_output += content
@@ -371,7 +413,7 @@ async def run_agent(
     question: str,
     conversation_id: str | None = None,
     user_id: str = "",
-) -> AsyncGenerator[str, None]:
+) -> AsyncGenerator[StreamChunk, None]:
     """Run the tool-calling agent with intent classification.
 
     Flow:
@@ -385,6 +427,9 @@ async def run_agent(
     # Step 1: 意圖分類
     intent, ticker, confidence = await _classify_intent(question, llm)
     logger.info("Intent: %s | Ticker: %s | Confidence: %.2f", intent, ticker, confidence)
+
+    # Emit intent classification event
+    yield IntentEvent(type="intent", intent=intent, ticker=ticker, confidence=confidence)
 
     # 低信心 → 降級為 Agent 模式（讓 LLM 自主判斷）
     if confidence < _CONFIDENCE_THRESHOLD and intent != "general":

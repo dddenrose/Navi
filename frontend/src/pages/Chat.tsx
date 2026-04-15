@@ -6,11 +6,14 @@ import {
   getConversationMessages,
   deleteConversation,
 } from "@/lib/api";
+import type { ThinkingStep } from "@/lib/api";
+import { ThinkingPanel } from "@/components/ThinkingPanel";
 
 interface Message {
   role: "user" | "assistant";
   content: string;
   streaming?: boolean;
+  thinkingSteps?: ThinkingStep[];
 }
 
 interface Conversation {
@@ -117,6 +120,19 @@ export default function Chat() {
     await streamChat({
       message: trimmed,
       conversationId: currentConvId,
+      onThinkingStep: (step) => {
+        setMessages((prev) => {
+          const updated = [...prev];
+          const last = updated[updated.length - 1];
+          if (last.role === "assistant") {
+            updated[updated.length - 1] = {
+              ...last,
+              thinkingSteps: [...(last.thinkingSteps ?? []), step],
+            };
+          }
+          return updated;
+        });
+      },
       onChunk: (chunk) => {
         fullContent += chunk;
         streamContentRef.current = fullContent;
@@ -399,28 +415,38 @@ export default function Chat() {
                     🧭
                   </div>
                 )}
-                <div
-                  className={`max-w-2xl px-5 py-4 rounded-2xl text-sm leading-8 whitespace-pre-wrap break-words ${
-                    msg.role === "user" ? "rounded-tr-sm" : "rounded-tl-sm"
-                  }`}
-                  style={
-                    msg.role === "user"
-                      ? {
-                          background:
-                            "linear-gradient(135deg, #6366f1, #7c3aed)",
-                          color: "white",
-                        }
-                      : {
-                          background: "var(--overlay-bg)",
-                          border: "1px solid var(--border)",
-                          color: "var(--text-link)",
-                        }
-                  }
-                >
-                  {msg.content}
-                  {msg.streaming && (
-                    <span className="cursor-blink inline-block w-0.5 h-4 bg-indigo-400 ml-0.5 align-text-bottom" />
-                  )}
+                <div className="flex flex-col max-w-2xl min-w-0">
+                  {msg.role === "assistant" &&
+                    msg.thinkingSteps &&
+                    msg.thinkingSteps.length > 0 && (
+                      <ThinkingPanel
+                        steps={msg.thinkingSteps}
+                        isStreaming={!!msg.streaming}
+                      />
+                    )}
+                  <div
+                    className={`px-5 py-4 rounded-2xl text-sm leading-8 whitespace-pre-wrap break-words ${
+                      msg.role === "user" ? "rounded-tr-sm" : "rounded-tl-sm"
+                    }`}
+                    style={
+                      msg.role === "user"
+                        ? {
+                            background:
+                              "linear-gradient(135deg, #6366f1, #7c3aed)",
+                            color: "white",
+                          }
+                        : {
+                            background: "var(--overlay-bg)",
+                            border: "1px solid var(--border)",
+                            color: "var(--text-link)",
+                          }
+                    }
+                  >
+                    {msg.content}
+                    {msg.streaming && (
+                      <span className="cursor-blink inline-block w-0.5 h-4 bg-indigo-400 ml-0.5 align-text-bottom" />
+                    )}
+                  </div>
                 </div>
               </div>
             ))}
