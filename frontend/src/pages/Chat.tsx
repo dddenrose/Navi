@@ -8,6 +8,7 @@ import {
 } from "@/lib/api";
 import type { ThinkingStep } from "@/lib/api";
 import { ThinkingPanel } from "@/components/ThinkingPanel";
+import { MarkdownRenderer } from "@/components/MarkdownRenderer";
 
 interface Message {
   role: "user" | "assistant";
@@ -425,8 +426,10 @@ export default function Chat() {
                       />
                     )}
                   <div
-                    className={`px-5 py-4 rounded-2xl text-sm leading-8 whitespace-pre-wrap break-words ${
-                      msg.role === "user" ? "rounded-tr-sm" : "rounded-tl-sm"
+                    className={`px-5 py-4 rounded-2xl text-sm leading-8 break-words ${
+                      msg.role === "user"
+                        ? "rounded-tr-sm whitespace-pre-wrap"
+                        : "rounded-tl-sm"
                     }`}
                     style={
                       msg.role === "user"
@@ -442,7 +445,11 @@ export default function Chat() {
                           }
                     }
                   >
-                    {msg.content}
+                    {msg.role === "assistant" ? (
+                      <MarkdownRenderer content={msg.content} />
+                    ) : (
+                      msg.content
+                    )}
                     {msg.streaming && (
                       <span className="cursor-blink inline-block w-0.5 h-4 bg-indigo-400 ml-0.5 align-text-bottom" />
                     )}
