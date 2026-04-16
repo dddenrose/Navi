@@ -1,5 +1,7 @@
 """Navi Backend — Configuration via pydantic-settings."""
 
+import os
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -34,4 +36,11 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+# Sync credentials path to OS env so that google.auth.default() can find it.
+if settings.google_application_credentials:
+    os.environ.setdefault(
+        "GOOGLE_APPLICATION_CREDENTIALS",
+        settings.google_application_credentials,
+    )
 # trigger rebuild

@@ -19,6 +19,7 @@ dependencies = [
     "requests>=2.31.0",
     "python-dotenv>=1.0.0",
     "pydantic-settings>=2.5.0",
+    "langgraph>=0.2.0",
 ]
 
 [project.scripts]

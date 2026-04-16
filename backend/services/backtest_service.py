@@ -72,6 +72,7 @@ class BacktestResult:
     losing_trades: int = 0
     avg_win: float = 0.0  # %
     avg_loss: float = 0.0  # %
+    total_fees: float = 0.0  # total transaction costs
     benchmark_return: float = 0.0  # % (buy & hold)
     trades: list[Trade] = field(default_factory=list)
     equity_curve: list[EquityPoint] = field(default_factory=list)
@@ -373,10 +374,18 @@ def run_backtest(
         result.error = f"不支援的策略：{strategy}。可選：ma_cross, rsi, macd, custom"
         return result
 
+    # ── Transaction cost parameters ──
+    # Taiwan stock market: broker commission 0.1425%, securities tax 0.3% (sell only)
+    # Discount brokers typically offer 5-6折 on commission
+    is_tw = ticker.endswith(".TW") or ticker.endswith(".TWO")
+    commission_rate = 0.001425 if is_tw else 0.0  # broker commission (both sides)
+    sell_tax_rate = 0.003 if is_tw else 0.0  # securities transaction tax (sell only)
+
     # ── Simulate trades ──
     cash = initial_capital
     shares = 0
     trades: list[Trade] = []
+    total_fees = 0.0
     buy_price: float | None = None
 
     # Create a date→price lookup
@@ -390,12 +399,15 @@ def run_backtest(
             continue
 
         if action == TradeAction.BUY and shares == 0:
-            # Buy: use all cash
-            shares = int(cash // price)
+            # Buy: use all cash (minus estimated commission)
+            affordable = cash / (1 + commission_rate)
+            shares = int(affordable // price)
             if shares == 0:
                 continue
             cost = shares * price
-            cash -= cost
+            buy_commission = round(cost * commission_rate, 2)
+            cash -= cost + buy_commission
+            total_fees += buy_commission
             buy_price = price
             trades.append(
                 Trade(
@@ -409,16 +421,20 @@ def run_backtest(
             )
 
         elif action == TradeAction.SELL and shares > 0:
-            # Sell: liquidate all
-            proceeds = shares * price
-            cash += proceeds
+            # Sell: liquidate all, deduct commission + tax
+            gross_proceeds = shares * price
+            sell_commission = round(gross_proceeds * commission_rate, 2)
+            sell_tax = round(gross_proceeds * sell_tax_rate, 2)
+            net_proceeds = gross_proceeds - sell_commission - sell_tax
+            total_fees += sell_commission + sell_tax
+            cash += net_proceeds
             trades.append(
                 Trade(
                     date=date_str,
                     action=TradeAction.SELL,
                     price=round(price, 2),
                     shares=shares,
-                    value=round(proceeds, 2),
+                    value=round(gross_proceeds, 2),
                     reason=reason,
                 )
             )
@@ -446,9 +462,14 @@ def run_backtest(
             t = trade_by_date[date_str]
             if t.action == TradeAction.BUY:
                 sim_shares = t.shares
-                sim_cash -= t.value
+                buy_cost = t.value
+                buy_fee = round(buy_cost * commission_rate, 2)
+                sim_cash -= buy_cost + buy_fee
             elif t.action == TradeAction.SELL:
-                sim_cash += t.value
+                gross = t.value
+                sell_fee = round(gross * commission_rate, 2)
+                sell_tax_cost = round(gross * sell_tax_rate, 2)
+                sim_cash += gross - sell_fee - sell_tax_cost
                 sim_shares = 0
 
         equity = sim_cash + sim_shares * price
@@ -468,6 +489,7 @@ def run_backtest(
     final_equity = cash + shares * final_price
     result.final_equity = round(final_equity, 2)
     result.total_return = round(((final_equity - initial_capital) / initial_capital) * 100, 2)
+    result.total_fees = round(total_fees, 2)
 
     # Annualized return
     days = (df.index[-1] - df.index[0]).days
@@ -559,6 +581,7 @@ def format_backtest_result(result: BacktestResult) -> str:
         f"  • 夏普比率：{result.sharpe_ratio:.2f}",
         f"  • 勝率：{result.win_rate:.1f}%（{result.winning_trades} 勝 / {result.losing_trades} 敗）",
         f"  • 總交易次數：{result.total_trades} 次",
+        f"  • 總交易成本：${result.total_fees:,.0f}（手續費 + 證交稅）",
     ]
 
     if result.avg_win or result.avg_loss:

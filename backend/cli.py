@@ -1,4 +1,4 @@
-"""Navi CLI — Interactive Q&A with the RAG pipeline.
+"""Navi CLI — Interactive Q&A with the Agent pipeline.
 
 Usage:
     cd backend
@@ -25,12 +25,13 @@ BANNER = """
 
 
 async def _stream_response(question: str, ticker: str | None = None) -> None:
-    """Stream RAG response to stdout."""
-    from services.rag_service import analyze
+    """Stream Agent response to stdout."""
+    from services.agent_service import run_agent
 
     print("\n🧚 Navi：", end="", flush=True)
-    async for chunk in analyze(question, ticker=ticker):
-        print(chunk, end="", flush=True)
+    async for chunk in run_agent(question):
+        if isinstance(chunk, str):
+            print(chunk, end="", flush=True)
     print("\n")
 
 
