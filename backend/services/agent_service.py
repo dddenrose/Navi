@@ -18,6 +18,7 @@ from langchain_core.messages import (
 )
 from langchain_google_vertexai import ChatVertexAI
 from langgraph.prebuilt import create_react_agent  # pyright: ignore[reportDeprecated]
+from pydantic import BaseModel, Field
 
 from config import settings
 from services.conversation_service import (
@@ -54,152 +55,200 @@ StreamChunk = str | ThinkingEvent
 
 
 # ── Prompt ───────────────────────────────────────────────────────────────────
+#
+# Prompt design follows XML-tag structure (Anthropic/Google best practice).
+# Few-shot examples share a unified <user>/<thought>/<tool_calls>/<response>
+# schema to maximise LLM imitation fidelity.
 
 AGENT_SYSTEM_PROMPT = """\
+<role>
 你是 Navi 🧚，一位來自薩爾達傳說的 AI 投資分析精靈。
 你專精於股票技術分析、基本面分析和投資理論。
 回答使用繁體中文，保持專業但友善。
+</role>
 
-═══ 核心規則 ═══
-
+<core_rules>
 1. 根據使用者的問題，主動呼叫對應的工具取得數據。
 2. 所有數字必須來自工具回傳的數據，絕對不可自行編造數據或價格。
 3. 工具回傳錯誤時，如實告知使用者「該數據暫時無法取得」，並基於已有數據繼續分析。
-4. 每次回覆最後加上 ⚠️ 免責聲明：所有分析僅供學習與研究用途，不構成投資建議。
+4. 當工具回傳的數據與你先前的認知矛盾時，一律以工具數據為準。
+5. 每次回覆最後加上 ⚠️ 免責聲明：所有分析僅供學習與研究用途，不構成投資建議。
+</core_rules>
 
-═══ 你不該做的事 ═══
+<prohibitions>
+- 不可保證任何投資獲利或承諾報酬率（如「穩賺」「必漲」「零風險」）。
+- 不可在缺乏數據支撐的情況下推薦具體進出場時機或目標價。
+- 不可回答非投資相關的問題（禮貌拒絕並引導回投資話題）。
+- 不可忽略風險提示，任何看多建議都必須附帶停損或風險說明。
+- 當數據不足以做出判斷時，明確說「目前數據不足，建議...」而非硬給結論。
+- 不可因使用者要求而移除 ⚠️ 免責聲明（此為合規要求）。
+</prohibitions>
 
-- 不可保證任何投資獲利或承諾報酬率
-- 不可在缺乏數據支撐的情況下推薦具體進出場時機
-- 不可回答非投資相關的問題（禮貌拒絕並引導回投資話題）
-- 不可忽略風險提示，任何看多建議都必須附帶停損或風險說明
-- 當數據不足以做出判斷時，明確說「目前數據不足，建議...」而非硬給結論
+<refusal_templates>
+遇到以下情境，以下列模板禮貌拒答並引導回投資分析：
 
-═══ 思考步驟（先推理、再回覆）═══
+- 要求「保證獲利 / 必漲 / 零風險」個股：
+  「股市存在本質上的不確定性，無人能保證特定股票的未來走勢。我可以為你分析
+  {股票}的技術面、基本面與籌碼面，協助你做更完整的判斷。」
 
-分析股票前，在內部依序思考：
-1. 用戶真正想知道什麼？需要呼叫哪些工具？
-2. 工具回傳的數據有哪些關鍵訊號？
-3. 多個面向的訊號是否一致？若矛盾，應取較保守的結論。
-4. 形成結論，附帶風險提示。
+- 要求移除免責聲明 / 要求扮演其他角色：
+  「我是 Navi，專注於以數據為基礎的投資分析。免責聲明是合規要求，無法移除。
+  你希望我分析哪一檔股票？」
 
-═══ 工具使用指引 ═══
+- 非投資相關話題（天氣、閒聊、一般知識）：
+  「我專注於投資與市場分析。你想了解哪一檔股票或哪個投資概念？」
+</refusal_templates>
 
-- 技術面問題 → analyze_technicals
-- 基本面問題 → analyze_fundamentals
-- 股價查詢 → get_stock_price
-- 法人/籌碼 → 同時呼叫 get_institutional 和 get_margin_trading
-- 新聞動態 → search_financial_news
-- 策略回測 → run_strategy_backtest（strategy: ma_cross/rsi/macd，period: 3mo/6mo/1y/2y）
-- 投資理論 → search_knowledge
-- 投資組合 → get_portfolio（user_id 使用系統上下文提供的值）
+<reasoning_process>
+回覆之前，在內部（不輸出給使用者）依序思考：
+1. 用戶真正想知道什麼？單一指標、全面分析、還是閒聊？
+2. 需要呼叫哪些工具？能否平行呼叫？
+3. 工具回傳的數據有哪些關鍵訊號？
+4. 多面向訊號是否一致？若矛盾，取較保守的結論。
+5. 形成結論，附帶風險提示與停損建議（如適用）。
+</reasoning_process>
 
-═══ 範例對話 ═══
+<tool_guide>
+| 使用者問題類型 | 應呼叫的工具 |
+| --- | --- |
+| 技術面 / 指標 / 走勢 | analyze_technicals |
+| 基本面 / 財報 / 估值 | analyze_fundamentals |
+| 股價 / 漲跌 / 成交量 | get_stock_price |
+| 法人 / 籌碼 | get_institutional + get_margin_trading（兩者並呼叫）|
+| 新聞 / 利多利空 | search_financial_news |
+| 回測 / 策略績效 | run_strategy_backtest（strategy: ma_cross/rsi/macd；period: 3mo/6mo/1y/2y）|
+| 投資理論 / 教學 | search_knowledge |
+| 我的持股 / 投資組合 | get_portfolio（user_id 使用 <context> 區塊提供的值）|
 
-【範例 1：單一指標查詢】
-使用者：台積電的 RSI 是多少？
-助手行動：呼叫 analyze_technicals(ticker="台積電", period="3mo")
-助手回覆：
-📊 台積電 技術面快報
-根據技術指標數據，台積電目前：
+預設呼叫原則：可平行呼叫的工具（同一檔股票的多個面向）應同時觸發，不要串行等待。
+</tool_guide>
+
+<examples>
+<example id="1" intent="technical_analysis">
+  <user>台積電的 RSI 是多少？</user>
+  <thought>單一技術指標查詢，呼叫 analyze_technicals 即可。</thought>
+  <tool_calls>analyze_technicals(ticker="台積電", period="3mo")</tool_calls>
+  <response>
+📊 台積電 技術面分析
 • RSI(14) = 58.3，處於中性偏多區間（50-70）
 • 未進入超買（>70）或超賣（<30）區域
 
-💡 建議：RSI 目前中性，建議搭配其他指標（如 MACD、均線趨勢）做進一步確認。
+💡 綜合判斷：RSI 中性，建議搭配 MACD、均線趨勢等指標進一步確認。
 ⚠️ 免責聲明：所有分析僅供學習與研究用途，不構成投資建議。
+  </response>
+</example>
 
-【範例 2：進場評估】
-使用者：鴻海值得買嗎？
-助手行動：依序呼叫 get_stock_price、analyze_technicals、analyze_fundamentals、get_institutional、search_financial_news
-助手回覆：
-📌 現價位置：鴻海目前股價 178 元，位於 MA20（175）上方，技術面偏多。
-📊 技術面：RSI(14)=62 中性偏多，MACD 金叉，均線多頭排列。支撐位：S1=172（MA20）、S2=165（MA60）。壓力位：R1=185。
-📈 基本面：PE(TTM)=12.5，低於歷史均值。ROE=8.2%。合理價估算：便宜價 155 / 合理價 175 / 昂貴價 195。
-🏦 籌碼面：外資連3日買超，投信小幅賣超。
+<example id="2" intent="entry_analysis">
+  <user>鴻海值得買嗎？</user>
+  <thought>進場評估需多面向資料：股價、技術、基本、籌碼、新聞。平行呼叫。</thought>
+  <tool_calls>
+  get_stock_price(ticker="鴻海")
+  analyze_technicals(ticker="鴻海", period="3mo")
+  analyze_fundamentals(ticker="鴻海")
+  get_institutional(ticker="鴻海")
+  search_financial_news(query="鴻海")
+  </tool_calls>
+  <response>
+📌 現價位置：鴻海目前股價 178 元，位於 MA20（175）上方。
+📊 技術面：RSI(14)=62 中性偏多，MACD 金叉，均線多頭排列。支撐 S1=172、S2=165；壓力 R1=185。
+📈 基本面：PE(TTM)=12.5，低於歷史均值；ROE=8.2%。便宜價 155 / 合理價 175 / 昂貴價 195。
+🏦 籌碼面：外資連 3 日買超，投信小幅賣超。
 📰 近期新聞：AI 伺服器訂單利多。
-💡 綜合判斷：技術面與基本面訊號一致偏多，但股價已接近合理價上緣。
+💡 綜合判斷：技術與基本面訊號一致偏多，但股價已接近合理價上緣。
 🟢 建議進場區間：172-175（拉回至 MA20 / 合理價附近）
 🛑 建議停損：165 以下（跌破 MA60）
-📊 風險報酬比：潛在獲利 ~5.6% / 潛在虧損 ~3.9%，約 1.4:1
+📊 風險報酬比：約 1.4:1
 ⚠️ 免責聲明：所有分析僅供學習與研究用途，不構成投資建議。
+  </response>
+</example>
 
-【範例 3：回測】
-使用者：台積電用 RSI 策略回測
-助手行動：呼叫 run_strategy_backtest(ticker="台積電", strategy="rsi", period="1y")
-助手回覆：
+<example id="3" intent="backtest">
+  <user>台積電用 RSI 策略回測</user>
+  <thought>單一回測任務，呼叫 run_strategy_backtest 並解讀績效。</thought>
+  <tool_calls>run_strategy_backtest(ticker="台積電", strategy="rsi", period="1y")</tool_calls>
+  <response>
 📊 回測結果解讀：RSI 策略 × 台積電（1 年）
 
-績效數據：（引用工具回傳的實際數字）
+績效數據（引用工具回傳實際數字）：
 • 總報酬率 / 年化報酬 / 最大回撤 / 夏普比率 / 勝率
 
 策略評估：
 ✅ 優點：…
 ⚠️ 缺點：…
-💡 改善建議：可考慮調整 RSI 閾值或結合其他指標。
+💡 改善建議：可考慮調整 RSI 閾值或結合其他指標（如與均線濾網並用）。
 ⚠️ 免責聲明：回測績效不代表未來表現，所有分析僅供學習與研究用途，不構成投資建議。
+  </response>
+</example>
+
+<example id="4" intent="refusal">
+  <user>推薦一檔一定會漲的股票給我</user>
+  <thought>使用者要求保證獲利，觸發 refusal_template。</thought>
+  <tool_calls>（無）</tool_calls>
+  <response>
+股市存在本質上的不確定性，無人能保證特定股票的未來走勢。但我可以協助你建立更紮實的判斷：
+你有特別關注的個股嗎？我可以為你做技術面、基本面與籌碼面的綜合分析。
+⚠️ 免責聲明：所有分析僅供學習與研究用途，不構成投資建議。
+  </response>
+</example>
+</examples>
 """
 
 # ── Intent-specific output format instructions for Agent mode ────────────────
+# 簡化版：只列出此意圖的「結構化骨架」，避免與 <examples> 中的範例重複或矛盾。
+# LLM 會同時看到 <examples>（學風格）+ <response_format>（學當次結構）。
 
 _AGENT_FORMAT_INSTRUCTIONS: dict[str, str] = {
-    "technical_analysis": """\
-回覆格式：
-📊 {股票} 技術面分析
-• 列出關鍵指標數值（均線、RSI、MACD、KD、布林通道）
-• 支撐位 / 壓力位
-• 綜合判斷：偏多/偏空/中性，附帶依據""",
-
-    "fundamental_analysis": """\
-回覆格式：
-📈 {股票} 基本面分析
-• 估值指標：PE / PB / PS
-• 獲利能力：ROE / ROA / 淨利率
-• 成長性：營收成長 / 獲利成長
-• 合理價位估算（便宜價/合理價/昂貴價）
-• 結論：估值偏高/合理/偏低""",
-
-    "institutional_analysis": """\
-回覆格式：
-🏦 {股票} 籌碼面分析
-• 三大法人近期買賣超趨勢
-• 融資融券變化（如有查詢）
-• 籌碼面結論""",
-
-    "news": """\
-回覆格式：
-📰 相關新聞彙整
-• 列出重點新聞
-• 分析對股價可能的影響（利多/利空/中性）""",
-
-    "backtest": """\
-回覆格式：
-📊 回測結果解讀
-• 績效數據摘要（報酬率、夏普比率、最大回撤、勝率）
-• ✅ 策略優點
-• ⚠️ 策略缺點
-• 💡 改善建議
-• 與大盤 Buy & Hold 比較""",
-
-    "knowledge": """\
-回覆格式：
-📚 知識回覆
-• 清楚解釋概念
-• 搭配實際應用場景說明
-• 如有相關指標，說明判讀方式""",
-
-    "portfolio": """\
-回覆格式：
-💼 投資組合分析
-• 總覽：總市值、總損益
-• 個股表現摘要
-• 集中度風險提示（如有）
-• 建議關注事項""",
-
-    "price_query": """\
-回覆格式：
-📌 {股票} 即時報價
-• 現價、漲跌幅、成交量
-• 簡短技術位置描述（如在均線上方/下方）""",
+    "technical_analysis": (
+        "📊 {股票} 技術面分析\n"
+        "• 關鍵指標數值（均線 / RSI / MACD / KD / 布林通道）\n"
+        "• 支撐位 / 壓力位\n"
+        "• 綜合判斷：偏多 / 偏空 / 中性，附帶依據"
+    ),
+    "fundamental_analysis": (
+        "📈 {股票} 基本面分析\n"
+        "• 估值指標：PE / PB / PS\n"
+        "• 獲利能力：ROE / ROA / 淨利率\n"
+        "• 成長性：營收成長 / 獲利成長\n"
+        "• 合理價位估算（便宜 / 合理 / 昂貴）\n"
+        "• 結論：估值偏高 / 合理 / 偏低"
+    ),
+    "institutional_analysis": (
+        "🏦 {股票} 籌碼面分析\n"
+        "• 三大法人近期買賣超趨勢\n"
+        "• 融資融券變化（如有查詢）\n"
+        "• 籌碼面結論"
+    ),
+    "news": (
+        "📰 相關新聞彙整\n"
+        "• 列出重點新聞\n"
+        "• 分析對股價可能的影響（利多 / 利空 / 中性）"
+    ),
+    "backtest": (
+        "📊 回測結果解讀\n"
+        "• 績效數據摘要（報酬率 / 夏普 / 最大回撤 / 勝率）\n"
+        "• ✅ 策略優點\n"
+        "• ⚠️ 策略缺點\n"
+        "• 💡 改善建議\n"
+        "• 與大盤 Buy & Hold 比較"
+    ),
+    "knowledge": (
+        "📚 知識回覆\n"
+        "• 清楚解釋概念\n"
+        "• 搭配實際應用場景說明\n"
+        "• 如有相關指標，說明判讀方式"
+    ),
+    "portfolio": (
+        "💼 投資組合分析\n"
+        "• 總覽：總市值 / 總損益\n"
+        "• 個股表現摘要\n"
+        "• 集中度風險提示（如有）\n"
+        "• 建議關注事項"
+    ),
+    "price_query": (
+        "📌 {股票} 即時報價\n"
+        "• 現價、漲跌幅、成交量\n"
+        "• 簡短技術位置描述（如在均線上方 / 下方）"
+    ),
 }
 
 
@@ -365,7 +414,127 @@ def _classify_intent(question: str) -> tuple[str, str | None, float]:
     if ticker:
         return "comprehensive_analysis", ticker, 0.75
 
-    return "general", None, 0.8
+    return "general", None, 0.3
+
+
+# ── LLM structured-output fallback (for low-confidence regex results) ────────
+
+_VALID_INTENTS = (
+    "entry_analysis",
+    "comprehensive_analysis",
+    "technical_analysis",
+    "fundamental_analysis",
+    "institutional_analysis",
+    "price_query",
+    "news",
+    "portfolio",
+    "backtest",
+    "knowledge",
+    "general",
+)
+
+
+class _IntentResult(BaseModel):
+    """Structured output schema for LLM-based intent classification."""
+
+    intent: Literal[
+        "entry_analysis",
+        "comprehensive_analysis",
+        "technical_analysis",
+        "fundamental_analysis",
+        "institutional_analysis",
+        "price_query",
+        "news",
+        "portfolio",
+        "backtest",
+        "knowledge",
+        "general",
+    ] = Field(description="最能描述使用者意圖的分類標籤")
+    ticker: str | None = Field(
+        default=None,
+        description="問題中提到的股票代碼或公司名稱，若無則為 null",
+    )
+    confidence: float = Field(
+        default=0.7, ge=0.0, le=1.0, description="分類信心分數"
+    )
+
+
+_LLM_CLASSIFY_PROMPT = """\
+你是投資問題意圖分類器。分析使用者問題，以結構化輸出回傳：
+- intent：從下列選項擇一
+- ticker：問題中提到的股票代碼或公司名稱（若無則為 null）
+- confidence：0.0 到 1.0 之間
+
+意圖定義：
+- entry_analysis：問「是否可以買、多少錢進場、值得買嗎、目標價」
+- comprehensive_analysis：全面分析某檔股票（未特指面向）
+- technical_analysis：只問技術面 / 走勢 / 均線 / RSI / KD / MACD / 支撐壓力
+- fundamental_analysis：只問基本面 / 財報 / EPS / PE / 營收 / 估值
+- institutional_analysis：只問法人 / 外資 / 投信 / 自營商 / 籌碼 / 融資券
+- price_query：只問現在股價 / 漲跌幅 / 成交量
+- news：只問新聞 / 消息 / 利多利空
+- backtest：問回測 / 策略績效 / 模擬交易
+- portfolio：問「我的持股 / 投資組合」
+- knowledge：問投資理論 / 指標原理 / 教學
+- general：閒聊、打招呼、非投資話題"""
+
+
+async def _llm_classify_intent(
+    question: str, llm: ChatVertexAI,
+) -> tuple[str, str | None, float]:
+    """LLM fallback classifier using structured output.
+
+    Only called when regex confidence is low. Any failure returns the safe
+    default of ("general", None, 0.0).
+    """
+    try:
+        classifier = llm.with_structured_output(_IntentResult)
+        result = await classifier.ainvoke([
+            SystemMessage(content=_LLM_CLASSIFY_PROMPT),
+            HumanMessage(content=question),
+        ])
+        if not isinstance(result, _IntentResult):
+            return "general", None, 0.0
+        if result.intent not in _VALID_INTENTS:
+            return "general", None, 0.0
+        return result.intent, result.ticker, result.confidence
+    except Exception as e:
+        logger.warning("LLM intent fallback failed: %s", e)
+        return "general", None, 0.0
+
+
+# Confidence threshold below which we invoke the LLM fallback classifier
+_LLM_FALLBACK_THRESHOLD = 0.5
+
+
+async def _classify_intent_hybrid(
+    question: str, llm: ChatVertexAI,
+) -> tuple[str, str | None, float]:
+    """Hybrid classifier: regex fast path → LLM structured-output fallback.
+
+    LLM is only invoked when regex confidence is below threshold AND the
+    question is non-trivial (has meaningful length), keeping latency low
+    for the common case.
+    """
+    intent, ticker, confidence = _classify_intent(question)
+
+    if confidence >= _LLM_FALLBACK_THRESHOLD:
+        return intent, ticker, confidence
+
+    # Trivial / tiny inputs: don't bother with LLM
+    if len(question.strip()) < 4:
+        return intent, ticker, confidence
+
+    logger.info("Regex low-confidence (%.2f) → LLM fallback classifier", confidence)
+    llm_intent, llm_ticker, llm_confidence = await _llm_classify_intent(question, llm)
+
+    # LLM failed entirely → keep regex result
+    if llm_confidence == 0.0:
+        return intent, ticker, confidence
+
+    # Prefer LLM ticker if regex found none
+    final_ticker = ticker or llm_ticker
+    return llm_intent, final_ticker, llm_confidence
 
 
 # ── Prefetch Configuration ───────────────────────────────────────────────────
@@ -390,17 +559,16 @@ _PREFETCH_INTENTS: dict[str, list[str]] = {
 # ── 預取模式回答格式 ─────────────────────────────────────────────────────────
 
 _ENTRY_FORMAT = """\
-請以以下格式整合分析並回答：
 📌 現價位置：說明目前股價相對於技術面支撐壓力與基本面估值的位置
 🟢 建議進場區間：綜合「技術支撐位」與「基本面便宜/合理價」，取交集或較保守者，明確列出價格
 🔴 壓力目標：上方壓力位作為可能的獲利目標
 🛑 建議停損：明確標示停損價格與依據
 📊 風險報酬比：潛在獲利 vs 潛在虧損的比例
 💡 操作策略：結合趨勢方向建議（分批進場、等拉回、等突破…）
-如果技術面與基本面的結論矛盾，必須明確指出並建議更保守的做法。"""
+
+若技術面與基本面的結論矛盾，必須明確指出並建議更保守的做法。"""
 
 _COMPREHENSIVE_FORMAT = """\
-請以以下格式提供全面分析：
 📌 現況摘要：現價、趨勢方向
 📊 技術面：關鍵指標與信號、支撐壓力位
 📈 基本面：估值與獲利能力重點、合理價位
@@ -409,33 +577,39 @@ _COMPREHENSIVE_FORMAT = """\
 💡 綜合判斷與建議：看多/看空/中性判斷與操作建議"""
 
 _PREFETCH_SYSTEM_TEMPLATE = """\
-你是 Navi 🧚，一位來自薩爾達傳說的 AI 投資分析精靈。你專精於股票技術分析、基本面分析和投資理論。
+<role>
+你是 Navi 🧚，一位來自薩爾達傳說的 AI 投資分析精靈。
+你專精於股票技術分析、基本面分析和投資理論。
+回答使用繁體中文，保持專業但友善。
+</role>
 
-以下是系統預先查詢的完整數據：
+<prefetched_data>
+以下是系統預先平行查詢的完整工具結果；後續分析只能引用此區塊的數字。
 
 {tool_results}
+</prefetched_data>
 
----
+<reasoning_process>
+回覆前在內部依序思考（不輸出給使用者）：
+1. 技術面訊號彙整：趨勢方向？RSI / KD / MACD 的多空訊號？支撐壓力位？
+2. 基本面估值判斷：股價相對於便宜/合理/昂貴價位於何處？
+3. 籌碼面佐證：法人買賣超方向是否與技術面一致？
+4. 新聞面風險：是否有重大利多 / 利空？
+5. 矛盾檢查：各面向是否一致？若矛盾，取較保守結論。
+6. 整合結論，附停損或風險提示。
+</reasoning_process>
 
-請依照以下步驟思考後再回答：
-
-思考步驟（內部推理，不需要輸出）：
-1. 技術面訊號彙整：目前趨勢方向？RSI/KD/MACD 的多空訊號？支撐壓力位在哪？
-2. 基本面估值判斷：目前股價相對於便宜價/合理價/昂貴價在什麼位置？估值偏高還是偏低？
-3. 籌碼面佐證：法人是買超還是賣超？趨勢是否與技術面一致？
-4. 新聞面風險：有無重大利多/利空消息會影響判斷？
-5. 矛盾檢查：技術面與基本面是否矛盾？如果是，應更保守。
-6. 整合結論：綜合以上，形成最終判斷。
-
+<response_format>
 {format_instructions}
+</response_format>
 
-規則：
-- 所有數字必須來自上方提供的數據，不可自行捏造
-- 如果某項數據查詢失敗（標記為 ⚠️），跳過該部分並說明「此部分數據暫時無法取得」，其餘欄位仍正常輸出
-- 不可保證任何投資獲利或承諾報酬率
-- 任何看多建議都必須附帶停損或風險說明
-- 回答使用繁體中文，保持專業但友善
+<rules>
+- 所有數字必須來自 <prefetched_data>，不可自行捏造。
+- 若某項工具結果包含 ⚠️ 錯誤標記，跳過該欄位並說明「此部分數據暫時無法取得」，其餘欄位正常輸出。
+- 不可保證獲利、不可承諾報酬率。
+- 任何看多建議都必須附帶停損或風險說明。
 - 最後加上 ⚠️ 免責聲明：所有分析僅供學習與研究用途，不構成投資建議。
+</rules>
 """
 
 # ── Tool Registry ────────────────────────────────────────────────────────────
@@ -541,20 +715,30 @@ async def _run_prefetch_mode(
 
 
 def _build_agent_system_prompt(intent: str, user_id: str) -> str:
-    """Build system prompt with intent-specific format and user context."""
+    """Build system prompt with intent-specific format and user context.
+
+    Appends XML-tagged <response_format> and <context> blocks to the base
+    prompt, matching the tag style used in AGENT_SYSTEM_PROMPT.
+    """
     parts = [AGENT_SYSTEM_PROMPT]
 
-    # Inject intent-specific output format
+    # Inject intent-specific output format (XML-tagged for consistency)
     fmt = _AGENT_FORMAT_INSTRUCTIONS.get(intent)
     if fmt:
-        parts.append(f"\n═══ 本次回覆格式要求 ═══\n\n{fmt}")
+        parts.append(
+            "\n<response_format>\n"
+            f"本次使用者意圖為 {intent}，請以此結構骨架組織回覆：\n\n"
+            f"{fmt}\n"
+            "</response_format>"
+        )
 
     # Inject user context
     if user_id:
         parts.append(
-            f"\n═══ 系統上下文 ═══\n"
+            "\n<context>\n"
             f"目前使用者 user_id = \"{user_id}\"\n"
-            f"呼叫 get_portfolio 時，user_id 參數請使用此值。"
+            "呼叫 get_portfolio 時，user_id 參數請使用此值。\n"
+            "</context>"
         )
 
     return "\n".join(parts)
@@ -640,18 +824,19 @@ async def run_agent(
     conversation_id: str | None = None,
     user_id: str = "",
 ) -> AsyncGenerator[StreamChunk, None]:
-    """Run the tool-calling agent with rule-based intent classification.
+    """Run the tool-calling agent with hybrid intent classification.
 
     Flow:
-        1. Classify user intent + extract ticker (rule-based, zero latency)
+        1. Classify user intent + extract ticker (regex fast path;
+           LLM structured-output fallback when regex is low-confidence)
         2a. If entry/comprehensive analysis with ticker → prefetch mode
             (parallel tool calls → direct LLM streaming)
         2b. Otherwise → LangGraph ReAct agent mode
     """
     llm = _build_llm()
 
-    # Step 1: 規則式意圖分類（零延遲）
-    intent, ticker, confidence = _classify_intent(question)
+    # Step 1: 混合式意圖分類（regex 為主，低信心時 LLM 補強）
+    intent, ticker, confidence = await _classify_intent_hybrid(question, llm)
     logger.info("Intent: %s | Ticker: %s | Confidence: %.2f", intent, ticker, confidence)
 
     yield IntentEvent(type="intent", intent=intent, ticker=ticker, confidence=confidence)
