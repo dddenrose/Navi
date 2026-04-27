@@ -22,14 +22,17 @@ def get_portfolio(user_id: str) -> str:
         return "你目前還沒有任何持股。可以透過投資組合頁面新增持股。"
 
     lines = [
-        f"💼 投資組合概覽",
-        f"",
+        "💼 投資組合概覽",
+        "",
         f"📊 總市值：{summary.total_value:,.0f}",
         f"💰 總成本：{summary.total_cost:,.0f}",
-        f"{'📈' if summary.total_pnl >= 0 else '📉'} 總損益：{summary.total_pnl:+,.0f}（{summary.total_pnl_percent:+.2f}%）",
+        (
+            f"{'📈' if summary.total_pnl >= 0 else '📉'} 總損益："
+            f"{summary.total_pnl:+,.0f}（{summary.total_pnl_percent:+.2f}%）"
+        ),
         f"📦 持股檔數：{summary.holdings_count}",
-        f"",
-        f"═══ 持股明細 ═══",
+        "",
+        "═══ 持股明細 ═══",
     ]
 
     for h in summary.holdings:

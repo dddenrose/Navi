@@ -16,7 +16,9 @@ interface PriceChartProps {
 }
 
 export default function PriceChart({ history, isPositive }: PriceChartProps) {
-  // Read CSS variables once per theme change, not on every render
+  // Read CSS variables once per theme change, not on every render.
+  // `theme` is a deliberate dep so we re-read CSS vars when the theme switches;
+  // `getComputedStyle` reads from DOM, not from `theme` directly, hence disable.
   const { theme } = useThemeStore();
   const { grid, tick, tooltipBg, tooltipBorder } = useMemo(() => {
     const root = getComputedStyle(document.documentElement);
@@ -29,6 +31,7 @@ export default function PriceChart({ history, isPositive }: PriceChartProps) {
         root.getPropertyValue("--tooltip-border").trim() ||
         "rgba(255,255,255,0.08)",
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [theme]);
 
   return (

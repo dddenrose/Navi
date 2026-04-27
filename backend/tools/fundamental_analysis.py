@@ -46,14 +46,16 @@ def analyze_fundamentals(ticker: str) -> str:
 
     # 合理價位估算
     if data.fair_price is not None:
-        parts.extend([
-            "",
-            "🎯【合理價位估算】",
-            f"  🟢 便宜價：{_num(data.cheap_price)}  （PE {_num(data.pe_low, 1)}）",
-            f"  🟡 合理價：{_num(data.fair_price)}  （PE {_num(data.pe_mid, 1)}）",
-            f"  🔴 昂貴價：{_num(data.expensive_price)}  （PE {_num(data.pe_high, 1)}）",
-            f"  📝 {data.valuation_note}",
-        ])
+        parts.extend(
+            [
+                "",
+                "🎯【合理價位估算】",
+                f"  🟢 便宜價：{_num(data.cheap_price)}  （PE {_num(data.pe_low, 1)}）",
+                f"  🟡 合理價：{_num(data.fair_price)}  （PE {_num(data.pe_mid, 1)}）",
+                f"  🔴 昂貴價：{_num(data.expensive_price)}  （PE {_num(data.pe_high, 1)}）",
+                f"  📝 {data.valuation_note}",
+            ]
+        )
     elif data.valuation_note:
         parts.extend(["", f"⚠️ 估值說明：{data.valuation_note}"])
 

@@ -5,8 +5,7 @@ from __future__ import annotations
 import logging
 import math
 from dataclasses import dataclass, field
-from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 
 import yfinance as yf
 
@@ -18,14 +17,14 @@ logger = logging.getLogger(__name__)
 # ── Enums & Data Classes ─────────────────────────────────────────────────────
 
 
-class StrategyName(str, Enum):
+class StrategyName(StrEnum):
     MA_CROSS = "ma_cross"
     RSI = "rsi"
     MACD = "macd"
     CUSTOM = "custom"
 
 
-class TradeAction(str, Enum):
+class TradeAction(StrEnum):
     BUY = "buy"
     SELL = "sell"
 
@@ -148,14 +147,10 @@ def _strategy_rsi(
         if prev_rsi is not None:
             # RSI 從超賣區回升
             if prev_rsi <= oversold and curr_rsi > oversold:
-                signals.append(
-                    (date_str, TradeAction.BUY, f"RSI 從超賣區回升（{curr_rsi:.1f}）")
-                )
+                signals.append((date_str, TradeAction.BUY, f"RSI 從超賣區回升（{curr_rsi:.1f}）"))
             # RSI 從超買區回落
             elif prev_rsi >= overbought and curr_rsi < overbought:
-                signals.append(
-                    (date_str, TradeAction.SELL, f"RSI 從超買區回落（{curr_rsi:.1f}）")
-                )
+                signals.append((date_str, TradeAction.SELL, f"RSI 從超買區回落（{curr_rsi:.1f}）"))
 
         prev_rsi = curr_rsi
 
@@ -386,7 +381,6 @@ def run_backtest(
     shares = 0
     trades: list[Trade] = []
     total_fees = 0.0
-    buy_price: float | None = None
 
     # Create a date→price lookup
     price_map: dict[str, float] = {}
@@ -408,7 +402,6 @@ def run_backtest(
             buy_commission = round(cost * commission_rate, 2)
             cash -= cost + buy_commission
             total_fees += buy_commission
-            buy_price = price
             trades.append(
                 Trade(
                     date=date_str,
@@ -439,13 +432,11 @@ def run_backtest(
                 )
             )
             shares = 0
-            buy_price = None
 
     # ── Build equity curve ──
     # Re-simulate day by day for equity curve
     sim_cash = initial_capital
     sim_shares = 0
-    trade_idx = 0
     peak_equity = initial_capital
     equity_curve: list[EquityPoint] = []
 
@@ -526,7 +517,9 @@ def run_backtest(
     result.total_trades = len(trades)
     result.winning_trades = winning
     result.losing_trades = losing
-    result.win_rate = round((winning / (winning + losing)) * 100, 1) if (winning + losing) > 0 else 0
+    result.win_rate = (
+        round((winning / (winning + losing)) * 100, 1) if (winning + losing) > 0 else 0
+    )
     result.avg_win = round(sum(win_returns) / len(win_returns), 2) if win_returns else 0
     result.avg_loss = round(sum(loss_returns) / len(loss_returns), 2) if loss_returns else 0
 
@@ -550,9 +543,7 @@ def run_backtest(
     # Benchmark: buy & hold return
     first_price = float(df["Close"].iloc[0])
     if first_price > 0:
-        result.benchmark_return = round(
-            ((final_price - first_price) / first_price) * 100, 2
-        )
+        result.benchmark_return = round(((final_price - first_price) / first_price) * 100, 2)
 
     result.trades = trades
     result.equity_curve = equity_curve
@@ -575,11 +566,17 @@ def format_backtest_result(result: BacktestResult) -> str:
         "💰 績效摘要：",
         f"  • 初始資金：${result.initial_capital:,.0f}",
         f"  • 最終淨值：${result.final_equity:,.0f}",
-        f"  • 總報酬率：{result.total_return:+.2f}%（同期大盤 Buy & Hold：{result.benchmark_return:+.2f}%）",
+        (
+            f"  • 總報酬率：{result.total_return:+.2f}%"
+            f"（同期大盤 Buy & Hold：{result.benchmark_return:+.2f}%）"
+        ),
         f"  • 年化報酬：{result.annualized_return:+.2f}%",
         f"  • 最大回撤：-{result.max_drawdown:.2f}%",
         f"  • 夏普比率：{result.sharpe_ratio:.2f}",
-        f"  • 勝率：{result.win_rate:.1f}%（{result.winning_trades} 勝 / {result.losing_trades} 敗）",
+        (
+            f"  • 勝率：{result.win_rate:.1f}%"
+            f"（{result.winning_trades} 勝 / {result.losing_trades} 敗）"
+        ),
         f"  • 總交易次數：{result.total_trades} 次",
         f"  • 總交易成本：${result.total_fees:,.0f}（手續費 + 證交稅）",
     ]

@@ -22,19 +22,19 @@ class MarginDaily:
 
     date: str = ""
     # 融資
-    margin_buy: int = 0           # 融資買進
-    margin_sell: int = 0          # 融資賣出
-    margin_cash_repay: int = 0    # 融資現金償還
-    margin_balance: int = 0       # 融資餘額（張）
-    margin_limit: int = 0         # 融資限額
+    margin_buy: int = 0  # 融資買進
+    margin_sell: int = 0  # 融資賣出
+    margin_cash_repay: int = 0  # 融資現金償還
+    margin_balance: int = 0  # 融資餘額（張）
+    margin_limit: int = 0  # 融資限額
     margin_utilization: float = 0.0  # 融資使用率 (%)
     # 融券
-    short_sell: int = 0           # 融券賣出
-    short_buy: int = 0            # 融券買進
-    short_cash_repay: int = 0     # 融券現券償還
-    short_balance: int = 0        # 融券餘額（張）
+    short_sell: int = 0  # 融券賣出
+    short_buy: int = 0  # 融券買進
+    short_cash_repay: int = 0  # 融券現券償還
+    short_balance: int = 0  # 融券餘額（張）
     # 資券互抵
-    offset: int = 0               # 資券互抵（當沖）
+    offset: int = 0  # 資券互抵（當沖）
 
 
 @dataclass
@@ -45,8 +45,8 @@ class MarginSummary:
     name: str = ""
     records: list[MarginDaily] = field(default_factory=list)
     latest: MarginDaily | None = None
-    margin_change: int = 0       # 融資餘額近期變化
-    short_change: int = 0        # 融券餘額近期變化
+    margin_change: int = 0  # 融資餘額近期變化
+    short_change: int = 0  # 融券餘額近期變化
     error: str = ""
 
 
@@ -117,12 +117,16 @@ def _fetch_twse_margin(date_str: str, ticker: str) -> MarginDaily | None:
         if row_code == code:
             # Row format (typical):
             # [0] 代號, [1] 名稱,
-            # [2] 融資買進, [3] 融資賣出, [4] 融資現償, [5] 融資前日餘額, [6] 融資今日餘額, [7] 融資限額,
-            # [8] 融券賣出, [9] 融券買進, [10] 融券現券償還, [11] 融券前日餘額, [12] 融券今日餘額,
+            # [2] 融資買進, [3] 融資賣出, [4] 融資現償, [5] 融資前日餘額,
+            # [6] 融資今日餘額, [7] 融資限額,
+            # [8] 融券賣出, [9] 融券買進, [10] 融券現券償還,
+            # [11] 融券前日餘額, [12] 融券今日餘額,
             # [13] 資券互抵
             margin_balance = _parse_int(row[6]) if len(row) > 6 else 0
             margin_limit = _parse_int(row[7]) if len(row) > 7 else 0
-            utilization = round((margin_balance / margin_limit * 100), 2) if margin_limit > 0 else 0.0
+            utilization = (
+                round((margin_balance / margin_limit * 100), 2) if margin_limit > 0 else 0.0
+            )
 
             return MarginDaily(
                 date=f"{date_str[:4]}/{date_str[4:6]}/{date_str[6:]}",
@@ -157,10 +161,7 @@ def get_margin_data(ticker: str, days: int = 5) -> MarginSummary:
     # Parallel fetch TWSE API for all dates
     records: list[MarginDaily] = []
     with ThreadPoolExecutor(max_workers=5) as executor:
-        future_to_date = {
-            executor.submit(_fetch_twse_margin, d, norm_ticker): d
-            for d in dates
-        }
+        future_to_date = {executor.submit(_fetch_twse_margin, d, norm_ticker): d for d in dates}
         date_records: dict[str, MarginDaily] = {}
         for future in as_completed(future_to_date):
             d = future_to_date[future]

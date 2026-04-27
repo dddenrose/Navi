@@ -19,7 +19,6 @@ from services.stock_service import (
     normalize_ticker,
 )
 
-
 # ── normalize_ticker ─────────────────────────────────────────────────────────
 
 
@@ -95,8 +94,8 @@ class TestGetStockOverview:
 class TestGetTechnicalIndicators:
     @patch("services.stock_service.yf.Ticker")
     def test_with_sufficient_data(self, mock_ticker_cls):
-        import pandas as pd
         import numpy as np
+        import pandas as pd
 
         # Generate 60+ days of fake price data
         np.random.seed(42)
@@ -187,21 +186,45 @@ class TestGetFundamentalData:
 class TestFormatStockData:
     def test_formatting(self):
         overview = StockOverviewData(
-            ticker="TSM", name="TSMC", price=180.5, change=2.5, change_percent=1.4,
-            volume=10_000_000, market_cap=900_000_000_000, currency="USD",
+            ticker="TSM",
+            name="TSMC",
+            price=180.5,
+            change=2.5,
+            change_percent=1.4,
+            volume=10_000_000,
+            market_cap=900_000_000_000,
+            currency="USD",
         )
         technical = TechnicalIndicators(
-            ticker="TSM", current_price=180.5,
-            ma5=179.0, ma10=177.0, ma20=175.0, ma60=170.0, ma_trend="多頭排列",
-            rsi_14=62.4, rsi_signal="中性",
-            macd=1.5, macd_signal=1.2, macd_histogram=0.3, macd_cross="多方（DIF > DEA）",
-            k_value=68.0, d_value=55.0, kd_signal="中性",
-            bb_upper=185.0, bb_middle=175.0, bb_lower=165.0, bb_position="中軌與上軌之間（偏多）",
+            ticker="TSM",
+            current_price=180.5,
+            ma5=179.0,
+            ma10=177.0,
+            ma20=175.0,
+            ma60=170.0,
+            ma_trend="多頭排列",
+            rsi_14=62.4,
+            rsi_signal="中性",
+            macd=1.5,
+            macd_signal=1.2,
+            macd_histogram=0.3,
+            macd_cross="多方（DIF > DEA）",
+            k_value=68.0,
+            d_value=55.0,
+            kd_signal="中性",
+            bb_upper=185.0,
+            bb_middle=175.0,
+            bb_lower=165.0,
+            bb_position="中軌與上軌之間（偏多）",
             summary="📈 偏多（3多/0空）",
         )
         fundamental = FundamentalData(
-            ticker="TSM", name="TSMC",
-            pe_ratio=25.3, roe=0.284, eps=6.5, sector="Technology",
+            ticker="TSM",
+            name="TSMC",
+            pe_ratio=25.3,
+            roe=0.284,
+            eps=6.5,
+            sector="Technology",
             industry="Semiconductors",
         )
 

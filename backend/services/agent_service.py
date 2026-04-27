@@ -213,16 +213,9 @@ _AGENT_FORMAT_INSTRUCTIONS: dict[str, str] = {
         "• 結論：估值偏高 / 合理 / 偏低"
     ),
     "institutional_analysis": (
-        "🏦 {股票} 籌碼面分析\n"
-        "• 三大法人近期買賣超趨勢\n"
-        "• 融資融券變化（如有查詢）\n"
-        "• 籌碼面結論"
+        "🏦 {股票} 籌碼面分析\n• 三大法人近期買賣超趨勢\n• 融資融券變化（如有查詢）\n• 籌碼面結論"
     ),
-    "news": (
-        "📰 相關新聞彙整\n"
-        "• 列出重點新聞\n"
-        "• 分析對股價可能的影響（利多 / 利空 / 中性）"
-    ),
+    "news": ("📰 相關新聞彙整\n• 列出重點新聞\n• 分析對股價可能的影響（利多 / 利空 / 中性）"),
     "backtest": (
         "📊 回測結果解讀\n"
         "• 績效數據摘要（報酬率 / 夏普 / 最大回撤 / 勝率）\n"
@@ -232,10 +225,7 @@ _AGENT_FORMAT_INSTRUCTIONS: dict[str, str] = {
         "• 與大盤 Buy & Hold 比較"
     ),
     "knowledge": (
-        "📚 知識回覆\n"
-        "• 清楚解釋概念\n"
-        "• 搭配實際應用場景說明\n"
-        "• 如有相關指標，說明判讀方式"
+        "📚 知識回覆\n• 清楚解釋概念\n• 搭配實際應用場景說明\n• 如有相關指標，說明判讀方式"
     ),
     "portfolio": (
         "💼 投資組合分析\n"
@@ -245,9 +235,7 @@ _AGENT_FORMAT_INSTRUCTIONS: dict[str, str] = {
         "• 建議關注事項"
     ),
     "price_query": (
-        "📌 {股票} 即時報價\n"
-        "• 現價、漲跌幅、成交量\n"
-        "• 簡短技術位置描述（如在均線上方 / 下方）"
+        "📌 {股票} 即時報價\n• 現價、漲跌幅、成交量\n• 簡短技術位置描述（如在均線上方 / 下方）"
     ),
 }
 
@@ -266,68 +254,131 @@ def _build_llm() -> ChatVertexAI:
 # Regex patterns for intent classification (compiled once)
 _INTENT_PATTERNS: list[tuple[str, re.Pattern, float]] = [
     # entry_analysis: 進場、買入、目標價
-    ("entry_analysis", re.compile(
-        r"(進場|可以買|能買|適合買|值得買|值得投資|適不適合|目標價|多少錢.*(買|進)|"
-        r"該不該買|何時.*(買|進場)|買入|建議.*(買|進場)|可不可以買|entry)",
-        re.IGNORECASE,
-    ), 0.9),
+    (
+        "entry_analysis",
+        re.compile(
+            r"(進場|可以買|能買|適合買|值得買|值得投資|適不適合|目標價|多少錢.*(買|進)|"
+            r"該不該買|何時.*(買|進場)|買入|建議.*(買|進場)|可不可以買|entry)",
+            re.IGNORECASE,
+        ),
+        0.9,
+    ),
     # backtest: 回測、策略
-    ("backtest", re.compile(
-        r"(回測|backt|策略績效|模擬交易|歷史績效|策略.*表現)",
-        re.IGNORECASE,
-    ), 0.95),
+    (
+        "backtest",
+        re.compile(
+            r"(回測|backt|策略績效|模擬交易|歷史績效|策略.*表現)",
+            re.IGNORECASE,
+        ),
+        0.95,
+    ),
     # portfolio: 持股、投資組合
-    ("portfolio", re.compile(
-        r"(我的持股|投資組合|portfolio|我的股票|持倉|我買了|我有哪些股)",
-        re.IGNORECASE,
-    ), 0.95),
+    (
+        "portfolio",
+        re.compile(
+            r"(我的持股|投資組合|portfolio|我的股票|持倉|我買了|我有哪些股)",
+            re.IGNORECASE,
+        ),
+        0.95,
+    ),
     # knowledge: 投資理論、教學
-    ("knowledge", re.compile(
-        r"(什麼是|教我|解釋.*(?:指標|理論|策略)|如何.*(?:分析|計算)|"
-        r"怎麼看.*(?:技術|基本|財報)|原理|學習|入門|新手)",
-        re.IGNORECASE,
-    ), 0.85),
+    (
+        "knowledge",
+        re.compile(
+            r"(什麼是|教我|解釋.*(?:指標|理論|策略)|如何.*(?:分析|計算)|"
+            r"怎麼看.*(?:技術|基本|財報)|原理|學習|入門|新手)",
+            re.IGNORECASE,
+        ),
+        0.85,
+    ),
     # news: 新聞、消息
-    ("news", re.compile(
-        r"(新聞|消息|市場動態|最近.*(?:發生|怎麼了)|news|利多|利空|重大.*事件)",
-        re.IGNORECASE,
-    ), 0.9),
+    (
+        "news",
+        re.compile(
+            r"(新聞|消息|市場動態|最近.*(?:發生|怎麼了)|news|利多|利空|重大.*事件)",
+            re.IGNORECASE,
+        ),
+        0.9,
+    ),
     # institutional_analysis: 法人、籌碼
-    ("institutional_analysis", re.compile(
-        r"(法人|外資|投信|自營商|籌碼|買超|賣超|融資|融券|三大法人|主力)",
-        re.IGNORECASE,
-    ), 0.9),
+    (
+        "institutional_analysis",
+        re.compile(
+            r"(法人|外資|投信|自營商|籌碼|買超|賣超|融資|融券|三大法人|主力)",
+            re.IGNORECASE,
+        ),
+        0.9,
+    ),
     # technical_analysis: 技術面
-    ("technical_analysis", re.compile(
-        r"(技術[面指]|RSI|MACD|KD|均線|MA\d|布林|支撐|壓力|走勢|K線|趨勢|"
-        r"黃金交叉|死亡交叉|超買|超賣|乖離|波段|型態)",
-        re.IGNORECASE,
-    ), 0.9),
+    (
+        "technical_analysis",
+        re.compile(
+            r"(技術[面指]|RSI|MACD|KD|均線|MA\d|布林|支撐|壓力|走勢|K線|趨勢|"
+            r"黃金交叉|死亡交叉|超買|超賣|乖離|波段|型態)",
+            re.IGNORECASE,
+        ),
+        0.9,
+    ),
     # fundamental_analysis: 基本面
-    ("fundamental_analysis", re.compile(
-        r"(基本面|財報|EPS|PE|PB|ROE|本益比|殖利率|營收|毛利|淨利|股利|配息|估值)",
-        re.IGNORECASE,
-    ), 0.9),
+    (
+        "fundamental_analysis",
+        re.compile(
+            r"(基本面|財報|EPS|PE|PB|ROE|本益比|殖利率|營收|毛利|淨利|股利|配息|估值)",
+            re.IGNORECASE,
+        ),
+        0.9,
+    ),
     # price_query: 股價查詢
-    ("price_query", re.compile(
-        r"(股價|現在.*多少錢|目前.*(?:價格|價位)|(?:漲|跌)了?多少|收盤|開盤|成交量|市值)",
-        re.IGNORECASE,
-    ), 0.9),
+    (
+        "price_query",
+        re.compile(
+            r"(股價|現在.*多少錢|目前.*(?:價格|價位)|(?:漲|跌)了?多少|收盤|開盤|成交量|市值)",
+            re.IGNORECASE,
+        ),
+        0.9,
+    ),
     # comprehensive_analysis: 分析（廣泛）
-    ("comprehensive_analysis", re.compile(
-        r"((?:分析|怎麼樣|如何|怎樣|看法|看好|看壞|前景|展望).{0,6}$|"
-        r"^(?:幫我|請|麻煩)?(?:分析|看看|評估))",
-        re.IGNORECASE,
-    ), 0.85),
+    (
+        "comprehensive_analysis",
+        re.compile(
+            r"((?:分析|怎麼樣|如何|怎樣|看法|看好|看壞|前景|展望).{0,6}$|"
+            r"^(?:幫我|請|麻煩)?(?:分析|看看|評估))",
+            re.IGNORECASE,
+        ),
+        0.85,
+    ),
 ]
 
 # Ticker extraction pattern:
 # Non-ticker uppercase words to skip
-_NON_TICKER_WORDS = frozenset({
-    "RSI", "MACD", "EPS", "PE", "PB", "ROE", "ROA", "MA", "KD",
-    "ETF", "IPO", "AI", "BB", "ATR", "SMA", "EMA", "DCF", "DDM",
-    "API", "SSE", "FAQ", "URL", "PDF", "CSV",
-})
+_NON_TICKER_WORDS = frozenset(
+    {
+        "RSI",
+        "MACD",
+        "EPS",
+        "PE",
+        "PB",
+        "ROE",
+        "ROA",
+        "MA",
+        "KD",
+        "ETF",
+        "IPO",
+        "AI",
+        "BB",
+        "ATR",
+        "SMA",
+        "EMA",
+        "DCF",
+        "DDM",
+        "API",
+        "SSE",
+        "FAQ",
+        "URL",
+        "PDF",
+        "CSV",
+    }
+)
 
 # Common greetings and general phrases
 _GENERAL_PATTERN = re.compile(
@@ -366,9 +417,30 @@ def _extract_ticker(question: str) -> str | None:
 
     # Words that appear at sentence start but are NOT company names
     _non_company = {
-        "最近", "目前", "現在", "今天", "昨天", "什麼", "怎麼", "如何", "為什",
-        "哪些", "哪個", "這個", "那個", "那些", "請問", "幫我", "麻煩", "可以",
-        "能不", "應該", "是否", "我的", "你的", "不是",
+        "最近",
+        "目前",
+        "現在",
+        "今天",
+        "昨天",
+        "什麼",
+        "怎麼",
+        "如何",
+        "為什",
+        "哪些",
+        "哪個",
+        "這個",
+        "那個",
+        "那些",
+        "請問",
+        "幫我",
+        "麻煩",
+        "可以",
+        "能不",
+        "應該",
+        "是否",
+        "我的",
+        "你的",
+        "不是",
     }
 
     # b) Company name at start of sentence before query keywords:
@@ -454,9 +526,7 @@ class _IntentResult(BaseModel):
         default=None,
         description="問題中提到的股票代碼或公司名稱，若無則為 null",
     )
-    confidence: float = Field(
-        default=0.7, ge=0.0, le=1.0, description="分類信心分數"
-    )
+    confidence: float = Field(default=0.7, ge=0.0, le=1.0, description="分類信心分數")
 
 
 _LLM_CLASSIFY_PROMPT = """\
@@ -480,7 +550,8 @@ _LLM_CLASSIFY_PROMPT = """\
 
 
 async def _llm_classify_intent(
-    question: str, llm: ChatVertexAI,
+    question: str,
+    llm: ChatVertexAI,
 ) -> tuple[str, str | None, float]:
     """LLM fallback classifier using structured output.
 
@@ -489,10 +560,12 @@ async def _llm_classify_intent(
     """
     try:
         classifier = llm.with_structured_output(_IntentResult)
-        result = await classifier.ainvoke([
-            SystemMessage(content=_LLM_CLASSIFY_PROMPT),
-            HumanMessage(content=question),
-        ])
+        result = await classifier.ainvoke(
+            [
+                SystemMessage(content=_LLM_CLASSIFY_PROMPT),
+                HumanMessage(content=question),
+            ]
+        )
         if not isinstance(result, _IntentResult):
             return "general", None, 0.0
         if result.intent not in _VALID_INTENTS:
@@ -508,7 +581,8 @@ _LLM_FALLBACK_THRESHOLD = 0.5
 
 
 async def _classify_intent_hybrid(
-    question: str, llm: ChatVertexAI,
+    question: str,
+    llm: ChatVertexAI,
 ) -> tuple[str, str | None, float]:
     """Hybrid classifier: regex fast path → LLM structured-output fallback.
 
@@ -673,9 +747,7 @@ async def _run_prefetch_mode(
     for name in tool_names:
         yield ToolEndEvent(type="tool_end", tool=name)
 
-    format_instructions = (
-        _ENTRY_FORMAT if intent == "entry_analysis" else _COMPREHENSIVE_FORMAT
-    )
+    format_instructions = _ENTRY_FORMAT if intent == "entry_analysis" else _COMPREHENSIVE_FORMAT
     system_msg = _PREFETCH_SYSTEM_TEMPLATE.format(
         tool_results=tool_results,
         format_instructions=format_instructions,
@@ -702,7 +774,10 @@ async def _run_prefetch_mode(
         if conversation_id and full_output:
             try:
                 save_history(
-                    conversation_id, question, full_output, user_id=user_id,
+                    conversation_id,
+                    question,
+                    full_output,
+                    user_id=user_id,
                 )
             except Exception as e:
                 logger.warning("Failed to save history: %s", e)
@@ -736,7 +811,7 @@ def _build_agent_system_prompt(intent: str, user_id: str) -> str:
     if user_id:
         parts.append(
             "\n<context>\n"
-            f"目前使用者 user_id = \"{user_id}\"\n"
+            f'目前使用者 user_id = "{user_id}"\n'
             "呼叫 get_portfolio 時，user_id 參數請使用此值。\n"
             "</context>"
         )
@@ -807,7 +882,10 @@ async def _run_agent_mode(
         if conversation_id and full_output:
             try:
                 save_history(
-                    conversation_id, question, full_output, user_id=user_id,
+                    conversation_id,
+                    question,
+                    full_output,
+                    user_id=user_id,
                 )
             except Exception as e:
                 logger.warning("Failed to save history for %s: %s", conversation_id, e)
@@ -846,14 +924,23 @@ async def run_agent(
     if prefetch_tools and ticker:
         logger.info("→ Prefetch mode (%d tools)", len(prefetch_tools))
         async for chunk in _run_prefetch_mode(
-            question, intent, ticker, prefetch_tools, llm,
-            conversation_id, user_id,
+            question,
+            intent,
+            ticker,
+            prefetch_tools,
+            llm,
+            conversation_id,
+            user_id,
         ):
             yield chunk
     else:
         logger.info("→ Agent mode (intent=%s)", intent)
         async for chunk in _run_agent_mode(
-            question, intent, llm, conversation_id, user_id,
+            question,
+            intent,
+            llm,
+            conversation_id,
+            user_id,
         ):
             yield chunk
 

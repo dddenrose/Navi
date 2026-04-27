@@ -4,9 +4,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-
-from google.cloud.firestore_v1.base_query import FieldFilter
+from datetime import UTC, datetime
 
 from services.firestore_client import get_db
 from services.stock_service import get_stock_overview
@@ -16,14 +14,16 @@ logger = logging.getLogger(__name__)
 # ── Firestore 集合名稱 ──────────────────────────────────────────────────────
 
 PORTFOLIOS_COL = "portfolios"  # portfolios/{user_id}
-HOLDINGS_SUB = "holdings"       # portfolios/{user_id}/holdings/{holding_id}
+HOLDINGS_SUB = "holdings"  # portfolios/{user_id}/holdings/{holding_id}
 
 
 # ── Data classes ─────────────────────────────────────────────────────────────
 
+
 @dataclass
 class Holding:
     """單一持股."""
+
     id: str = ""
     ticker: str = ""
     name: str = ""
@@ -37,6 +37,7 @@ class Holding:
 @dataclass
 class HoldingWithPrice(Holding):
     """含即時市值的持股."""
+
     current_price: float | None = None
     market_value: float = 0.0
     cost_basis: float = 0.0
@@ -48,6 +49,7 @@ class HoldingWithPrice(Holding):
 @dataclass
 class PortfolioSummary:
     """投資組合摘要."""
+
     total_value: float = 0.0
     total_cost: float = 0.0
     total_pnl: float = 0.0
@@ -58,6 +60,7 @@ class PortfolioSummary:
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
+
 def _holdings_ref(user_id: str):
     """Return reference to a user's holdings sub-collection."""
     db = get_db()
@@ -65,12 +68,15 @@ def _holdings_ref(user_id: str):
 
 
 def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 # ── CRUD ─────────────────────────────────────────────────────────────────────
 
-def add_holding(user_id: str, ticker: str, shares: float, avg_cost: float, name: str = "", notes: str = "") -> Holding:
+
+def add_holding(
+    user_id: str, ticker: str, shares: float, avg_cost: float, name: str = "", notes: str = ""
+) -> Holding:
     """新增一筆持股."""
     ref = _holdings_ref(user_id)
     now = _now_iso()
@@ -87,7 +93,13 @@ def add_holding(user_id: str, ticker: str, shares: float, avg_cost: float, name:
     return Holding(id=doc_ref.id, **data)
 
 
-def update_holding(user_id: str, holding_id: str, shares: float | None = None, avg_cost: float | None = None, notes: str | None = None) -> Holding:
+def update_holding(
+    user_id: str,
+    holding_id: str,
+    shares: float | None = None,
+    avg_cost: float | None = None,
+    notes: str | None = None,
+) -> Holding:
     """修改持股（部分更新）."""
     ref = _holdings_ref(user_id).document(holding_id)
     doc = ref.get()
@@ -104,7 +116,10 @@ def update_holding(user_id: str, holding_id: str, shares: float | None = None, a
 
     ref.update(updates)
     merged = {**doc.to_dict(), **updates}
-    return Holding(id=holding_id, **{k: merged[k] for k in Holding.__dataclass_fields__ if k != "id" and k in merged})
+    return Holding(
+        id=holding_id,
+        **{k: merged[k] for k in Holding.__dataclass_fields__ if k != "id" and k in merged},
+    )
 
 
 def delete_holding(user_id: str, holding_id: str) -> bool:
@@ -123,20 +138,23 @@ def list_holdings(user_id: str) -> list[Holding]:
     holdings = []
     for doc in docs:
         d = doc.to_dict()
-        holdings.append(Holding(
-            id=doc.id,
-            ticker=d.get("ticker", ""),
-            name=d.get("name", ""),
-            shares=d.get("shares", 0),
-            avg_cost=d.get("avg_cost", 0),
-            notes=d.get("notes", ""),
-            created_at=d.get("created_at", ""),
-            updated_at=d.get("updated_at", ""),
-        ))
+        holdings.append(
+            Holding(
+                id=doc.id,
+                ticker=d.get("ticker", ""),
+                name=d.get("name", ""),
+                shares=d.get("shares", 0),
+                avg_cost=d.get("avg_cost", 0),
+                notes=d.get("notes", ""),
+                created_at=d.get("created_at", ""),
+                updated_at=d.get("updated_at", ""),
+            )
+        )
     return holdings
 
 
 # ── 即時市值計算 ─────────────────────────────────────────────────────────────
+
 
 def get_portfolio_summary(user_id: str) -> PortfolioSummary:
     """取得投資組合摘要（含即時市值損益）."""
@@ -166,22 +184,24 @@ def get_portfolio_summary(user_id: str) -> PortfolioSummary:
         pnl = market_value - cost_basis
         pnl_pct = (pnl / cost_basis * 100) if cost_basis else 0.0
 
-        enriched.append(HoldingWithPrice(
-            id=h.id,
-            ticker=h.ticker,
-            name=h.name,
-            shares=h.shares,
-            avg_cost=h.avg_cost,
-            notes=h.notes,
-            created_at=h.created_at,
-            updated_at=h.updated_at,
-            current_price=price,
-            market_value=round(market_value, 2),
-            cost_basis=round(cost_basis, 2),
-            pnl=round(pnl, 2),
-            pnl_percent=round(pnl_pct, 2),
-            currency=currency,
-        ))
+        enriched.append(
+            HoldingWithPrice(
+                id=h.id,
+                ticker=h.ticker,
+                name=h.name,
+                shares=h.shares,
+                avg_cost=h.avg_cost,
+                notes=h.notes,
+                created_at=h.created_at,
+                updated_at=h.updated_at,
+                current_price=price,
+                market_value=round(market_value, 2),
+                cost_basis=round(cost_basis, 2),
+                pnl=round(pnl, 2),
+                pnl_percent=round(pnl_pct, 2),
+                currency=currency,
+            )
+        )
 
     total_pnl = total_value - total_cost
     total_pnl_pct = (total_pnl / total_cost * 100) if total_cost else 0.0

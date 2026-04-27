@@ -26,6 +26,7 @@ router = APIRouter(
 
 # ── Request / Response models ────────────────────────────────────────────────
 
+
 class AddHoldingRequest(BaseModel):
     ticker: str = Field(..., min_length=1, description="股票代碼，例如 2330.TW")
     shares: float = Field(..., gt=0, description="持股張數/股數")
@@ -70,6 +71,7 @@ class PortfolioSummaryResponse(BaseModel):
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
+
 
 def _get_uid(user: dict) -> str:
     return user.get("uid", "")

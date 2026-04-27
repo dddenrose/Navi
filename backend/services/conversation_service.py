@@ -2,12 +2,10 @@
 
 import logging
 import uuid
-from datetime import datetime, timezone
 
 from google.cloud import firestore as firestore_module
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 
-from config import settings
 from services.firestore_client import get_db
 
 logger = logging.getLogger(__name__)
@@ -131,10 +129,7 @@ def list_conversations(user_id: str, limit: int = 20) -> list[dict]:
     db = get_db()
     query = db.collection(COLLECTION).where("user_id", "==", user_id)
     docs = (
-        query
-        .order_by("updated_at", direction=firestore_module.Query.DESCENDING)
-        .limit(limit)
-        .get()
+        query.order_by("updated_at", direction=firestore_module.Query.DESCENDING).limit(limit).get()
     )
     return [
         {

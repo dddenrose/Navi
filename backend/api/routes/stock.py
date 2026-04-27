@@ -13,7 +13,6 @@ from services.stock_service import (
     get_fundamental_data,
     get_stock_overview,
     get_technical_indicators,
-    normalize_ticker,
     search_tw_stocks,
 )
 

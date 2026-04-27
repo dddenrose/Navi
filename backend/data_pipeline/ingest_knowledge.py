@@ -135,7 +135,7 @@ def ingest_all(*, force: bool = False) -> None:
         print()
 
     print("=" * 50)
-    print(f"✅ Ingestion complete!")
+    print("✅ Ingestion complete!")
     print(f"   Files processed: {total_files}")
     print(f"   Chunks stored:   {total_chunks}")
 

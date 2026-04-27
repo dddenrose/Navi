@@ -21,9 +21,7 @@ class RateLimiter:
     def _cleanup(self, key: str, now: float) -> None:
         """Remove expired timestamps."""
         cutoff = now - self.window_seconds
-        self._requests[key] = [
-            ts for ts in self._requests[key] if ts > cutoff
-        ]
+        self._requests[key] = [ts for ts in self._requests[key] if ts > cutoff]
 
     def check(self, key: str) -> None:
         """Check rate limit; raise HTTPException if exceeded."""
@@ -33,7 +31,10 @@ class RateLimiter:
         if len(self._requests[key]) >= self.max_requests:
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail=f"Rate limit exceeded. Max {self.max_requests} requests per {self.window_seconds}s.",
+                detail=(
+                    f"Rate limit exceeded. Max {self.max_requests} requests "
+                    f"per {self.window_seconds}s."
+                ),
             )
 
         self._requests[key].append(now)

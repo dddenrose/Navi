@@ -26,8 +26,8 @@ class Settings(BaseSettings):
     firestore_collection_knowledge: str = "knowledge"
 
     # Auth
-    auth_required: bool = True              # Set False in local dev to skip JWT
-    cors_origins: str = ""                  # Comma-separated allowed origins; empty = deny all cross-origin
+    auth_required: bool = True  # Set False in local dev to skip JWT
+    cors_origins: str = ""  # Comma-separated allowed origins; empty = deny all cross-origin
 
     # Server
     host: str = "0.0.0.0"
@@ -43,4 +43,3 @@ if settings.google_application_credentials:
         "GOOGLE_APPLICATION_CREDENTIALS",
         settings.google_application_credentials,
     )
-# trigger rebuild

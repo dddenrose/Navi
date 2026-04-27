@@ -2,8 +2,8 @@
 
 from pydantic import BaseModel, Field
 
-
 # ── Chat ─────────────────────────────────────────────────────────────────────
+
 
 class ChatRequest(BaseModel):
     message: str = Field(..., min_length=1, description="使用者問題")
@@ -23,6 +23,7 @@ class ChatResponse(BaseModel):
 
 
 # ── Stock ────────────────────────────────────────────────────────────────────
+
 
 class StockOverview(BaseModel):
     ticker: str
@@ -111,6 +112,7 @@ class FundamentalResponse(BaseModel):
 
 
 # ── Knowledge ────────────────────────────────────────────────────────────────
+
 
 class KnowledgeStats(BaseModel):
     total_documents: int = 0

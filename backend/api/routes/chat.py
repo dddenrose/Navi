@@ -3,7 +3,7 @@
 import json
 import logging
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
 from api.dependencies import verify_firebase_token
@@ -86,12 +86,13 @@ async def chat(
 
 
 @router.get("/conversations/{conversation_id}/messages")
-async def get_conversation_history(conversation_id: str, user: dict = Depends(verify_firebase_token)):
+async def get_conversation_history(
+    conversation_id: str, user: dict = Depends(verify_firebase_token)
+):
     """取得指定對話的訊息歷史."""
     messages = get_conversation_messages(conversation_id, user_id=_get_uid(user))
     if messages is None:
-        from fastapi import HTTPException as NotFoundError
-        raise NotFoundError(status_code=404, detail="Conversation not found")
+        raise HTTPException(status_code=404, detail="Conversation not found")
     return {"messages": messages}
 
 

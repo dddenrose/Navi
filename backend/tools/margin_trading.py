@@ -25,13 +25,18 @@ def get_margin_trading(ticker: str, days: int = 5) -> str:
 
     latest = data.latest
     if latest:
-        parts.extend([
-            "【最新一日】",
-            f"  融資餘額：{latest.margin_balance:,} 張（使用率 {latest.margin_utilization:.1f}%）",
-            f"  融券餘額：{latest.short_balance:,} 張",
-            f"  資券互抵：{latest.offset:,} 張",
-            "",
-        ])
+        parts.extend(
+            [
+                "【最新一日】",
+                (
+                    f"  融資餘額：{latest.margin_balance:,} 張"
+                    f"（使用率 {latest.margin_utilization:.1f}%）"
+                ),
+                f"  融券餘額：{latest.short_balance:,} 張",
+                f"  資券互抵：{latest.offset:,} 張",
+                "",
+            ]
+        )
 
     # Daily breakdown (condensed)
     parts.append("【近期明細】")

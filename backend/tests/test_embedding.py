@@ -25,9 +25,9 @@ def test_get_embedding_returns_768_dims():
 
 def test_store_and_search():
     """End-to-end: store a document, then find it via vector search."""
+    from config import settings
     from services.embedding_service import search_similar, store_document
     from services.firestore_client import get_db
-    from config import settings
 
     # Store a test document
     test_content = "RSI（相對強弱指標）是一種動量振盪指標，用於衡量價格變動的速度和幅度。"
