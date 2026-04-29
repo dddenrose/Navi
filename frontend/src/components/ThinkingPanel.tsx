@@ -179,7 +179,7 @@ export const ThinkingPanel = memo(function ThinkingPanel({
 
       {/* Expanded timeline */}
       {expanded && (
-        <div className="ml-[7px] border-l border-slate-700/60 pl-4 pb-1 mt-0.5">
+        <div className="ml-[7px] pl-4 pb-1 mt-0.5">
           {displaySteps.map((step, i) => {
             const isLast = i === displaySteps.length - 1;
             return (

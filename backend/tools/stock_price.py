@@ -24,7 +24,8 @@ def get_stock_price(ticker: str) -> str:
         f"漲跌：{sign}{data.change} ({sign}{data.change_percent}%)",
     ]
     if data.volume:
-        parts.append(f"成交量：{data.volume:,}")
+        # yfinance volume 單位為「股」（台股 1 張 = 1000 股）
+        parts.append(f"成交量：{data.volume:,} 股")
     if data.market_cap:
         parts.append(f"市值：{data.market_cap:,}")
 

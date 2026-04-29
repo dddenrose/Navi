@@ -19,6 +19,19 @@ _info_cache: dict[str, tuple[float, dict]] = {}
 _INFO_CACHE_TTL = 300  # 5 minutes
 
 
+def _normalize_yield(val: float | None) -> float | None:
+    """yfinance `dividendYield` 在 0.2.40 前後格式不同（小數 vs 百分比）。
+
+    統一回傳「小數」形式（0.025 表 2.5%）：
+      - 若 val > 1，視為百分比（2.5）→ 除以 100
+      - 否則保留原值（0.025）
+    台股殖利率極少超過 100%，此判斷對正常數據安全。
+    """
+    if val is None:
+        return None
+    return val / 100 if val > 1 else val
+
+
 def _get_ticker_info(ticker: str) -> dict:
     """Get yf.Ticker.info with simple TTL cache."""
     now = time.time()
@@ -805,7 +818,9 @@ def get_fundamental_data(ticker: str) -> FundamentalData:
         # 每股
         eps=eps,
         forward_eps=forward_eps,
-        dividend_yield=info.get("dividendYield"),
+        # yfinance 0.2.40+ 將 dividendYield 從小數（0.025）改為百分比（2.5）。
+        # 統一正規化為小數形式（0.025），下游用 val*100 顯示才不會二次放大。
+        dividend_yield=_normalize_yield(info.get("dividendYield")),
         # 合理價位
         cheap_price=valuation.get("cheap_price"),
         fair_price=valuation.get("fair_price"),
@@ -841,7 +856,8 @@ def format_stock_data_for_prompt(
             f"{sign}{overview.change} ({sign}{overview.change_percent}%)"
         )
     if overview.volume:
-        parts.append(f"   成交量：{overview.volume:,}")
+        # yfinance volume 單位為「股」（台股 1 張 = 1000 股）
+        parts.append(f"   成交量：{overview.volume:,} 股")
     if overview.market_cap:
         parts.append(f"   市值：{overview.market_cap:,}")
 
