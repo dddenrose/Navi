@@ -281,7 +281,7 @@ export default function Backtest() {
                 value={capital}
                 onChange={(e) => setCapital(e.target.value)}
                 min="10000"
-                step="100000"
+                step="any"
                 className="w-full max-w-[200px] rounded-xl px-4 py-2.5 text-sm text-white placeholder:text-slate-600 outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/40 tabular-nums"
                 style={{
                   background: "var(--overlay-bg)",
