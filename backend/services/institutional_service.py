@@ -104,18 +104,19 @@ def _fetch_twse_institutional(date_str: str, ticker: str) -> InstitutionalDaily 
         if row_code == code:
             # Columns: 證券代號, 證券名稱, 外資買, 外資賣, 外資淨, 投信買, 投信賣, 投信淨,
             #          自營商買, 自營商賣, 自營商淨, 合計淨
+            # NOTE: TWSE T86 API 回傳單位為「股」，這裡換算成「張」（1 張 = 1000 股）。
             return InstitutionalDaily(
                 date=f"{date_str[:4]}/{date_str[4:6]}/{date_str[6:]}",
-                foreign_buy=_parse_int(row[2]),
-                foreign_sell=_parse_int(row[3]),
-                foreign_net=_parse_int(row[4]),
-                investment_trust_buy=_parse_int(row[5]),
-                investment_trust_sell=_parse_int(row[6]),
-                investment_trust_net=_parse_int(row[7]),
-                dealer_buy=_parse_int(row[8]),
-                dealer_sell=_parse_int(row[9]),
-                dealer_net=_parse_int(row[10]),
-                total_net=_parse_int(row[11]),
+                foreign_buy=_parse_int(row[2]) // 1000,
+                foreign_sell=_parse_int(row[3]) // 1000,
+                foreign_net=_parse_int(row[4]) // 1000,
+                investment_trust_buy=_parse_int(row[5]) // 1000,
+                investment_trust_sell=_parse_int(row[6]) // 1000,
+                investment_trust_net=_parse_int(row[7]) // 1000,
+                dealer_buy=_parse_int(row[8]) // 1000,
+                dealer_sell=_parse_int(row[9]) // 1000,
+                dealer_net=_parse_int(row[10]) // 1000,
+                total_net=_parse_int(row[11]) // 1000,
             )
     return None
 
