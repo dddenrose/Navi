@@ -6,7 +6,7 @@ import {
   getConversationMessages,
   deleteConversation,
 } from "@/lib/api";
-import type { ThinkingStep } from "@/lib/api";
+import type { ThinkingStep, StoredMessage } from "@/lib/api";
 import { ThinkingPanel } from "@/components/ThinkingPanel";
 import { MarkdownRenderer } from "@/components/MarkdownRenderer";
 
@@ -76,9 +76,10 @@ export default function Chat() {
         const data = await getConversationMessages(currentConvId);
         if (cancelled) return;
         const loaded: Message[] = (data.messages ?? []).map(
-          (m: { role: string; content: string }) => ({
+          (m: StoredMessage) => ({
             role: m.role === "human" ? "user" : "assistant",
             content: m.content,
+            thinkingSteps: m.thinking,
           }),
         );
         setMessages(loaded);

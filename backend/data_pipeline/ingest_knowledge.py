@@ -32,6 +32,11 @@ CATEGORY_MAP = {
     "technical_analysis": "technical_analysis",
     "fundamental_analysis": "fundamental_analysis",
     "investment_theory": "investment_theory",
+    "taiwan_market": "taiwan_market",
+    "macro": "macro",
+    "agent_persona": "agent_persona",
+    "compliance": "compliance",
+    "tool_interpretation": "tool_interpretation",
     "papers": "papers",
 }
 

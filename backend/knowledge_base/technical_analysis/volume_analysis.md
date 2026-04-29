@@ -1,3 +1,10 @@
+---
+title: 成交量分析
+tags: [technical, volume, price_volume]
+related_tools: [analyze_technicals]
+priority: high
+---
+
 # 成交量分析 (Volume Analysis)
 
 ## 定義

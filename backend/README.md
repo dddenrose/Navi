@@ -76,13 +76,21 @@ uv run python cli.py
 
 ## API 端點
 
-| 方法 | 路徑                   | 說明                     |
-| ---- | ---------------------- | ------------------------ |
-| GET  | `/`                    | Health check             |
-| GET  | `/health`              | Health check             |
-| POST | `/api/chat`            | AI 對話（SSE Streaming） |
-| GET  | `/api/stock/{ticker}`  | 股票概覽                 |
-| GET  | `/api/knowledge/stats` | 知識庫統計               |
+| 方法     | 路徑                                    | 說明                       |
+| -------- | --------------------------------------- | -------------------------- |
+| GET      | `/health`                               | Health check               |
+| POST     | `/api/chat`                             | AI 對話（SSE Streaming）   |
+| GET      | `/api/chat/conversations`               | 列出使用者對話             |
+| GET      | `/api/chat/conversations/{id}/messages` | 取得對話歷史             |
+| DELETE   | `/api/chat/conversations/{id}`          | 刪除對話                   |
+| GET      | `/api/stock/{ticker}`                   | 股票概覽                   |
+| GET      | `/api/stock/{ticker}/technical`         | 技術面分析                 |
+| GET      | `/api/stock/{ticker}/fundamental`       | 基本面分析                 |
+| GET      | `/api/stock/{ticker}/institutional`     | 三大法人買賣超             |
+| GET      | `/api/stock/{ticker}/margin`            | 融資融券                   |
+| GET/POST | `/api/portfolio` ・ `/holdings`         | 投資組合 CRUD             |
+| POST     | `/api/backtest`                         | 策略回測                   |
+| GET      | `/api/knowledge/stats`                  | 知識庫統計                 |
 
 ### Chat API 範例
 
@@ -101,28 +109,54 @@ backend/
 ├── config.py                      # 環境設定 (pydantic-settings)
 ├── cli.py                         # CLI 互動式問答
 ├── api/
-│   ├── routes/
-│   │   ├── chat.py                # POST /api/chat (SSE)
-│   │   ├── stock.py               # GET /api/stock/{ticker}
-│   │   └── knowledge.py           # GET /api/knowledge/stats
-│   └── dependencies.py
+│   ├── dependencies.py            # JWT / Firebase Auth
+│   ├── rate_limit.py              # IP-based rate limit
+│   └── routes/
+│       ├── chat.py                # POST /api/chat (SSE) + 對話歷史
+│       ├── stock.py               # 概覽 / 技術 / 基本 / 法人 / 融資
+│       ├── portfolio.py           # 投資組合 CRUD
+│       ├── backtest.py            # 策略回測
+│       └── knowledge.py           # 知識庫統計
 ├── services/
-│   ├── firestore_client.py        # Firestore singleton
+│   ├── agent_service.py           # LangGraph ReAct + 混合意圖分類 + Prefetch
+│   ├── conversation_service.py    # 多輪對話歷史（Firestore）
+│   ├── stock_service.py           # yfinance + 台股代碼解析
+│   ├── institutional_service.py   # TWSE/OTC 三大法人
+│   ├── margin_service.py          # 融資融券
+│   ├── news_service.py            # Google News RSS
+│   ├── portfolio_service.py       # 投資組合
+│   ├── backtest_service.py        # 回測引擎
 │   ├── embedding_service.py       # text-embedding-004 + Vector Search
-│   └── rag_service.py             # RAG pipeline (Search → Gemini)
+│   └── firestore_client.py        # Firestore singleton
+├── tools/                         # LangChain / LangGraph Agent Tools（9 種）
+│   ├── stock_price.py             # get_stock_price
+│   ├── technical_analysis.py      # analyze_technicals
+│   ├── fundamental_analysis.py    # analyze_fundamentals
+│   ├── knowledge_search.py        # search_knowledge (RAG)
+│   ├── institutional.py           # get_institutional
+│   ├── margin_trading.py          # get_margin_trading
+│   ├── news_search.py             # search_financial_news
+│   ├── portfolio_tool.py          # get_portfolio
+│   └── backtest_tool.py           # run_strategy_backtest
 ├── models/
-│   ├── schemas.py                 # Pydantic models
-│   └── prompts.py                 # Prompt templates
+│   └── schemas.py                 # Pydantic models
 ├── data_pipeline/
 │   └── ingest_knowledge.py        # 知識庫匯入腳本
-├── knowledge_base/                # Markdown 知識文件
-│   ├── technical_analysis/
-│   ├── fundamental_analysis/
-│   └── investment_theory/
+├── knowledge_base/                # 24 份 Markdown、8 大分類
+│   ├── technical_analysis/        # RSI、MACD、KD、MA、布林、量能、K 線、支撐壓力
+│   ├── fundamental_analysis/      # 財務比率、財報解讀、估值方法、產業分析
+│   ├── investment_theory/         # 風險管理、資產配置、行為金融、ETF
+│   ├── taiwan_market/             # 台股交易機制與資料來源
+│   ├── macro/                     # 總體指標
+│   ├── agent_persona/             # 投資哲學與回覆風格
+│   ├── compliance/                # 免責聲明與風險提醒
+│   └── tool_interpretation/       # 回測 / 分析輸出解讀
 └── tests/
+    ├── test_app.py
     ├── test_firestore.py
     ├── test_embedding.py
-    └── test_rag.py
+    ├── test_rag.py
+    └── test_stock_service.py
 ```
 
 ## Firestore Vector Index 設定

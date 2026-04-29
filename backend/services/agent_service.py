@@ -72,7 +72,14 @@ AGENT_SYSTEM_PROMPT = """\
 2. 所有數字必須來自工具回傳的數據，絕對不可自行編造數據或價格。
 3. 工具回傳錯誤時，如實告知使用者「該數據暫時無法取得」，並基於已有數據繼續分析。
 4. 當工具回傳的數據與你先前的認知矛盾時，一律以工具數據為準。
-5. 每次回覆最後加上 ⚠️ 免責聲明：所有分析僅供學習與研究用途，不構成投資建議。
+5. **若你呼叫了 search_knowledge，必須在最終回應中實際引用其內容**（例如以
+   「根據知識庫說明、「概念上需注意」、「台股實務上」等用語帶出），
+   不可只呼叫卻不使用；尤其是以下眼角必須依 KB 內容說明：
+   • 技術指標超買（RSI > 80 / KD > 80）為「強多頭鈍化」與「反轉訊號」的區別
+   • 三大法人買賣超數據單位為「張」（1 張 = 1000 股）
+   • 「目標價」是估算值，非承諾
+   • 用戶出現 FOMO / 鎖定 / 追高語言時的行為偏誤提醒
+6. 每次回覆最後加上 ⚠️ 免責聲明：所有分析僅供學習與研究用途，不構成投資建議。
 </core_rules>
 
 <prohibitions>
@@ -117,10 +124,38 @@ AGENT_SYSTEM_PROMPT = """\
 | 法人 / 籌碼 | get_institutional + get_margin_trading（兩者並呼叫）|
 | 新聞 / 利多利空 | search_financial_news |
 | 回測 / 策略績效 | run_strategy_backtest（strategy: ma_cross/rsi/macd；period: 3mo/6mo/1y/2y）|
-| 投資理論 / 教學 | search_knowledge |
+| 投資理論 / 教學 / 名詞解釋 | search_knowledge |
 | 我的持股 / 投資組合 | get_portfolio（user_id 使用 <context> 區塊提供的值）|
 
 預設呼叫原則：可平行呼叫的工具（同一檔股票的多個面向）應同時觸發，不要串行等待。
+
+<knowledge_base_usage>
+**search_knowledge 不只用於純理論題，個股分析時也應主動呼叫**，以引用知識庫中的「眉角」與台股實務細節。觸發時機：
+
+1. **進場分析 / 目標價評估**：
+   - 平行呼叫 `search_knowledge`，query 例如：「目標價 估值 風險管理」、「RSI 鈍化 強多頭」、「台股 三大法人 解讀」
+   - 引用知識庫中對應指標的「常見誤判」段落，避免教科書式解讀
+
+2. **技術指標出現極端值時**：
+   - RSI > 80 或 < 20 → search_knowledge("RSI 鈍化 強趨勢")
+   - KD 高檔黃金交叉、低檔死亡交叉 → search_knowledge("KD 鈍化")
+   - 布林帶突破 → search_knowledge("布林通道 軋空 假突破")
+
+3. **籌碼面解讀**：
+   - 三大法人連續買賣超 → search_knowledge("外資 投信 自營商 解讀")
+   - 融資融券異常 → search_knowledge("融資維持率 軋空 斷頭")
+
+4. **使用者出現行為偏誤訊號**（FOMO / 鎖定成本 / 跟單）：
+   - 「會不會漲」「該不該追」「等回本」 → search_knowledge("行為金融 損失趨避 過度自信")
+
+5. **回測結果解讀**：
+   - 取得 `run_strategy_backtest` 結果後 → search_knowledge("夏普比率 過度擬合 回測 解讀")
+
+6. **合規邊界判斷**：
+   - 用戶要求保證、薦股、借錢投資 → search_knowledge("免責 紅線 合規")
+
+**單位 sanity check**：法人買賣超數據單位為「張」（1 張 = 1000 股）。若工具回傳數值 > 該股單日成交量數十倍，極可能是單位誤解（股 vs 張），需重新核對而非直接引用。
+</knowledge_base_usage>
 </tool_guide>
 
 <examples>
@@ -140,13 +175,19 @@ AGENT_SYSTEM_PROMPT = """\
 
 <example id="2" intent="entry_analysis">
   <user>鴻海值得買嗎？</user>
-  <thought>進場評估需多面向資料：股價、技術、基本、籌碼、新聞。平行呼叫。</thought>
+  <thought>
+  進場評估需多面向資料：股價、技術、基本、籌碼、新聞。平行呼叫。
+  另外平行呼叫 search_knowledge 取得進場分析的「眉角」與風險管理框架，
+  確保解讀時不只看數字表面，也納入知識庫中的台股實務與行為偏誤提醒。
+  </thought>
   <tool_calls>
   get_stock_price(ticker="鴻海")
   analyze_technicals(ticker="鴻海", period="3mo")
   analyze_fundamentals(ticker="鴻海")
   get_institutional(ticker="鴻海")
+  get_margin_trading(ticker="鴻海")
   search_financial_news(query="鴻海")
+  search_knowledge(query="進場分析 目標價 估值 RSI 鈍化 三大法人解讀")
   </tool_calls>
   <response>
 📌 現價位置：鴻海目前股價 178 元，位於 MA20（175）上方。
@@ -158,6 +199,10 @@ AGENT_SYSTEM_PROMPT = """\
 🟢 建議進場區間：172-175（拉回至 MA20 / 合理價附近）
 🛑 建議停損：165 以下（跌破 MA60）
 📊 風險報酬比：約 1.4:1
+📚 知識庫補充（來自 search_knowledge）：
+  - 目標價只是估算值，不是承諾，需依實際走勢動態調整
+  - 強多頭趨勢中 RSI 高檔可能「鈍化」，不代表立即反轉
+  - 三大法人買超數據以「張」為單位（1 張 = 1000 股），請避免單位誤判
 ⚠️ 免責聲明：所有分析僅供學習與研究用途，不構成投資建議。
   </response>
 </example>
@@ -459,6 +504,20 @@ def _extract_ticker(question: str) -> str | None:
     if m:
         return m.group(1)
 
+    # d) Fallback: action verb followed by Chinese name anywhere in sentence
+    #    "幫我分析聯發科未來目標價格?" → "聯發科"
+    #    Lazy match + lookahead to stop before non-name suffixes (未來/目標/的/etc.)
+    m = re.search(
+        r"(?:分析|看看|查[詢看]?|評估|了解|介紹|說明)(?:一下)?\s*"
+        r"([一-龥]{2,5}?)"
+        r"(?=未來|目標|股票|股價|公司|集團|的|怎|是否|可以|能否|"
+        r"值得|適合|有沒|會不|該不|現在|目前|最近|短期|長期|"
+        r"[^\u4e00-\u9fa5]|$)",
+        q,
+    )
+    if m and m.group(1) not in _non_company:
+        return m.group(1)
+
     return None
 
 
@@ -619,14 +678,18 @@ _PREFETCH_INTENTS: dict[str, list[str]] = {
         "analyze_technicals",
         "analyze_fundamentals",
         "get_institutional",
+        "get_margin_trading",
         "search_financial_news",
+        "search_knowledge",
     ],
     "comprehensive_analysis": [
         "get_stock_price",
         "analyze_technicals",
         "analyze_fundamentals",
         "get_institutional",
+        "get_margin_trading",
         "search_financial_news",
+        "search_knowledge",
     ],
 }
 
@@ -669,8 +732,13 @@ _PREFETCH_SYSTEM_TEMPLATE = """\
 2. 基本面估值判斷：股價相對於便宜/合理/昂貴價位於何處？
 3. 籌碼面佐證：法人買賣超方向是否與技術面一致？
 4. 新聞面風險：是否有重大利多 / 利空？
-5. 矛盾檢查：各面向是否一致？若矛盾，取較保守結論。
-6. 整合結論，附停損或風險提示。
+5. **知識庫眉角檢核**：對照 search_knowledge 回傳內容檢視現狀。
+   - RSI > 80 是否為強多頭中的「鈍化」？避免直接視為反轉訊號
+   - 法人買賣超數據單位為「張」（1 張 = 1000 股），避免單位誤判
+   - 目標價/估值是估算值，非承諾，需提醒用戶
+   - 用戶若有 FOMO / 錨定 / 跟單跡象，引用行為金融偏誤提醒
+6. 矛盾檢查：各面向是否一致？若矛盾，取較保守結論。
+7. 整合結論，附停損或風險提示。
 </reasoning_process>
 
 <response_format>
@@ -679,6 +747,8 @@ _PREFETCH_SYSTEM_TEMPLATE = """\
 
 <rules>
 - 所有數字必須來自 <prefetched_data>，不可自行捏造。
+- **必須將 search_knowledge 的內容融入分析**，而非僅依靠 LLM 內建知識；
+  若知識庫內容對當前指標數值（如 RSI 鈍化、KD 高檔交叉、法人解讀）有對應說明，回應中應引用。
 - 若某項工具結果包含 ⚠️ 錯誤標記，跳過該欄位並說明「此部分數據暫時無法取得」，其餘欄位正常輸出。
 - 不可保證獲利、不可承諾報酬率。
 - 任何看多建議都必須附帶停損或風險說明。
@@ -708,6 +778,14 @@ async def _prefetch_tool_results(ticker: str, tool_names: list[str]) -> str:
         try:
             if name == "search_financial_news":
                 inp = {"query": ticker}
+            elif name == "search_knowledge":
+                # 進場/全面分析時主動引入「眉角」與台股實務解讀
+                inp = {
+                    "query": (
+                        "進場分析 目標價 估值常見誤判 RSI鈍化強多頭 "
+                        "台股三大法人解讀 位階與風險控制 行為金融偏誤"
+                    )
+                }
             elif name == "analyze_technicals":
                 inp = {"ticker": ticker, "period": "3mo"}
             else:
@@ -737,15 +815,26 @@ async def _run_prefetch_mode(
     llm: ChatVertexAI,
     conversation_id: str | None,
     user_id: str,
+    intent_event: IntentEvent | None = None,
 ) -> AsyncGenerator[StreamChunk, None]:
     """預取模式：平行呼叫工具 → 組裝結果 → 直接串流 LLM 回答。"""
+    thinking_steps: list[dict] = []
+    if intent_event is not None:
+        thinking_steps.append(dict(intent_event))
+
     for name in tool_names:
-        yield ToolStartEvent(type="tool_start", tool=name, input={"ticker": ticker})
+        start_event = ToolStartEvent(
+            type="tool_start", tool=name, input={"ticker": ticker}
+        )
+        thinking_steps.append(dict(start_event))
+        yield start_event
 
     tool_results = await _prefetch_tool_results(ticker, tool_names)
 
     for name in tool_names:
-        yield ToolEndEvent(type="tool_end", tool=name)
+        end_event = ToolEndEvent(type="tool_end", tool=name)
+        thinking_steps.append(dict(end_event))
+        yield end_event
 
     format_instructions = _ENTRY_FORMAT if intent == "entry_analysis" else _COMPREHENSIVE_FORMAT
     system_msg = _PREFETCH_SYSTEM_TEMPLATE.format(
@@ -778,12 +867,14 @@ async def _run_prefetch_mode(
                     question,
                     full_output,
                     user_id=user_id,
+                    thinking=thinking_steps or None,
                 )
             except Exception as e:
                 logger.warning("Failed to save history: %s", e)
     except Exception:
         logger.exception("Prefetch mode failed")
         yield "抱歉，分析過程中發生錯誤，請稍後再試。"
+
 
 
 # ── LangGraph Agent Mode ─────────────────────────────────────────────────────
@@ -825,9 +916,14 @@ async def _run_agent_mode(
     llm: ChatVertexAI,
     conversation_id: str | None,
     user_id: str,
+    intent_event: IntentEvent | None = None,
 ) -> AsyncGenerator[StreamChunk, None]:
     """LangGraph ReAct Agent 模式：自主決策工具呼叫。"""
     system_prompt = _build_agent_system_prompt(intent, user_id)
+
+    thinking_steps: list[dict] = []
+    if intent_event is not None:
+        thinking_steps.append(dict(intent_event))
 
     agent = create_react_agent(
         model=llm,
@@ -857,15 +953,19 @@ async def _run_agent_mode(
             if kind == "on_tool_start":
                 tool_name = event["name"]
                 active_tools.add(tool_name)
-                yield ToolStartEvent(
+                start_event = ToolStartEvent(
                     type="tool_start",
                     tool=tool_name,
                     input=event["data"].get("input", {}),
                 )
+                thinking_steps.append(dict(start_event))
+                yield start_event
             elif kind == "on_tool_end":
                 tool_name = event["name"]
                 active_tools.discard(tool_name)
-                yield ToolEndEvent(type="tool_end", tool=tool_name)
+                end_event = ToolEndEvent(type="tool_end", tool=tool_name)
+                thinking_steps.append(dict(end_event))
+                yield end_event
             elif kind == "on_chat_model_stream":
                 content = event["data"]["chunk"].content
                 if content and not active_tools:
@@ -886,6 +986,7 @@ async def _run_agent_mode(
                     question,
                     full_output,
                     user_id=user_id,
+                    thinking=thinking_steps or None,
                 )
             except Exception as e:
                 logger.warning("Failed to save history for %s: %s", conversation_id, e)
@@ -917,7 +1018,10 @@ async def run_agent(
     intent, ticker, confidence = await _classify_intent_hybrid(question, llm)
     logger.info("Intent: %s | Ticker: %s | Confidence: %.2f", intent, ticker, confidence)
 
-    yield IntentEvent(type="intent", intent=intent, ticker=ticker, confidence=confidence)
+    intent_event = IntentEvent(
+        type="intent", intent=intent, ticker=ticker, confidence=confidence
+    )
+    yield intent_event
 
     # Step 2: 分流執行策略
     prefetch_tools = _PREFETCH_INTENTS.get(intent)
@@ -931,6 +1035,7 @@ async def run_agent(
             llm,
             conversation_id,
             user_id,
+            intent_event=intent_event,
         ):
             yield chunk
     else:
@@ -941,6 +1046,7 @@ async def run_agent(
             llm,
             conversation_id,
             user_id,
+            intent_event=intent_event,
         ):
             yield chunk
 

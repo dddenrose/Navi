@@ -203,9 +203,11 @@ export const ThinkingPanel = memo(function ThinkingPanel({
                     <span className="text-slate-300">
                       {getIntentName(step.intent)}
                     </span>
-                    {step.ticker && (
-                      <span className="text-slate-500">{step.ticker}</span>
-                    )}
+                    {step.ticker &&
+                      step.ticker !== "null" &&
+                      step.ticker !== "None" && (
+                        <span className="text-slate-500">{step.ticker}</span>
+                      )}
                   </span>
                 )}
 
@@ -221,6 +223,12 @@ export const ThinkingPanel = memo(function ThinkingPanel({
                     <span className="text-slate-300">
                       {getToolName(step.tool)}
                     </span>
+                    {(() => {
+                      const t = step.input?.ticker;
+                      return typeof t === "string" && t ? (
+                        <span className="text-slate-500">{t}</span>
+                      ) : null;
+                    })()}
                   </span>
                 )}
               </div>

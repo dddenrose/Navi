@@ -12,8 +12,9 @@
 
 ## ✨ 功能特色
 
-- **AI 對話分析** — 自然語言提問，意圖分類器自動路由至最佳回應模式（Prefetch 平行工具 或 Agent 自主決策），結合 RAG 知識庫與即時數據，透過 SSE Streaming 產出分析
-- **智慧意圖分類** — LLM 分類器支援 10 種意圖類別與信心度評分；低信心度自動 fallback 至完整 Agent 模式
+- **AI 對話分析** — 自然語言提問，混合式意圖分類器自動路由至最佳回應模式（Prefetch 平行工具 或 LangGraph ReAct Agent 自主決策），結合 RAG 知識庫與即時數據，透過 SSE Streaming 產出分析
+- **混合式意圖分類** — 規則 fast path + LLM fallback 兩階段分類器，10 種意圖類別與信心度評分；低信心度自動 fallback 至完整 Agent 模式
+- **精選投資知識庫** — 24 份 Markdown 文件跨 8 大分類（技術分析 / 基本分析 / 投資理論 / 台股市場 / 總體帶註 / 代理人格 / 免責合規 / 工具判讀），進場分析與全面分析時自動引用 KB 內容
 - **中文股票名稱解析** — 動態串接 TWSE + TPEx API，支援中文名稱 → 代碼查詢（~2,400 檔股票，24 小時快取）
 - **技術面分析** — RSI、MACD、KD、均線、布林通道、費波那契回撤、5 源支撐壓力位（均線、布林、波段高低點、Fibonacci、心理關卡），以及自動計算停損與風險報酬比
 - **基本面分析** — PE、PB、ROE、EPS、營收成長，以及 3 層級公平價位估算（便宜價/合理價/昂貴價，基於 PE 百分位 × EPS）
@@ -33,14 +34,14 @@
 │  (TypeScript)    │────────▶│           FastAPI Backend                │
 │                  │◀────────│                                          │
 │ Firebase Hosting │   SSE   │  ┌────────────┐                         │
-│                  │         │  │  意圖分類器  │ ── 信心度 < 0.7 ──────┐│
+│                  │         │  │  混合意圖    │ ── 信心度 < 0.7 ──────┐│
 │                  │         │  │  Classifier │                       ││
 │                  │         │  └──────┬─────┘                        ││
 │                  │         │   Prefetch │ 意圖             Agent    ││
 │                  │         │         ▼                     模式     ││
 │                  │         │  ┌────────────┐        ┌────────────┐  ││
-│                  │         │  │  平行工具   │        │ LangChain  │◀─┘│
-│                  │         │  │  執行       │        │ AgentExec  │   │
+│                  │         │  │  平行工具   │        │  LangGraph │◀─┘│
+│                  │         │  │  執行       │        │  ReAct     │   │
 │                  │         │  └──────┬─────┘        └──────┬─────┘   │
 │                  │         │         └──────────┬───────────┘         │
 │                  │         │                    ▼                     │
@@ -63,10 +64,10 @@
 
 ### 雙模式分派
 
-**意圖分類器**分析每個使用者問題（10 種類別，附信心度評分），路由至兩種模式之一：
+**混合式意圖分類器**（規則 fast path + LLM fallback）分析每個使用者問題（10 種類別、附信心度），路由至兩種模式之一：
 
-- **Prefetch 模式** — 針對明確意圖（例如：進場分析、全面分析）：平行呼叫所有所需工具，再以結構化 Chain-of-Thought 提示彙整結果，延遲更低
-- **Agent 模式** — 針對開放式或低信心度的問題：由 LangChain `AgentExecutor` 自主決定呼叫哪些工具，彈性更高
+- **Prefetch 模式** — 針對明確意圖（例如：進場分析、全面分析）：平行呼叫所需工具（含自動知識庫查詢），再以結構化 Chain-of-Thought 提示彙整結果，並強制要求引用 KB 內容，延遲更低、品質更一致
+- **Agent 模式** — 針對開放式或低信心度的問題：由 LangGraph `create_react_agent` 自主決定呼叫 9 種工具中哪些（含 `search_knowledge`），彈性更高
 
 ### 9 種 Agent 工具
 
@@ -75,7 +76,7 @@
 | `get_stock_price`       | 即時股價、漲跌幅、成交量、市值                                  |
 | `analyze_technicals`    | MA、RSI、MACD、KD、布林通道、Fibonacci 回撤、支撐壓力、停損建議 |
 | `analyze_fundamentals`  | PE、PB、ROE、EPS、成長率、3 層級公平價位（便宜/合理/昂貴）      |
-| `search_knowledge`      | 對 13 份投資知識文件進行 RAG 向量搜尋（取 top-5）               |
+| `search_knowledge`      | 對 **24 份投資知識文件（8 大分類）**進行 RAG 向量搜尋（取 top-5）          |
 | `get_institutional`     | 外資、投信、自營商買賣超數據（TWSE/OTC API）                    |
 | `get_margin_trading`    | 融資融券餘額、使用率、資券互抵                                  |
 | `search_financial_news` | Google News RSS 財經新聞搜尋                                    |
@@ -92,7 +93,7 @@
 | --------- | ----------------------------------------- |
 | 語言      | Python 3.12                               |
 | Web 框架  | FastAPI 0.115+                            |
-| AI 框架   | LangChain 0.3+（Tool-calling Agent）      |
+| AI 框架   | LangChain 1.x + LangGraph（ReAct Agent） |
 | LLM       | Gemini 2.5 Pro（透過 Vertex AI）          |
 | Embedding | text-embedding-004（768 維向量）          |
 | Vector DB | Firestore Vector Search                   |
@@ -234,9 +235,8 @@ navi/
 │   │   ├── backtest.py          #   策略回測
 │   │   └── knowledge.py         #   知識庫管理
 │   ├── services/                # 業務邏輯層
-│   │   ├── agent_service.py     #   LangChain Agent + 意圖分類 + Prefetch
+│   │   ├── agent_service.py     #   LangGraph ReAct + 混合意圖分類 + Prefetch
 │   │   ├── conversation_service.py # 多輪對話歷史（Firestore）
-│   │   ├── rag_service.py       #   RAG Pipeline
 │   │   ├── stock_service.py     #   股票數據（yfinance）+ 代碼解析
 │   │   ├── embedding_service.py #   Embedding 處理
 │   │   ├── backtest_service.py  #   回測引擎
@@ -245,12 +245,17 @@ navi/
 │   │   ├── news_service.py      #   Google News RSS
 │   │   ├── portfolio_service.py #   投資組合管理
 │   │   └── firestore_client.py  #   Firestore Client 單例
-│   ├── tools/                   # LangChain Agent Tools（9 種）
+│   ├── tools/                   # LangChain / LangGraph Agent Tools（9 種）
 │   ├── models/                  # Pydantic Schemas & Prompt Templates
-│   ├── knowledge_base/          # 靜態知識文件（13 份 Markdown）
-│   │   ├── technical_analysis/  #   RSI、MACD、KD、MA、BB、K 線型態等
-│   │   ├── fundamental_analysis/#   財務比率、財報解讀、估值方法等
-│   │   └── investment_theory/   #   風險管理
+│   ├── knowledge_base/          # 精選知識文件（24 份 Markdown、8 大分類）
+│   │   ├── technical_analysis/  #   RSI、MACD、KD、MA、布林、量能、K 線、支擐壓力
+│   │   ├── fundamental_analysis/#   財務比率、財報解讀、估值方法、產業分析
+│   │   ├── investment_theory/   #   風險管理、資產配置、行為金融、ETF
+│   │   ├── taiwan_market/       #   台股市場交易機制與資料來源
+│   │   ├── macro/               #   總體指標（利率、匯率、景氣循環）
+│   │   ├── agent_persona/       #   代理人投資哲學與回覆風格
+│   │   ├── compliance/          #   免責聲明與風險提醒
+│   │   └── tool_interpretation/ #   如何解讀回測 / 分析輸出
 │   ├── data_pipeline/           # 知識庫匯入管線
 │   └── tests/                   # Pytest 測試
 ├── frontend/

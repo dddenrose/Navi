@@ -13,8 +13,9 @@
 
 ## ✨ Features
 
-- **AI Chat Analysis** — Ask questions in natural language; an intent classifier auto-routes to the optimal response mode (Prefetch parallel tools or Agent autonomous decision), combining RAG knowledge base with real-time data via SSE Streaming
-- **Smart Intent Classification** — LLM-based classifier with 10 intent categories and confidence scoring; low-confidence queries auto-fallback to full Agent mode
+- **AI Chat Analysis** — Ask questions in natural language; a hybrid intent classifier auto-routes to the optimal response mode (Prefetch parallel tools or LangGraph ReAct Agent), combining RAG knowledge base with real-time data via SSE Streaming
+- **Hybrid Intent Classification** — Two-stage classifier (rule-based fast path + LLM fallback) covering 10 intent categories with confidence scoring; low-confidence queries auto-fallback to full Agent mode
+- **Curated Investment Knowledge Base** — 24 Markdown documents across 8 categories (technical / fundamental / investment theory / Taiwan market / macro / agent persona / compliance / tool interpretation), auto-quoted by the agent for entry-analysis & comprehensive-analysis questions
 - **Chinese Stock Name Resolution** — Dynamically resolves Chinese company names to ticker codes via TWSE + TPEx APIs (~2,400 stocks, 24h cache)
 - **Technical Analysis** — RSI, MACD, KD, moving averages, Bollinger Bands, Fibonacci retracement, 5-source support/resistance levels (MA, Bollinger, swing points, Fibonacci, psychological levels), and auto-calculated stop-loss with risk/reward ratio
 - **Fundamental Analysis** — PE, PB, ROE, EPS, revenue growth, and 3-tier fair value estimation (cheap / fair / expensive based on PE percentile × EPS)
@@ -34,14 +35,14 @@
 │  (TypeScript)    │────────▶│           FastAPI Backend                │
 │                  │◀────────│                                          │
 │ Firebase Hosting │   SSE   │  ┌────────────┐                         │
-│                  │         │  │  Intent     │ ── confidence < 0.7 ──┐│
+│                  │         │  │  Hybrid     │ ── confidence < 0.7 ──┐│
 │                  │         │  │  Classifier │                       ││
 │                  │         │  └──────┬─────┘                        ││
 │                  │         │    Prefetch │ intents          Agent    ││
 │                  │         │         ▼                     mode     ││
 │                  │         │  ┌────────────┐        ┌────────────┐  ││
-│                  │         │  │  Parallel   │        │ LangChain  │◀─┘│
-│                  │         │  │  Tool Exec  │        │ AgentExec  │   │
+│                  │         │  │  Parallel   │        │  LangGraph │◀─┘│
+│                  │         │  │  Tool Exec  │        │  ReAct     │   │
 │                  │         │  └──────┬─────┘        └──────┬─────┘   │
 │                  │         │         └──────────┬───────────┘         │
 │                  │         │                    ▼                     │
@@ -64,10 +65,10 @@
 
 ### Dual-Mode Dispatch
 
-The **Intent Classifier** analyzes each user question (10 categories, with confidence scoring) and routes to one of two modes:
+The **Hybrid Intent Classifier** (rule-based fast path + LLM fallback) analyzes each user question across 10 categories with confidence scoring, then routes to one of two modes:
 
-- **Prefetch Mode** — For well-defined intents (e.g. entry analysis, comprehensive analysis): runs all required tools in parallel, then synthesizes results with a structured Chain-of-Thought prompt. Lower latency.
-- **Agent Mode** — For open-ended or low-confidence queries: LangChain `AgentExecutor` autonomously decides which tools to call. More flexible.
+- **Prefetch Mode** — For well-defined intents (e.g. entry analysis, comprehensive analysis): runs all required tools in parallel (including auto knowledge-base lookup) and synthesizes results with a structured Chain-of-Thought prompt that mandates KB-grounded reasoning. Lower latency, higher consistency.
+- **Agent Mode** — For open-ended or low-confidence queries: a LangGraph `create_react_agent` autonomously decides which of the 9 tools to call (including `search_knowledge`). More flexible.
 
 ### 9 Agent Tools
 
@@ -76,7 +77,7 @@ The **Intent Classifier** analyzes each user question (10 categories, with confi
 | `get_stock_price`       | Real-time stock price, change %, volume, market cap                                      |
 | `analyze_technicals`    | MA, RSI, MACD, KD, Bollinger Bands, Fibonacci retracement, support/resistance, stop-loss |
 | `analyze_fundamentals`  | PE, PB, ROE, EPS, growth rates, 3-tier fair value (cheap/fair/expensive)                 |
-| `search_knowledge`      | RAG vector search across 13 investment knowledge documents (top-5 results)               |
+| `search_knowledge`      | RAG vector search across **24 investment knowledge documents in 8 categories** (top-5)   |
 | `get_institutional`     | Foreign, investment trust, dealer buy/sell data (TWSE/OTC API)                           |
 | `get_margin_trading`    | Margin balance, utilization rate, short selling, margin offset                           |
 | `search_financial_news` | Financial news via Google News RSS                                                       |
@@ -93,7 +94,7 @@ The **Intent Classifier** analyzes each user question (10 categories, with confi
 | ------------- | ----------------------------------------- |
 | Language      | Python 3.12                               |
 | Web Framework | FastAPI 0.115+                            |
-| AI Framework  | LangChain 0.3+ (Tool-calling Agent)       |
+| AI Framework  | LangChain 1.x + LangGraph (ReAct Agent)   |
 | LLM           | Gemini 2.5 Pro (via Vertex AI)            |
 | Embedding     | text-embedding-004 (768 dimensions)       |
 | Vector DB     | Firestore Vector Search                   |
@@ -235,9 +236,8 @@ navi/
 │   │   ├── backtest.py          #   Strategy backtesting
 │   │   └── knowledge.py         #   Knowledge base management
 │   ├── services/                # Business logic layer
-│   │   ├── agent_service.py     #   LangChain Agent + Intent Classifier + Prefetch
+│   │   ├── agent_service.py     #   LangGraph ReAct + Hybrid Intent Classifier + Prefetch
 │   │   ├── conversation_service.py # Multi-turn conversation history (Firestore)
-│   │   ├── rag_service.py       #   RAG Pipeline
 │   │   ├── stock_service.py     #   Stock data (yfinance) + ticker resolution
 │   │   ├── embedding_service.py #   Embedding processing
 │   │   ├── backtest_service.py  #   Backtesting engine
@@ -246,12 +246,17 @@ navi/
 │   │   ├── news_service.py      #   Google News RSS
 │   │   ├── portfolio_service.py #   Portfolio management
 │   │   └── firestore_client.py  #   Firestore client singleton
-│   ├── tools/                   # LangChain Agent Tools (9 tools)
+│   ├── tools/                   # LangChain / LangGraph Agent Tools (9 tools)
 │   ├── models/                  # Pydantic Schemas & Prompt Templates
-│   ├── knowledge_base/          # Static knowledge docs (13 Markdown files)
-│   │   ├── technical_analysis/  #   RSI, MACD, KD, MA, BB, candlesticks, etc.
-│   │   ├── fundamental_analysis/#   Financial ratios, earnings, valuation, etc.
-│   │   └── investment_theory/   #   Risk management
+│   ├── knowledge_base/          # Curated knowledge docs (24 Markdown files, 8 categories)
+│   │   ├── technical_analysis/  #   RSI, MACD, KD, MA, BB, volume, candlesticks, S/R
+│   │   ├── fundamental_analysis/#   Financial ratios, earnings, valuation, industry
+│   │   ├── investment_theory/   #   Risk management, portfolio theory, behavioral, ETF
+│   │   ├── taiwan_market/       #   Taiwan-specific trading mechanics & data sources
+│   │   ├── macro/               #   Macro indicators (rates, FX, cycles)
+│   │   ├── agent_persona/       #   Investment philosophy & response style
+│   │   ├── compliance/          #   Disclaimers & risk warnings
+│   │   └── tool_interpretation/ #   How to read backtest / analysis outputs
 │   ├── data_pipeline/           # Knowledge ingestion pipeline
 │   └── tests/                   # Pytest tests
 ├── frontend/

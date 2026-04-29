@@ -1,3 +1,9 @@
+---
+title: 產業分析框架
+tags: [fundamental, industry, porter]
+priority: medium
+---
+
 # 產業分析框架 (Industry Analysis Framework)
 
 ## 定義
