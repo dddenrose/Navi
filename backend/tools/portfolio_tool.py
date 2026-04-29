@@ -11,7 +11,7 @@ def get_portfolio(user_id: str) -> str:
     當使用者問到「我的持股」「投資組合表現」「我的股票賺了多少」時使用此工具。
 
     Args:
-        user_id: 使用者 ID（從對話 context 取得）
+        user_id: 使用者 ID。必須使用系統上下文中提供的 user_id 值，不可自行填入。
     """
     try:
         summary = get_portfolio_summary(user_id)
@@ -22,14 +22,17 @@ def get_portfolio(user_id: str) -> str:
         return "你目前還沒有任何持股。可以透過投資組合頁面新增持股。"
 
     lines = [
-        f"💼 投資組合概覽",
-        f"",
+        "💼 投資組合概覽",
+        "",
         f"📊 總市值：{summary.total_value:,.0f}",
         f"💰 總成本：{summary.total_cost:,.0f}",
-        f"{'📈' if summary.total_pnl >= 0 else '📉'} 總損益：{summary.total_pnl:+,.0f}（{summary.total_pnl_percent:+.2f}%）",
+        (
+            f"{'📈' if summary.total_pnl >= 0 else '📉'} 總損益："
+            f"{summary.total_pnl:+,.0f}（{summary.total_pnl_percent:+.2f}%）"
+        ),
         f"📦 持股檔數：{summary.holdings_count}",
-        f"",
-        f"═══ 持股明細 ═══",
+        "",
+        "═══ 持股明細 ═══",
     ]
 
     for h in summary.holdings:

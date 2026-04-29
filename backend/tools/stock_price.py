@@ -2,7 +2,7 @@
 
 from langchain_core.tools import tool
 
-from services.stock_service import get_stock_overview, normalize_ticker
+from services.stock_service import get_stock_overview
 
 
 @tool

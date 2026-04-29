@@ -157,8 +157,7 @@ def get_institutional_data(ticker: str, days: int = 5) -> InstitutionalSummary:
     records: list[InstitutionalDaily] = []
     with ThreadPoolExecutor(max_workers=5) as executor:
         future_to_date = {
-            executor.submit(_fetch_twse_institutional, d, norm_ticker): d
-            for d in dates
+            executor.submit(_fetch_twse_institutional, d, norm_ticker): d for d in dates
         }
         date_records: dict[str, InstitutionalDaily] = {}
         for future in as_completed(future_to_date):

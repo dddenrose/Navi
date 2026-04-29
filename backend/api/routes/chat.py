@@ -3,10 +3,11 @@
 import json
 import logging
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
 from api.dependencies import verify_firebase_token
+from api.rate_limit import chat_limiter, get_rate_limit_key
 from models.schemas import ChatRequest
 from services.agent_service import run_agent
 from services.conversation_service import (
@@ -31,7 +32,6 @@ async def _sse_generator(
 ):
     """Wrap Agent streaming output in SSE format."""
     # Auto-generate conversation_id if not provided
-    # just  test trigger
     cid = conversation_id or new_conversation_id()
 
     # Send conversation_id as the first event so the client can track it
@@ -54,12 +54,19 @@ async def _sse_generator(
 
 
 @router.post("")
-async def chat(request: ChatRequest, user: dict = Depends(verify_firebase_token)):
+async def chat(
+    request: ChatRequest,
+    req: Request,
+    user: dict = Depends(verify_firebase_token),
+):
     """與 Navi 對話，回傳 SSE streaming response.
 
     - 首次對話不帶 conversation_id → 自動產生
     - 後續對話帶 conversation_id → 多輪延續
     """
+    # Rate limiting: 10 requests per minute per user
+    chat_limiter.check(get_rate_limit_key(req, user))
+
     return StreamingResponse(
         _sse_generator(
             request.message,
@@ -79,11 +86,12 @@ async def chat(request: ChatRequest, user: dict = Depends(verify_firebase_token)
 
 
 @router.get("/conversations/{conversation_id}/messages")
-async def get_conversation_history(conversation_id: str, user: dict = Depends(verify_firebase_token)):
+async def get_conversation_history(
+    conversation_id: str, user: dict = Depends(verify_firebase_token)
+):
     """取得指定對話的訊息歷史."""
     messages = get_conversation_messages(conversation_id, user_id=_get_uid(user))
     if messages is None:
-        from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="Conversation not found")
     return {"messages": messages}
 

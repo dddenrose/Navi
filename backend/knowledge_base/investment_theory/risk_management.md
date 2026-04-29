@@ -1,3 +1,9 @@
+---
+title: 風險管理基礎
+tags: [risk, position_sizing, stop_loss, diversification]
+priority: highest
+---
+
 # 風險管理基礎 — 停損、部位控制、分散投資
 
 ## 概述

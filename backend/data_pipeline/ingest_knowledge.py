@@ -32,6 +32,11 @@ CATEGORY_MAP = {
     "technical_analysis": "technical_analysis",
     "fundamental_analysis": "fundamental_analysis",
     "investment_theory": "investment_theory",
+    "taiwan_market": "taiwan_market",
+    "macro": "macro",
+    "agent_persona": "agent_persona",
+    "compliance": "compliance",
+    "tool_interpretation": "tool_interpretation",
     "papers": "papers",
 }
 
@@ -135,7 +140,7 @@ def ingest_all(*, force: bool = False) -> None:
         print()
 
     print("=" * 50)
-    print(f"✅ Ingestion complete!")
+    print("✅ Ingestion complete!")
     print(f"   Files processed: {total_files}")
     print(f"   Chunks stored:   {total_chunks}")
 

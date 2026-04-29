@@ -1,5 +1,7 @@
 """Navi Backend — Configuration via pydantic-settings."""
 
+import os
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -24,8 +26,8 @@ class Settings(BaseSettings):
     firestore_collection_knowledge: str = "knowledge"
 
     # Auth
-    auth_required: bool = True              # Set False in local dev to skip JWT
-    cors_origins: str = ""                  # Comma-separated allowed origins; empty = deny all cross-origin
+    auth_required: bool = True  # Set False in local dev to skip JWT
+    cors_origins: str = ""  # Comma-separated allowed origins; empty = deny all cross-origin
 
     # Server
     host: str = "0.0.0.0"
@@ -34,4 +36,10 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
-# trigger rebuild
+
+# Sync credentials path to OS env so that google.auth.default() can find it.
+if settings.google_application_credentials:
+    os.environ.setdefault(
+        "GOOGLE_APPLICATION_CREDENTIALS",
+        settings.google_application_credentials,
+    )

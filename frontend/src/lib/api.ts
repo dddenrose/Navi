@@ -133,9 +133,15 @@ export async function getConversations(): Promise<{
   return apiFetch<{ conversations: Conversation[] }>(`/api/chat/conversations`);
 }
 
+export interface StoredMessage {
+  role: string;
+  content: string;
+  thinking?: ThinkingStep[];
+}
+
 export async function getConversationMessages(
   conversationId: string,
-): Promise<{ messages: { role: string; content: string }[] }> {
+): Promise<{ messages: StoredMessage[] }> {
   return apiFetch(
     `/api/chat/conversations/${encodeURIComponent(conversationId)}/messages`,
   );

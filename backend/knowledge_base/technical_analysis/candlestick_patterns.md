@@ -1,3 +1,10 @@
+---
+title: K 線型態學
+tags: [technical, candlestick, patterns]
+related_tools: [analyze_technicals]
+priority: medium
+---
+
 # K 線型態學 (Candlestick Patterns)
 
 ## 定義

@@ -16,7 +16,8 @@ interface RsiChartProps {
 
 export default function RsiChart({ rsi }: RsiChartProps) {
   const data = [{ name: "RSI", value: rsi }];
-  // Read CSS variables once per theme change, not on every render
+  // Read CSS variables once per theme change, not on every render.
+  // `theme` is a deliberate dep to retrigger DOM CSS-var read when theme switches.
   const { theme } = useThemeStore();
   const { grid, tick } = useMemo(() => {
     const root = getComputedStyle(document.documentElement);
@@ -24,6 +25,7 @@ export default function RsiChart({ rsi }: RsiChartProps) {
       grid: root.getPropertyValue("--chart-grid").trim() || "#334155",
       tick: root.getPropertyValue("--chart-tick").trim() || "#64748b",
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [theme]);
 
   return (

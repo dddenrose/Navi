@@ -2,12 +2,10 @@
 
 import logging
 import uuid
-from datetime import datetime, timezone
 
 from google.cloud import firestore as firestore_module
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 
-from config import settings
 from services.firestore_client import get_db
 
 logger = logging.getLogger(__name__)
@@ -60,8 +58,14 @@ def save_history(
     user_message: str,
     assistant_message: str,
     user_id: str = "",
+    thinking: list[dict] | None = None,
 ) -> None:
-    """Append a turn (user + assistant) to the conversation in Firestore."""
+    """Append a turn (user + assistant) to the conversation in Firestore.
+
+    If ``thinking`` is provided, it will be stored on the assistant message
+    as a ``thinking`` field so the UI can later restore the Gemini-style
+    "show thinking" panel for historical conversations.
+    """
     db = get_db()
     doc_ref = db.collection(COLLECTION).document(conversation_id)
     doc = doc_ref.get()
@@ -73,7 +77,10 @@ def save_history(
         messages = []
 
     messages.append({"role": "human", "content": user_message})
-    messages.append({"role": "ai", "content": assistant_message})
+    ai_msg: dict = {"role": "ai", "content": assistant_message}
+    if thinking:
+        ai_msg["thinking"] = thinking
+    messages.append(ai_msg)
 
     # Trim old messages
     if len(messages) > MAX_TURNS * 2:
@@ -131,10 +138,7 @@ def list_conversations(user_id: str, limit: int = 20) -> list[dict]:
     db = get_db()
     query = db.collection(COLLECTION).where("user_id", "==", user_id)
     docs = (
-        query
-        .order_by("updated_at", direction=firestore_module.Query.DESCENDING)
-        .limit(limit)
-        .get()
+        query.order_by("updated_at", direction=firestore_module.Query.DESCENDING).limit(limit).get()
     )
     return [
         {

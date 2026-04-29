@@ -13,6 +13,37 @@
 
 ---
 
+## [0.5.0] - 2026-03-09
+
+### Added
+
+- **知識庫大幅擴充**：從 13 份文件擴充到 **24 份**，分類從 3 大類擴充到 **8 大類**
+  - 新增 `taiwan_market/`：台股交易機制、籌碼資料來源、現股當沖規則
+  - 新增 `macro/`：總體指標（利率、匯率、景氣循環）
+  - 新增 `agent_persona/`：投資哲學與回覆風格指引
+  - 新增 `compliance/`：免責聲明、風險提醒模板
+  - 新增 `tool_interpretation/`：回測 / 分析輸出解讀眉角
+  - `investment_theory/` 新增 `behavioral_finance.md`、`portfolio_theory.md`、`etf_passive_investing.md`
+- **Prefetch 模式自動引用 KB**：`entry_analysis` / `comprehensive_analysis` 意圖現在會自動執行 `search_knowledge`，並在系統提示中強制要求「以「根據知識庫說明」「概念上需注意」「台股實務上」等用語引用 KB」
+- **ThinkingPanel**：前端新增 Agent 思考過程串流顯示元件
+- **混合式意圖分類器**：規則 fast path + LLM fallback 兩階段分類
+
+### Changed
+
+- **Agent 框架升級**：從 LangChain `AgentExecutor` 重構為 LangGraph `create_react_agent`，狀態管理與串流體驗更佳
+- **Prefetch System Prompt 強化**：reasoning_process 新增「KB 眉角檢核」步驟（RSI 鈍化、法人單位張/股、目標價非承諾、行為偏誤）
+- **`<tool_guide>` 新增 `<knowledge_base_usage>`**：列出 6 種應主動呼叫 `search_knowledge` 的觸發條件
+- **Ticker 解析強化**：新增 lazy match + lookahead pattern，可正確擷取「幫我分析聯發科未來目標價格?」等格式
+- **`ingest_knowledge.py` CATEGORY_MAP**：擴充以涵蓋 8 大新分類
+- **`conversation_service.py`**：可讀性與結構性改善
+- **README 全面更新**：根目錄 / backend / frontend README 全部對齊新架構（24 份 KB、8 大分類、LangGraph、9 工具）
+
+### Removed
+
+- 移除已合入 `agent_service.py` 的舊 `rag_service.py`（功能已整合至 agent + knowledge_search tool）
+
+---
+
 ## [0.4.0] - 2026-03-08
 
 ### Added

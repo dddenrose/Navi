@@ -5,7 +5,6 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import dataclass, field
-from datetime import datetime
 from functools import lru_cache
 
 import requests
@@ -35,9 +34,10 @@ def _get_ticker_info(ticker: str) -> dict:
     _info_cache[ticker] = (now, info)
     return info
 
+
 # ── 台股名稱 → 代碼 動態查表 ─────────────────────────────────────────────────
 
-_tw_listing_cache: dict[str, str] = {}   # name → code (e.g. "緯創" → "3231")
+_tw_listing_cache: dict[str, str] = {}  # name → code (e.g. "緯創" → "3231")
 _tw_listing_market: dict[str, str] = {}  # code → market suffix (".TW" or ".TWO")
 _tw_listing_cache_time: float = 0
 _TW_LISTING_CACHE_TTL = 86400  # 24 hours
@@ -205,12 +205,14 @@ def search_tw_stocks(q: str, limit: int = 10) -> list[dict]:
     for name, code in listing.items():
         if q_norm in code.lower() or q_norm in name.lower():
             market_suffix = _tw_listing_market.get(code, ".TW")
-            results.append({
-                "code": code,
-                "name": name,
-                "ticker": f"{code}{market_suffix}",
-                "market": "上市" if market_suffix == ".TW" else "上櫃",
-            })
+            results.append(
+                {
+                    "code": code,
+                    "name": name,
+                    "ticker": f"{code}{market_suffix}",
+                    "market": "上市" if market_suffix == ".TW" else "上櫃",
+                }
+            )
         if len(results) >= limit:
             break
 
@@ -233,8 +235,8 @@ class StockOverviewData:
     market_cap: int | None = None
     currency: str = ""
     exchange: str = ""
-    high_52w: float | None = None   # 52 週最高價
-    low_52w: float | None = None    # 52 週最低價
+    high_52w: float | None = None  # 52 週最高價
+    low_52w: float | None = None  # 52 週最低價
 
 
 @dataclass
@@ -275,11 +277,11 @@ class TechnicalIndicators:
     fibonacci_levels: dict[str, float] = field(default_factory=dict)
     """費波那契回撤位，key 為比率字串（'23.6%', '38.2%', '50.0%', '61.8%'），value 為價格。"""
     swing_high: float | None = None  # 近期波段最高點
-    swing_low: float | None = None   # 近期波段最低點
+    swing_low: float | None = None  # 近期波段最低點
     # 停損建議
-    stop_loss: float | None = None          # 建議停損價位
-    stop_loss_note: str = ""                # 停損依據說明
-    risk_reward_note: str = ""              # 風險報酬比參考
+    stop_loss: float | None = None  # 建議停損價位
+    stop_loss_note: str = ""  # 停損依據說明
+    risk_reward_note: str = ""  # 風險報酬比參考
     # 綜合
     summary: str = ""
 
@@ -308,13 +310,13 @@ class FundamentalData:
     forward_eps: float | None = None
     dividend_yield: float | None = None
     # 合理價位估算（本益比法）
-    cheap_price: float | None = None    # 便宜價（歷史低本益比 × EPS）
-    fair_price: float | None = None     # 合理價（歷史平均本益比 × EPS）
+    cheap_price: float | None = None  # 便宜價（歷史低本益比 × EPS）
+    fair_price: float | None = None  # 合理價（歷史平均本益比 × EPS）
     expensive_price: float | None = None  # 昂貴價（歷史高本益比 × EPS）
-    pe_low: float | None = None          # 估算用的低 PE
-    pe_mid: float | None = None          # 估算用的中 PE
-    pe_high: float | None = None         # 估算用的高 PE
-    valuation_note: str = ""             # 估值方法說明或警告
+    pe_low: float | None = None  # 估算用的低 PE
+    pe_mid: float | None = None  # 估算用的中 PE
+    pe_high: float | None = None  # 估算用的高 PE
+    valuation_note: str = ""  # 估值方法說明或警告
     # 其他
     sector: str = ""
     industry: str = ""
@@ -591,8 +593,8 @@ def _calc_support_resistance(df, result: TechnicalIndicators) -> None:
     for i in range(window, n - window):
         lo = float(low.iloc[i])
         hi = float(high.iloc[i])
-        neighborhood_low = low.iloc[i - window: i + window + 1]
-        neighborhood_high = high.iloc[i - window: i + window + 1]
+        neighborhood_low = low.iloc[i - window : i + window + 1]
+        neighborhood_high = high.iloc[i - window : i + window + 1]
         if lo <= float(neighborhood_low.min()):
             swing_lows.append(lo)
         if hi >= float(neighborhood_high.max()):
@@ -647,6 +649,7 @@ def _calc_support_resistance(df, result: TechnicalIndicators) -> None:
         step = 5
 
     import math
+
     nearest_int_below = math.floor(price / step) * step
     nearest_int_above = math.ceil(price / step) * step
 
@@ -656,7 +659,9 @@ def _calc_support_resistance(df, result: TechnicalIndicators) -> None:
         resistances.append((f"心理關卡 {nearest_int_above}", float(nearest_int_above)))
 
     # ── 排序並去重（價格相近 ±0.5% 視為同一關卡，保留描述性更強的那個）──
-    def _dedup(levels: list[tuple[str, float]], tolerance: float = 0.005) -> list[tuple[str, float]]:
+    def _dedup(
+        levels: list[tuple[str, float]], tolerance: float = 0.005
+    ) -> list[tuple[str, float]]:
         if not levels:
             return []
         levels = sorted(levels, key=lambda x: x[1], reverse=True)
@@ -691,12 +696,13 @@ def _calc_support_resistance(df, result: TechnicalIndicators) -> None:
         if potential_loss > 0:
             rr = round(potential_gain / potential_loss, 1)
             result.risk_reward_note = (
-                f"潛在獲利 {potential_gain:.1f} / 潛在虧損 {potential_loss:.1f} "
-                f"→ 風險報酬比 1:{rr}"
+                f"潛在獲利 {potential_gain:.1f} / 潛在虧損 {potential_loss:.1f} → 風險報酬比 1:{rr}"
             )
 
 
-def _calc_valuation(ticker_str: str, info: dict, eps: float | None, forward_eps: float | None) -> dict:
+def _calc_valuation(
+    ticker_str: str, info: dict, eps: float | None, forward_eps: float | None
+) -> dict:
     """用歷史本益比區間計算便宜/合理/昂貴價位。
 
     策略：
@@ -729,8 +735,8 @@ def _calc_valuation(ticker_str: str, info: dict, eps: float | None, forward_eps:
     if len(pe_values) >= 6:
         pe_values.sort()
         n = len(pe_values)
-        pe_low = pe_values[int(n * 0.25)]   # 25th percentile
-        pe_mid = pe_values[int(n * 0.50)]   # median
+        pe_low = pe_values[int(n * 0.25)]  # 25th percentile
+        pe_mid = pe_values[int(n * 0.50)]  # median
         pe_high = pe_values[int(n * 0.75)]  # 75th percentile
         result["pe_low"] = round(pe_low, 1)
         result["pe_mid"] = round(pe_mid, 1)
@@ -845,7 +851,12 @@ def format_stock_data_for_prompt(
     if technical.ma_trend:
         mas_str = " / ".join(
             f"MA{n}={v}"
-            for n, v in [(5, technical.ma5), (10, technical.ma10), (20, technical.ma20), (60, technical.ma60)]
+            for n, v in [
+                (5, technical.ma5),
+                (10, technical.ma10),
+                (20, technical.ma20),
+                (60, technical.ma60),
+            ]
             if v is not None
         )
         parts.append(f"   均線：{technical.ma_trend}（{mas_str}）")
@@ -876,12 +887,26 @@ def format_stock_data_for_prompt(
     def _fmt_num(val: float | None, decimals: int = 2) -> str:
         return f"{val:.{decimals}f}" if val is not None else "N/A"
 
-    parts.append(f"   PE（TTM）：{_fmt_num(fundamental.pe_ratio)}  |  Forward PE：{_fmt_num(fundamental.forward_pe)}")
-    parts.append(f"   PB：{_fmt_num(fundamental.pb_ratio)}  |  PS：{_fmt_num(fundamental.ps_ratio)}")
+    parts.append(
+        f"   PE（TTM）：{_fmt_num(fundamental.pe_ratio)}  |  "
+        f"Forward PE：{_fmt_num(fundamental.forward_pe)}"
+    )
+    parts.append(
+        f"   PB：{_fmt_num(fundamental.pb_ratio)}  |  PS：{_fmt_num(fundamental.ps_ratio)}"
+    )
     parts.append(f"   ROE：{_fmt_pct(fundamental.roe)}  |  ROA：{_fmt_pct(fundamental.roa)}")
-    parts.append(f"   淨利率：{_fmt_pct(fundamental.profit_margin)}  |  營業利益率：{_fmt_pct(fundamental.operating_margin)}")
-    parts.append(f"   營收成長：{_fmt_pct(fundamental.revenue_growth)}  |  獲利成長：{_fmt_pct(fundamental.earnings_growth)}")
-    parts.append(f"   EPS（TTM）：{_fmt_num(fundamental.eps)}  |  Forward EPS：{_fmt_num(fundamental.forward_eps)}")
+    parts.append(
+        f"   淨利率：{_fmt_pct(fundamental.profit_margin)}  |  "
+        f"營業利益率：{_fmt_pct(fundamental.operating_margin)}"
+    )
+    parts.append(
+        f"   營收成長：{_fmt_pct(fundamental.revenue_growth)}  |  "
+        f"獲利成長：{_fmt_pct(fundamental.earnings_growth)}"
+    )
+    parts.append(
+        f"   EPS（TTM）：{_fmt_num(fundamental.eps)}  |  "
+        f"Forward EPS：{_fmt_num(fundamental.forward_eps)}"
+    )
     if fundamental.dividend_yield is not None:
         parts.append(f"   殖利率：{_fmt_pct(fundamental.dividend_yield)}")
     if fundamental.sector:
