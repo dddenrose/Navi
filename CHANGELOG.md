@@ -9,7 +9,16 @@
 
 ## [Unreleased]
 
-> 尚未發布的變更將記錄於此。
+### Fixed
+
+- **台股三大法人單位錯誤**：TWSE T86 API 回傳單位為「股」，先前直接顯示為「張」導致數值膨脹 1000 倍（例如「外資買超 3,677,223 張」應為 3,677 張）。`institutional_service` 統一在資料來源換算成張。
+- **yfinance `dividendYield` 二次放大**：yfinance 0.2.40+ 將 `dividendYield` 從小數（0.025）改為百分比（2.5），下游 `*100` 顯示會變成 250%。新增 `_normalize_yield()` 在資料源頭統一正規化為小數。
+- **成交量單位標註**：`stock_price` 工具與 `format_stock_data_for_prompt` 在 volume 數值補上「股」字尾，避免 LLM 在台股情境誤稱為「張」。
+
+### Changed
+
+- **ThinkingPanel**：展開區塊移除多餘左側框線。
+- **Backtest 資金欄位**：`step` 改為 `any`，輸入更彈性。
 
 ---
 
