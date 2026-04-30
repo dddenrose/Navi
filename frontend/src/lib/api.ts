@@ -171,6 +171,16 @@ export type ThinkingStep =
   | { type: "tool_start"; tool: string; input?: Record<string, unknown> }
   | { type: "tool_end"; tool: string };
 
+export interface QuotaErrorPayload {
+  code: "QUOTA_EXCEEDED" | "ACCOUNT_SUSPENDED";
+  message: string;
+  tier: string;
+  daily_limit: number;
+  used_today: number;
+  remaining: number;
+  reset_at: string;
+}
+
 export interface ChatStreamOptions {
   message: string;
   conversationId?: string;
@@ -178,11 +188,21 @@ export interface ChatStreamOptions {
   onThinkingStep: (step: ThinkingStep) => void;
   onDone: (conversationId: string) => void;
   onError: (error: string) => void;
+  onQuotaHeaders?: (headers: Headers) => void;
+  onQuotaExceeded?: (payload: QuotaErrorPayload) => void;
 }
 
 export async function streamChat(options: ChatStreamOptions): Promise<void> {
-  const { message, conversationId, onChunk, onThinkingStep, onDone, onError } =
-    options;
+  const {
+    message,
+    conversationId,
+    onChunk,
+    onThinkingStep,
+    onDone,
+    onError,
+    onQuotaHeaders,
+    onQuotaExceeded,
+  } = options;
 
   const user = auth.currentUser;
   if (!user) {
@@ -203,9 +223,26 @@ export async function streamChat(options: ChatStreamOptions): Promise<void> {
     }),
   });
 
+  if (res.status === 429 && onQuotaExceeded) {
+    try {
+      const body = await res.json();
+      const detail = body?.detail ?? body;
+      if (detail && typeof detail === "object" && detail.code) {
+        onQuotaExceeded(detail as QuotaErrorPayload);
+        return;
+      }
+    } catch {
+      // fall through to generic error
+    }
+  }
+
   if (!res.ok) {
     onError(`HTTP ${res.status}: ${await res.text()}`);
     return;
+  }
+
+  if (onQuotaHeaders) {
+    onQuotaHeaders(res.headers);
   }
 
   const reader = res.body?.getReader();
@@ -316,6 +353,148 @@ export async function getPortfolio(): Promise<PortfolioSummary> {
 
 export async function getPortfolioHoldings(): Promise<HoldingData[]> {
   return apiFetch(`/api/portfolio/holdings`);
+}
+
+// ─── Quota ───────────────────────────────────────────────────────────────────
+
+export interface QuotaStatus {
+  tier: string;
+  status: string;
+  daily_limit: number;
+  used_today: number;
+  remaining: number;
+  reset_at: string;
+}
+
+export async function getQuotaStatus(): Promise<QuotaStatus> {
+  return apiFetch<QuotaStatus>(`/api/chat/quota`);
+}
+
+// ─── Admin ───────────────────────────────────────────────────────────────────
+
+export interface AdminUser {
+  uid: string;
+  email: string;
+  display_name: string;
+  tier: string;
+  status: string;
+  custom_daily_limit: number | null;
+  notes: string;
+  created_at?: string;
+  updated_at?: string;
+  last_active_at?: string;
+}
+
+export interface QuotaConfig {
+  tier: string;
+  daily_limit: number;
+  per_minute_limit: number;
+  description?: string;
+}
+
+export interface UsageDay {
+  date: string;
+  chat_count: number;
+}
+
+export interface AdminUsageSummary {
+  days: number;
+  total_messages: number;
+  active_users: number;
+  daily_breakdown: { date: string; count: number }[];
+  top_users: { uid: string; count: number }[];
+}
+
+export interface UsageLog {
+  id: string;
+  uid: string;
+  email: string;
+  tier: string;
+  endpoint: string;
+  conversation_id: string | null;
+  question_preview: string;
+  blocked: boolean;
+  block_reason: string | null;
+  timestamp: string;
+}
+
+export async function adminCheckMe(): Promise<{ admin: boolean; uid: string }> {
+  return apiFetch(`/api/admin/me`);
+}
+
+export async function adminListUsers(
+  params: {
+    q?: string;
+    tier?: string;
+    status?: string;
+    limit?: number;
+  } = {},
+): Promise<{ users: AdminUser[] }> {
+  const qs = new URLSearchParams();
+  if (params.q) qs.set("q", params.q);
+  if (params.tier) qs.set("tier", params.tier);
+  if (params.status) qs.set("status", params.status);
+  if (params.limit) qs.set("limit", String(params.limit));
+  const suffix = qs.toString() ? `?${qs.toString()}` : "";
+  return apiFetch(`/api/admin/users${suffix}`);
+}
+
+export async function adminGetUser(
+  uid: string,
+): Promise<{ user: AdminUser; usage: UsageDay[] }> {
+  return apiFetch(`/api/admin/users/${encodeURIComponent(uid)}`);
+}
+
+export async function adminUpdateUser(
+  uid: string,
+  patch: {
+    tier?: string;
+    status?: string;
+    custom_daily_limit?: number | null;
+    notes?: string;
+  },
+): Promise<{ user: AdminUser }> {
+  return apiFetch(`/api/admin/users/${encodeURIComponent(uid)}`, {
+    method: "PATCH",
+    body: JSON.stringify(patch),
+  });
+}
+
+export async function adminListQuotaConfigs(): Promise<{
+  configs: QuotaConfig[];
+}> {
+  return apiFetch(`/api/admin/quota-configs`);
+}
+
+export async function adminUpdateQuotaConfig(
+  tier: string,
+  patch: Partial<QuotaConfig>,
+): Promise<{ config: QuotaConfig }> {
+  return apiFetch(`/api/admin/quota-configs/${encodeURIComponent(tier)}`, {
+    method: "PUT",
+    body: JSON.stringify(patch),
+  });
+}
+
+export async function adminGetUsageSummary(
+  days = 30,
+): Promise<AdminUsageSummary> {
+  return apiFetch(`/api/admin/usage/summary?days=${days}`);
+}
+
+export async function adminListLogs(
+  params: {
+    uid?: string;
+    blocked?: boolean;
+    limit?: number;
+  } = {},
+): Promise<{ logs: UsageLog[] }> {
+  const qs = new URLSearchParams();
+  if (params.uid) qs.set("uid", params.uid);
+  if (params.blocked !== undefined) qs.set("blocked", String(params.blocked));
+  if (params.limit) qs.set("limit", String(params.limit));
+  const suffix = qs.toString() ? `?${qs.toString()}` : "";
+  return apiFetch(`/api/admin/logs${suffix}`);
 }
 
 export async function addHolding(data: {

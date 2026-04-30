@@ -4,6 +4,7 @@ import { signOut } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { useAuthStore } from "@/store/authStore";
 import { useThemeStore } from "@/store/themeStore";
+import { useTokenClaims } from "@/lib/useTokenClaims";
 
 const navItems = [
   {
@@ -97,6 +98,7 @@ export default function Layout() {
   const { theme, toggleTheme } = useThemeStore();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
+  const claims = useTokenClaims();
   const location = useLocation();
 
   // Close sidebar on route change (mobile)
@@ -252,6 +254,42 @@ export default function Layout() {
               {!collapsed && label}
             </NavLink>
           ))}
+          {claims.admin && (
+            <NavLink
+              to="/admin"
+              title={collapsed ? "後台" : undefined}
+              className={({ isActive }) =>
+                `flex items-center ${collapsed ? "justify-center" : "gap-3"} ${collapsed ? "px-0 py-3" : "px-4 py-3"} rounded-xl text-sm font-medium transition-colors duration-150 ${
+                  isActive
+                    ? "text-white"
+                    : "text-slate-500 hover:text-slate-200 hover:bg-white/5"
+                }`
+              }
+              style={({ isActive }) =>
+                isActive
+                  ? {
+                      background:
+                        "linear-gradient(135deg, rgba(244,114,182,0.25), rgba(139,92,246,0.15))",
+                      border: "1px solid rgba(244,114,182,0.3)",
+                    }
+                  : {}
+              }
+            >
+              <svg
+                viewBox="0 0 20 20"
+                fill="currentColor"
+                className="w-4 h-4"
+                aria-hidden="true"
+              >
+                <path
+                  fillRule="evenodd"
+                  d="M10 1a4.5 4.5 0 00-4.5 4.5V9H5a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2v-6a2 2 0 00-2-2h-.5V5.5A4.5 4.5 0 0010 1zm3 8V5.5a3 3 0 10-6 0V9h6z"
+                  clipRule="evenodd"
+                />
+              </svg>
+              {!collapsed && "後台"}
+            </NavLink>
+          )}
         </nav>
 
         {/* Collapse toggle (desktop only) */}

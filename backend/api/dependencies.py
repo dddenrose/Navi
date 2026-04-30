@@ -52,3 +52,39 @@ async def verify_firebase_token(
 def get_settings():
     """Return the application settings singleton."""
     return settings
+
+
+async def require_admin(user: dict = Depends(verify_firebase_token)) -> dict:
+    """Ensure the caller is an admin.
+
+    Verifies BOTH the Firebase ID token claim ``admin == true`` AND the
+    Firestore ``users/{uid}.tier == 'admin'``. Either failure → 403.
+    """
+    if not settings.auth_required:
+        # Dev mode: trust the stub user
+        return user
+
+    uid = user.get("uid", "")
+    if not uid:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No uid")
+
+    if not user.get("admin"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin only")
+
+    # Defense in depth: also check Firestore (in case claims drifted)
+    try:
+        from services.quota_service import get_user
+
+        record = get_user(uid)
+        if not record or record.get("tier") != "admin":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Admin tier check failed",
+            )
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("Admin check failed")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Admin check error")
+
+    return user

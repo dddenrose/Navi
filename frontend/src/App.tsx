@@ -13,6 +13,12 @@ const Chat = lazy(() => import("@/pages/Chat"));
 const Stock = lazy(() => import("@/pages/Stock"));
 const Portfolio = lazy(() => import("@/pages/Portfolio"));
 const Backtest = lazy(() => import("@/pages/Backtest"));
+const AdminLayout = lazy(() => import("@/pages/admin/AdminLayout"));
+const AdminDashboard = lazy(() => import("@/pages/admin/AdminDashboard"));
+const AdminUsers = lazy(() => import("@/pages/admin/AdminUsers"));
+const AdminUserDetail = lazy(() => import("@/pages/admin/AdminUserDetail"));
+const AdminQuotaConfigs = lazy(() => import("@/pages/admin/AdminQuotaConfigs"));
+const AdminLogs = lazy(() => import("@/pages/admin/AdminLogs"));
 
 function PageFallback() {
   return (
@@ -104,6 +110,20 @@ export default function App() {
                   </ErrorBoundary>
                 }
               />
+              <Route
+                path="admin"
+                element={
+                  <ErrorBoundary>
+                    <AdminLayout />
+                  </ErrorBoundary>
+                }
+              >
+                <Route index element={<AdminDashboard />} />
+                <Route path="users" element={<AdminUsers />} />
+                <Route path="users/:uid" element={<AdminUserDetail />} />
+                <Route path="quota" element={<AdminQuotaConfigs />} />
+                <Route path="logs" element={<AdminLogs />} />
+              </Route>
             </Route>
             <Route path="*" element={<Navigate to="/dashboard" replace />} />
           </Routes>

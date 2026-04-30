@@ -9,6 +9,14 @@
 
 ## [Unreleased]
 
+### Added
+
+- **使用者額度與權限管理系統**：新增 4 個 tier（free/pro/unlimited/admin）的每日訊息額度與每分鐘速率限制，所有 chat 請求需通過 `quota_service.check_and_consume` 原子性扣額。
+  - **後端**：`services/quota_service.py`（Firestore Transaction + Asia/Taipei 自然日重置 + 失敗開放）、`api/routes/admin.py`（後台 API：使用者管理、額度設定、使用統計、Audit Log）、`api/dependencies.require_admin` 透過 Firebase custom claims + Firestore 雙重檢查。
+  - **前端**：`/admin` 後台（總覽 / 使用者 / 額度設定 / Audit Log）、Chat 頁面額度徽章 `QuotaBadge`、429 額度耗盡時顯示警示並停用輸入。
+  - **管理工具**：`backend/scripts/seed_quota_configs.py`（初始化 tier 設定）、`set_admin.py`（提升 admin）、`set_tier.py`（切換 tier 供本地驗證）。
+  - **新 API**：`GET /api/chat/quota`、`/api/admin/me`、`/api/admin/users`、`/api/admin/quota-configs`、`/api/admin/usage/summary`、`/api/admin/logs`。
+
 ### Fixed
 
 - **台股三大法人單位錯誤**：TWSE T86 API 回傳單位為「股」，先前直接顯示為「張」導致數值膨脹 1000 倍（例如「外資買超 3,677,223 張」應為 3,677 張）。`institutional_service` 統一在資料來源換算成張。
