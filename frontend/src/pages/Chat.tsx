@@ -9,6 +9,8 @@ import {
 import type { ThinkingStep, StoredMessage } from "@/lib/api";
 import { ThinkingPanel } from "@/components/ThinkingPanel";
 import { MarkdownRenderer } from "@/components/MarkdownRenderer";
+import { QuotaBadge } from "@/components/QuotaBadge";
+import { useQuotaStore } from "@/store/quotaStore";
 
 interface Message {
   role: "user" | "assistant";
@@ -38,6 +40,9 @@ export default function Chat() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [sidebarLoading, setSidebarLoading] = useState(true);
   const [chatSidebarOpen, setChatSidebarOpen] = useState(true);
+
+  const quotaExhausted = useQuotaStore((s) => s.exhausted);
+  const quotaExhaustedMessage = useQuotaStore((s) => s.exhaustedMessage);
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -119,9 +124,34 @@ export default function Chat() {
     streamContentRef.current = "";
     let fullContent = "";
 
+    const quotaApply = useQuotaStore.getState().applyHeaders;
+    const quotaSetExhausted = useQuotaStore.getState().setExhausted;
+
     await streamChat({
       message: trimmed,
       conversationId: currentConvId,
+      onQuotaHeaders: (headers) => quotaApply(headers),
+      onQuotaExceeded: (payload) => {
+        quotaSetExhausted(payload.code, payload.message, payload.reset_at);
+        setMessages((prev) => {
+          const updated = [...prev];
+          // Drop the placeholder assistant streaming message
+          if (
+            updated.length &&
+            updated[updated.length - 1].role === "assistant" &&
+            updated[updated.length - 1].streaming
+          ) {
+            updated.pop();
+          }
+          updated.push({
+            role: "assistant",
+            content: `⚠️ ${payload.message}`,
+            streaming: false,
+          });
+          return updated;
+        });
+        setStreaming(false);
+      },
       onThinkingStep: (step) => {
         setMessages((prev) => {
           const updated = [...prev];
@@ -351,7 +381,7 @@ export default function Chat() {
       <div className="flex-1 flex flex-col min-w-0">
         {/* Desktop sidebar toggle */}
         <div
-          className="hidden md:flex items-center h-12 px-4 flex-shrink-0"
+          className="hidden md:flex items-center justify-between h-12 px-4 flex-shrink-0"
           style={{ borderBottom: "1px solid var(--border)" }}
         >
           <button
@@ -373,6 +403,7 @@ export default function Chat() {
             </svg>
             {chatSidebarOpen ? "隱藏記錄" : "對話記錄"}
           </button>
+          <QuotaBadge />
         </div>
         {/* Messages */}
         <div className="flex-1 overflow-y-auto px-4 py-6 md:px-8 md:py-8">
@@ -467,6 +498,18 @@ export default function Chat() {
           className="px-4 py-4 md:px-8 md:py-5"
           style={{ borderTop: "1px solid var(--border)" }}
         >
+          {quotaExhausted && (
+            <div
+              className="max-w-3xl mx-auto mb-3 px-4 py-3 rounded-xl text-xs"
+              style={{
+                background: "rgba(244,114,182,0.08)",
+                border: "1px solid rgba(244,114,182,0.3)",
+                color: "var(--text-primary)",
+              }}
+            >
+              ⚠️ {quotaExhaustedMessage ?? "今日訊息額度已用完。"}
+            </div>
+          )}
           <div
             className="flex gap-3 max-w-3xl mx-auto items-end rounded-2xl px-5 py-4 transition-[border-color,box-shadow]"
             style={{
@@ -484,24 +527,28 @@ export default function Chat() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="輸入問題… (Enter 發送，Shift+Enter 換行)"
-              disabled={streaming}
+              placeholder={
+                quotaExhausted
+                  ? "今日額度已用完，明日 00:00 重置"
+                  : "輸入問題… (Enter 發送，Shift+Enter 換行)"
+              }
+              disabled={streaming || quotaExhausted}
               rows={1}
               className="flex-1 bg-transparent text-sm text-slate-200 placeholder-slate-700 resize-none focus:outline-none focus-visible:outline-none disabled:opacity-40"
               style={{ minHeight: "24px", maxHeight: "120px" }}
             />
             <button
               onClick={handleSend}
-              disabled={!input.trim() || streaming}
+              disabled={!input.trim() || streaming || quotaExhausted}
               aria-label="發送訊息"
               className="flex-shrink-0 w-8 h-8 rounded-xl flex items-center justify-center transition-opacity disabled:opacity-30 disabled:cursor-not-allowed"
               style={{
                 background:
-                  !input.trim() || streaming
+                  !input.trim() || streaming || quotaExhausted
                     ? "var(--overlay-subtle)"
                     : "linear-gradient(135deg, #6366f1, #8b5cf6)",
                 boxShadow:
-                  !input.trim() || streaming
+                  !input.trim() || streaming || quotaExhausted
                     ? "none"
                     : "0 2px 12px rgba(99,102,241,0.4)",
               }}
