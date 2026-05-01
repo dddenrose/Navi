@@ -140,7 +140,7 @@ for entry in "${JOBS[@]}"; do
       --time-zone="${TIMEZONE}" \
       --uri="${uri}" \
       --http-method=POST \
-      --headers="Content-Type=application/json,X-Scheduler-Token=${TOKEN}" \
+      --update-headers="Content-Type=application/json,X-Scheduler-Token=${TOKEN}" \
       --message-body="${body}" \
       --attempt-deadline=900s \
       --quiet >/dev/null
