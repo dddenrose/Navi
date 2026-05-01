@@ -36,6 +36,12 @@ class Settings(BaseSettings):
 
     # Screener — shared-secret token for Cloud Scheduler /api/screener/run
     screener_runner_token: str = ""
+    # Screener email (optional)
+    sendgrid_api_key: str = ""
+    email_from_address: str = "notify@navi-stock.app"
+    email_from_name: str = "Navi 智能選股"
+    screener_unsubscribe_secret: str = ""
+    screener_public_base_url: str = "https://navi-stock-analyzer.web.app"
 
 
 settings = Settings()

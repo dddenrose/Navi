@@ -35,6 +35,7 @@ def main() -> None:
     parser.add_argument("--threshold", type=int, default=70, help="Stage 3 信心過濾門檻")
     parser.add_argument("--model", default=None, help="覆寫 LLM model 名稱（如 gemini-2.5-flash）")
     parser.add_argument("--skip-stage3", action="store_true", help="只跑 Stage 1+2 (零 LLM 成本)")
+    parser.add_argument("--no-chips", action="store_true", help="關閉 Stage 2 chips 因子（TWSE bulk fetch）")
     parser.add_argument("--no-persist", action="store_true", help="不寫入 Firestore")
     parser.add_argument(
         "--tickers",
@@ -64,6 +65,7 @@ def main() -> None:
         model_name=args.model,
         persist=not args.no_persist,
         skip_stage3=args.skip_stage3,
+        enable_chips=not args.no_chips,
         min_turnover=args.min_turnover,
         min_market_cap=args.min_market_cap,
     )

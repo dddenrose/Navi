@@ -12,11 +12,19 @@ import logging
 from typing import Any
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
-from pydantic import BaseModel, Field
+from fastapi.responses import HTMLResponse
+from pydantic import BaseModel, EmailStr, Field
 
 from api.dependencies import verify_firebase_token
 from config import settings
 from services.firestore_client import get_db
+from services.screener.email_sender import (
+    disable_subscriber,
+    get_subscriber,
+    send_report_email,
+    upsert_subscriber,
+    verify_unsubscribe_token,
+)
 from services.screener.orchestrator import REPORTS_COLLECTION, run_screener_async
 
 logger = logging.getLogger(__name__)
@@ -58,6 +66,7 @@ class RunRequest(BaseModel):
     confidence_threshold: int = Field(70, ge=0, le=100)
     model_name: str | None = None
     skip_stage3: bool = False
+    enable_chips: bool = True
     tickers: list[str] | None = None
 
 
@@ -154,6 +163,7 @@ async def run_screener_endpoint(payload: RunRequest) -> RunResponse:
         confidence_threshold=payload.confidence_threshold,
         model_name=payload.model_name,
         skip_stage3=payload.skip_stage3,
+        enable_chips=payload.enable_chips,
         tickers=payload.tickers,
         persist=True,
     )
@@ -238,4 +248,168 @@ async def get_report(report_id: str) -> ReportDetail:
     return ReportDetail(
         report=_doc_to_summary(doc),
         picks_by_industry=_load_picks(report_id),
+    )
+
+
+# ── Single-pick detail ──────────────────────────────────────────────────────
+
+
+@router.get(
+    "/reports/{report_id}/picks/{ticker}",
+    response_model=PickDoc,
+    dependencies=[Depends(verify_firebase_token)],
+)
+async def get_pick(report_id: str, ticker: str) -> PickDoc:
+    db = get_db()
+    ref = (
+        db.collection(REPORTS_COLLECTION)
+        .document(report_id)
+        .collection("picks")
+        .document(ticker)
+    )
+    snap = ref.get()
+    if not snap.exists:
+        raise HTTPException(status_code=404, detail="Pick not found")
+    data = snap.to_dict() or {}
+    return PickDoc(**{k: v for k, v in data.items() if k in PickDoc.model_fields})
+
+
+# ── Email subscription ──────────────────────────────────────────────────────
+
+
+class SubscriptionPayload(BaseModel):
+    enabled: bool | None = None
+    email: EmailStr | None = None
+    profiles: list[str] | None = None
+    frequencies: list[str] | None = None
+
+
+class SubscriptionResponse(BaseModel):
+    user_id: str
+    email: str = ""
+    enabled: bool = False
+    profiles: list[str] = []
+    frequencies: list[str] = []
+
+
+@router.get(
+    "/subscriptions",
+    response_model=SubscriptionResponse,
+)
+async def get_my_subscription(
+    user: dict = Depends(verify_firebase_token),
+) -> SubscriptionResponse:
+    user_id = user["uid"]
+    sub = get_subscriber(user_id) or {}
+    return SubscriptionResponse(
+        user_id=user_id,
+        email=sub.get("email") or user.get("email", ""),
+        enabled=bool(sub.get("enabled", False)),
+        profiles=sub.get("profiles") or ["momentum", "value"],
+        frequencies=sub.get("frequencies") or ["weekly"],
+    )
+
+
+@router.put(
+    "/subscriptions",
+    response_model=SubscriptionResponse,
+)
+async def update_my_subscription(
+    payload: SubscriptionPayload,
+    user: dict = Depends(verify_firebase_token),
+) -> SubscriptionResponse:
+    user_id = user["uid"]
+    existing = get_subscriber(user_id) or {}
+    update: dict = {}
+    if payload.enabled is not None:
+        update["enabled"] = payload.enabled
+    # email 預設使用 Firebase token 所含 email
+    update["email"] = (
+        payload.email
+        or existing.get("email")
+        or user.get("email", "")
+    )
+    update["profiles"] = payload.profiles or existing.get("profiles") or [
+        "momentum",
+        "value",
+    ]
+    update["frequencies"] = payload.frequencies or existing.get(
+        "frequencies"
+    ) or ["weekly"]
+    saved = upsert_subscriber(user_id, update)
+    return SubscriptionResponse(
+        user_id=user_id,
+        email=saved.get("email", ""),
+        enabled=bool(saved.get("enabled", False)),
+        profiles=saved.get("profiles") or [],
+        frequencies=saved.get("frequencies") or [],
+    )
+
+
+@router.get("/unsubscribe", response_class=HTMLResponse)
+async def unsubscribe(token: str) -> HTMLResponse:
+    """One-click unsubscribe via HMAC-signed token."""
+    user_id = verify_unsubscribe_token(token)
+    if not user_id:
+        return HTMLResponse(
+            "<h1>連結無效或已過期</h1>",
+            status_code=400,
+        )
+    ok = disable_subscriber(user_id)
+    if not ok:
+        return HTMLResponse("<h1>查無訂閱記錄</h1>", status_code=404)
+    return HTMLResponse(
+        "<h1>已取消訂閱</h1><p>你將不再收到 Navi 智能選股週報。</p>",
+        status_code=200,
+    )
+
+
+# ── Email notify trigger (scheduler) ────────────────────────────────────────
+
+
+class NotifyRequest(BaseModel):
+    profile: str = Field("momentum", pattern="^(value|momentum)$")
+    frequency: str = Field("weekly", pattern="^(daily|weekly)$")
+    report_id: str | None = None  # None → 使用最新 report
+
+
+class NotifyResponse(BaseModel):
+    report_id: str
+    sent: int
+    skipped: int
+    failed: int
+    dry_run: bool
+
+
+@router.post(
+    "/notify",
+    response_model=NotifyResponse,
+    dependencies=[Depends(verify_runner_token)],
+)
+async def notify_subscribers(payload: NotifyRequest) -> NotifyResponse:
+    """Render the latest matching report and email it to active subscribers."""
+    db = get_db()
+    target_id = payload.report_id
+    if not target_id:
+        docs = [snap.to_dict() or {} for snap in db.collection(REPORTS_COLLECTION).stream()]
+        docs.sort(key=lambda d: d.get("report_id", ""), reverse=True)
+        for doc in docs:
+            if (
+                doc.get("profile") == payload.profile
+                and doc.get("frequency") == payload.frequency
+            ):
+                target_id = doc.get("report_id")
+                break
+        if not target_id:
+            raise HTTPException(status_code=404, detail="No matching report to notify.")
+
+    result = send_report_email(
+        target_id, profile=payload.profile, frequency=payload.frequency
+    )
+    return NotifyResponse(
+        report_id=target_id,
+        sent=result.sent,
+        skipped=result.skipped,
+        failed=result.failed,
+        dry_run=result.dry_run,
     )
