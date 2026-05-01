@@ -34,6 +34,9 @@ class Settings(BaseSettings):
     port: int = 8000
     debug: bool = False
 
+    # Screener — shared-secret token for Cloud Scheduler /api/screener/run
+    screener_runner_token: str = ""
+
 
 settings = Settings()
 
