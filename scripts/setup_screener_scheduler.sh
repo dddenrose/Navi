@@ -97,11 +97,16 @@ echo ""
 
 # Job 定義表：name | schedule | profile | frequency
 # 目前只啟用 weekly（週日晚上跑）。需要 daily 時把下方兩行取消註解。
+# JOBS 列格式：name|schedule|profile|frequency|path
+#   path = run 或 notify (預設 run)
 JOBS=(
-  # "${JOB_PREFIX}-daily-momentum|0 6 * * 1-5|momentum|daily"
-  # "${JOB_PREFIX}-daily-value|5 6 * * 1-5|value|daily"
-  "${JOB_PREFIX}-weekly-momentum|0 20 * * 0|momentum|weekly"
-  "${JOB_PREFIX}-weekly-value|5 20 * * 0|value|weekly"
+  # "${JOB_PREFIX}-daily-momentum|0 6 * * 1-5|momentum|daily|run"
+  # "${JOB_PREFIX}-daily-value|5 6 * * 1-5|value|daily|run"
+  "${JOB_PREFIX}-weekly-momentum|0 20 * * 0|momentum|weekly|run"
+  "${JOB_PREFIX}-weekly-value|5 20 * * 0|value|weekly|run"
+  # Email notify：在 run 跑完後 90 分鐘觸發，預設週一 06:00 寄所有人
+  "${JOB_PREFIX}-notify-weekly-momentum|0 6 * * 1|momentum|weekly|notify"
+  "${JOB_PREFIX}-notify-weekly-value|5 6 * * 1|value|weekly|notify"
 )
 
 # ── --pause / --resume / --delete ───────────────────────────────────────────
@@ -119,10 +124,12 @@ fi
 
 # ── 建立 / 更新 jobs ────────────────────────────────────────────────────────
 for entry in "${JOBS[@]}"; do
-  IFS='|' read -r name schedule profile frequency <<< "${entry}"
+  IFS='|' read -r name schedule profile frequency path <<< "${entry}"
+  path="${path:-run}"
   body="{\"profile\":\"${profile}\",\"frequency\":\"${frequency}\"}"
+  uri="${SERVICE_URL}/api/screener/${path}"
 
-  echo "▶ ${name}  cron='${schedule}'  body=${body}"
+  echo "▶ ${name}  cron='${schedule}'  uri=${uri}  body=${body}"
 
   if gcloud scheduler jobs describe "${name}" \
       --location="${REGION}" --project="${PROJECT_ID}" &>/dev/null; then
@@ -131,7 +138,7 @@ for entry in "${JOBS[@]}"; do
       --project="${PROJECT_ID}" \
       --schedule="${schedule}" \
       --time-zone="${TIMEZONE}" \
-      --uri="${SERVICE_URL}/api/screener/run" \
+      --uri="${uri}" \
       --http-method=POST \
       --headers="Content-Type=application/json,X-Scheduler-Token=${TOKEN}" \
       --message-body="${body}" \
@@ -144,12 +151,12 @@ for entry in "${JOBS[@]}"; do
       --project="${PROJECT_ID}" \
       --schedule="${schedule}" \
       --time-zone="${TIMEZONE}" \
-      --uri="${SERVICE_URL}/api/screener/run" \
+      --uri="${uri}" \
       --http-method=POST \
       --headers="Content-Type=application/json,X-Scheduler-Token=${TOKEN}" \
       --message-body="${body}" \
       --attempt-deadline=900s \
-      --description="Navi Screener: ${profile} / ${frequency}" \
+      --description="Navi Screener: ${profile} / ${frequency} / ${path}" \
       --quiet >/dev/null
     echo "   ✚ created"
   fi
@@ -161,6 +168,5 @@ echo ""
 echo "  gcloud scheduler jobs list --location=${REGION} --project=${PROJECT_ID}"
 echo ""
 echo "立即手動觸發（測試）："
-echo "  gcloud scheduler jobs run ${JOB_PREFIX}-daily-momentum --location=${REGION}"
-echo ""
-echo "📌 注意：Email notify job (/api/screener/notify) 尚未實作，待 M2.3 完成再加。"
+echo "  gcloud scheduler jobs run ${JOB_PREFIX}-weekly-momentum --location=${REGION}"
+echo "  gcloud scheduler jobs run ${JOB_PREFIX}-notify-weekly-momentum --location=${REGION}"

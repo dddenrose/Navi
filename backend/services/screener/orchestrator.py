@@ -56,6 +56,10 @@ def _scored_to_pick_doc(pick: EvaluatedPick) -> dict[str, Any]:
             "return_6m": f.return_6m,
             "rel_strength_3m": f.rel_strength,
             "volume_expansion": f.volume_expansion,
+            "foreign_consecutive_days": f.foreign_consecutive_days,
+            "foreign_net_5d": f.foreign_net_5d,
+            "margin_change_5d": f.margin_change_5d,
+            "short_change_5d": f.short_change_5d,
         },
         "thesis": e.thesis,
         "kb_citations": e.kb_citations,
@@ -113,6 +117,7 @@ async def run_screener_async(
     model_name: str | None = None,
     persist: bool = True,
     skip_stage3: bool = False,
+    enable_chips: bool = True,
     min_turnover: float | None = None,
     min_market_cap: float | None = None,
 ) -> dict[str, Any]:
@@ -142,7 +147,7 @@ async def run_screener_async(
     stage1_passed = len(universe)
 
     # Stage 2
-    scored = score_universe(universe, profile=profile)
+    scored = score_universe(universe, profile=profile, enable_chips=enable_chips)
     candidates = top_n_per_industry(scored, n=top_per_industry)
     stage2_passed = len(candidates)
     industries_covered = sorted({s.factors.industry for s in candidates})

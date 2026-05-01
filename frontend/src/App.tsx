@@ -13,6 +13,7 @@ const Chat = lazy(() => import("@/pages/Chat"));
 const Stock = lazy(() => import("@/pages/Stock"));
 const Portfolio = lazy(() => import("@/pages/Portfolio"));
 const Backtest = lazy(() => import("@/pages/Backtest"));
+const Screener = lazy(() => import("@/pages/Screener"));
 const AdminLayout = lazy(() => import("@/pages/admin/AdminLayout"));
 const AdminDashboard = lazy(() => import("@/pages/admin/AdminDashboard"));
 const AdminUsers = lazy(() => import("@/pages/admin/AdminUsers"));
@@ -107,6 +108,14 @@ export default function App() {
                 element={
                   <ErrorBoundary>
                     <Backtest />
+                  </ErrorBoundary>
+                }
+              />
+              <Route
+                path="screener"
+                element={
+                  <ErrorBoundary>
+                    <Screener />
                   </ErrorBoundary>
                 }
               />

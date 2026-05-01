@@ -55,8 +55,10 @@ class StockFactors:
     # 後續 z-score 時 PE/PB 取負號
 
     # Chips（可選）
-    foreign_buy_5d: float | None = None
-    margin_change_5d_pct: float | None = None
+    foreign_consecutive_days: float | None = None
+    foreign_net_5d: float | None = None
+    margin_change_5d: float | None = None
+    short_change_5d: float | None = None
 
 
 @dataclass
@@ -189,8 +191,15 @@ def _score_industry_group(records: list[StockFactors]) -> list[ScoredStock]:
     quality_scores = family_score(
         [("roe", False), ("revenue_growth", False), ("profit_margin", False)]
     )
-    # Chips 在 MVP 為 None
-    chips_scores: list[float | None] = [None] * n
+    # Chips：長期買超 / 需求增強 關聯正向；short_change 反向（券增代表看空變多，視為正）
+    chips_scores = family_score(
+        [
+            ("foreign_consecutive_days", False),
+            ("foreign_net_5d", False),
+            ("margin_change_5d", False),
+            ("short_change_5d", False),
+        ]
+    )
 
     out: list[ScoredStock] = []
     for i, rec in enumerate(records):
@@ -225,12 +234,33 @@ def _benchmark_returns() -> tuple[float | None, float | None]:
 def score_universe(
     universe: list[UniverseRecord],
     profile: Profile = "momentum",
+    *,
+    enable_chips: bool = True,
 ) -> list[ScoredStock]:
     """主入口：計算因子 → 產業內 z-score → 加權 final score → 產業內排名."""
     bench_3m, bench_6m = _benchmark_returns()
     logger.info("Benchmark: 3M=%s, 6M=%s", bench_3m, bench_6m)
 
     raw = [_compute_raw_factors(r, bench_3m, bench_6m) for r in universe]
+
+    # Chips: bulk fetch (TWSE T86 + margin) one call per date for ALL tickers
+    if enable_chips and raw:
+        try:
+            from services.screener.chips_data import fetch_chips_bulk
+
+            chips = fetch_chips_bulk([f.ticker for f in raw], days=5)
+            for f in raw:
+                row = chips.get(f.ticker, {})
+                if "foreign_consecutive_days" in row:
+                    f.foreign_consecutive_days = row["foreign_consecutive_days"]
+                if "foreign_net_5d" in row:
+                    f.foreign_net_5d = row["foreign_net_5d"]
+                if "margin_change_5d" in row:
+                    f.margin_change_5d = row["margin_change_5d"]
+                if "short_change_5d" in row:
+                    f.short_change_5d = row["short_change_5d"]
+        except Exception as e:
+            logger.warning("Chips bulk fetch skipped: %s", e)
 
     # Group by industry
     by_industry: dict[str, list[StockFactors]] = {}

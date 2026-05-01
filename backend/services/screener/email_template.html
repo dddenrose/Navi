@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Navi 智能選股週報</title>
+</head>
+<body style="margin:0;padding:0;background:#f3f4f6;font-family:-apple-system,BlinkMacSystemFont,'PingFang TC','Helvetica Neue',Arial,sans-serif;color:#111827;">
+  <div style="max-width:680px;margin:0 auto;background:#ffffff;">
+    <!-- Header -->
+    <div style="padding:28px 24px;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;">
+      <div style="font-size:13px;opacity:0.85;letter-spacing:0.04em;">🧭 NAVI · 智能選股</div>
+      <h1 style="margin:8px 0 4px;font-size:22px;font-weight:700;">{{PROFILE_LABEL}} · {{REPORT_ID}}</h1>
+      <p style="margin:0;font-size:13px;opacity:0.9;">本期共 {{FINAL_COUNT}} 檔入選，涵蓋 {{INDUSTRIES_COUNT}} 個產業</p>
+    </div>
+
+    <!-- Intro -->
+    <div style="padding:20px 24px;color:#374151;font-size:13px;line-height:1.65;border-bottom:1px solid #e5e7eb;">
+      以下為本期 AI 深度評估後信心 ≥ 70 的精選名單。每檔附投資論點、目標價區間、主要風險。
+      <br /><strong style="color:#dc2626;">⚠️ 本內容為演算法產出，僅供參考，不構成投資建議。投資前請自行查證。</strong>
+    </div>
+
+    <!-- Picks table -->
+    <table style="width:100%;border-collapse:collapse;">
+      {{PICKS_TABLE}}
+    </table>
+
+    <!-- CTA -->
+    <div style="padding:24px;text-align:center;border-top:1px solid #e5e7eb;">
+      <a href="{{WEB_URL}}"
+         style="display:inline-block;padding:12px 28px;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;text-decoration:none;border-radius:10px;font-weight:600;font-size:14px;">
+        在 Navi 中查看完整報告 →
+      </a>
+    </div>
+
+    <!-- Footer -->
+    <div style="padding:18px 24px;background:#f9fafb;color:#9ca3af;font-size:11px;text-align:center;line-height:1.6;">
+      你正在以週報訂閱者身份收到這封信。若不再需要，可
+      <a href="{{UNSUBSCRIBE_URL}}" style="color:#6366f1;text-decoration:underline;">一鍵取消訂閱</a>。
+      <br />Navi · AI 投資助理 · Hey! Listen!
+    </div>
+  </div>
+</body>
+</html>
