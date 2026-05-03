@@ -1,10 +1,15 @@
-"""Stage 3 — AI Evaluator.
+"""Stage 3 — LLM 解讀層（不再是評估者）.
 
-對 Stage 2 篩出的候選股做 LLM 深度評估，產出結構化 ScreenerEvaluation。
-為了控制成本與穩定性，MVP 不用 tool-calling agent，而是：
-  1. 對每個 profile 預先做一次 search_knowledge 取得理論支撐文本（共用）
-  2. 將 ScoredStock 的 snapshot 序列化成 XML
-  3. 用 ChatVertexAI.with_structured_output() 強制 schema
+對 Stage 2 的 qualified picks 做質性補充：
+  - 把規則語言翻譯成投資邏輯（narrative）
+  - 補充規則看不到的脈絡（key_context）
+  - 標示風險（warnings）
+  - Value profile 額外做 value-trap 偵測
+
+LLM 不做：
+  - 不決定 picks 篩選（Stage 2 已定）
+  - 不寫目標價、停損（valuation.py 已算）
+  - 不寫 confidence（final_grade 由規則決定）
 """
 
 from __future__ import annotations
@@ -19,175 +24,181 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_google_vertexai import ChatVertexAI
 
 from config import settings
-from services.embedding_service import search_similar
-from services.screener.factor_scorer import ScoredStock
+from services.screener.factor_scorer import EvaluatedStock
 from services.screener.prompts import (
-    EVALUATOR_SYSTEM_PROMPT,
-    ScreenerEvaluation,
-    build_user_prompt,
+    INTERPRETER_SYSTEM_PROMPT,
+    StockInterpretation,
+    build_interpreter_user_prompt,
 )
 
 logger = logging.getLogger(__name__)
 
 
-# Profile 對應的知識庫 query（一份 profile 共用，避免重複 embedding 成本）
-_PROFILE_KB_QUERY = {
-    "value": "價值投資 估值 PE PB 殖利率 護城河 風險管理 目標價",
-    "momentum": "動量策略 均線 RSI 鈍化 三大法人解讀 量價關係 停損",
-}
-
-
 @dataclass
-class EvaluatedPick:
-    scored: ScoredStock
-    evaluation: ScreenerEvaluation
+class InterpretedPick:
+    evaluated: EvaluatedStock
+    interpretation: StockInterpretation
 
 
 def _build_llm(model_name: str | None = None) -> ChatVertexAI:
     vertexai.init(project=settings.google_cloud_project)
     return ChatVertexAI(
         model_name=model_name or settings.gemini_model_name,
-        temperature=0.3,
+        temperature=0.2,
         project=settings.google_cloud_project,
     )
 
 
-def _kb_context(profile: str, top_k: int = 5) -> tuple[str, list[str]]:
-    """預取 KB 相關段落，回傳 (拼接文字, 引用清單)."""
-    query = _PROFILE_KB_QUERY.get(profile, profile)
-    docs = search_similar(query, top_k=top_k)
-    if not docs:
-        return ("（知識庫無相關內容）", [])
-
-    lines = []
-    citations = []
-    for i, d in enumerate(docs, 1):
-        meta = d.get("metadata", {})
-        title = meta.get("title", "")
-        source = meta.get("source_file") or meta.get("category", "")
-        content = d.get("content", "")
-        if len(content) > 500:
-            content = content[:500] + "…"
-        lines.append(f"[{i}] {title}（{source}）\n{content}")
-        if source:
-            citations.append(source)
-    return ("\n\n".join(lines), citations)
+def _x(s: str) -> str:
+    return saxutils.escape(s)
 
 
-def _format_optional(v, fmt: str = "{:.2f}") -> str:
+def _fmt(v: float | None, *, pct: bool = False, digits: int = 2) -> str:
     if v is None:
         return "N/A"
-    try:
-        return fmt.format(v)
-    except Exception:
-        return str(v)
+    if pct:
+        return f"{v * 100:.{digits}f}%"
+    return f"{v:.{digits}f}"
 
 
-def _build_snapshot_xml(sc: ScoredStock, kb_text: str) -> str:
-    f = sc.factors
+def _checks_xml(tag: str, checks) -> str:
+    if not checks:
+        return f"<{tag}/>"
+    lines = [f"<{tag}>"]
+    for c in checks:
+        lines.append(
+            f"  <check id=\"{_x(c.rule_id)}\" passed=\"{str(c.passed).lower()}\">"
+            f"<name>{_x(c.name)}</name>"
+            f"<rule>{_x(c.rule)}</rule>"
+            f"<actual>{_x(c.actual)}</actual>"
+            f"<reference>{_x(c.reference)}</reference>"
+            f"</check>"
+        )
+    lines.append(f"</{tag}>")
+    return "\n".join(lines)
 
-    def x(s: str) -> str:
-        return saxutils.escape(s)
 
-    factor_lines = "\n".join(
-        f"  <{k}>{v}</{k}>" for k, v in sc.factor_scores.items()
-    )
+def _build_snapshot_xml(es: EvaluatedStock, profile: str) -> str:
+    d = es.data
+    t = es.trace
+    v = es.valuation
+
+    val_block = ""
+    if v is not None and v.fair_value_mid is not None:
+        val_block = (
+            "<valuation>\n"
+            f"  <method>{_x(v.method)}</method>\n"
+            f"  <fair_value_low>{v.fair_value_low}</fair_value_low>\n"
+            f"  <fair_value_mid>{v.fair_value_mid}</fair_value_mid>\n"
+            f"  <fair_value_high>{v.fair_value_high}</fair_value_high>\n"
+            f"  <buy_zone_upper>{v.buy_zone_upper}</buy_zone_upper>\n"
+            f"  <implied_upside_mid_pct>{v.implied_upside_mid_pct}</implied_upside_mid_pct>\n"
+            "</valuation>"
+        )
 
     return f"""\
 <stock>
-  <ticker>{x(f.ticker)}</ticker>
-  <name>{x(f.name)}</name>
-  <industry>{x(f.industry)}</industry>
-  <rank_in_industry>{sc.rank_in_industry}</rank_in_industry>
-  <final_score>{sc.final_score}</final_score>
+  <ticker>{_x(d.ticker)}</ticker>
+  <name>{_x(d.name)}</name>
+  <industry>{_x(d.industry)}</industry>
+  <industry_size>{es.industry_size}</industry_size>
+  <industry_rank>{es.industry_rank}</industry_rank>
+  <final_grade>{_x(t.final_grade)}</final_grade>
+  <profile>{_x(profile)}</profile>
+
   <snapshot>
-    <price>{_format_optional(f.price)}</price>
-    <pe>{_format_optional(f.pe)}</pe>
-    <pb>{_format_optional(f.pb)}</pb>
-    <roe>{_format_optional(f.roe, "{:.2%}") if f.roe is not None else "N/A"}</roe>
-    <dividend_yield>{_format_optional(f.dividend_yield, "{:.2%}") if f.dividend_yield is not None else "N/A"}</dividend_yield>
-    <revenue_growth>{_format_optional(f.revenue_growth, "{:.2%}") if f.revenue_growth is not None else "N/A"}</revenue_growth>
-    <profit_margin>{_format_optional(f.profit_margin, "{:.2%}") if f.profit_margin is not None else "N/A"}</profit_margin>
-    <return_3m>{_format_optional(f.return_3m, "{:.2%}") if f.return_3m is not None else "N/A"}</return_3m>
-    <return_6m>{_format_optional(f.return_6m, "{:.2%}") if f.return_6m is not None else "N/A"}</return_6m>
-    <relative_strength_3m>{_format_optional(f.rel_strength, "{:.2%}") if f.rel_strength is not None else "N/A"}</relative_strength_3m>
-    <volume_expansion>{_format_optional(f.volume_expansion)}</volume_expansion>
+    <price>{_fmt(d.price)}</price>
+    <pe>{_fmt(d.pe)}</pe>
+    <pb>{_fmt(d.pb)}</pb>
+    <dividend_yield>{_fmt(d.dividend_yield, pct=True)}</dividend_yield>
+    <roe_3y_avg>{_fmt(d.roe_3y_avg, pct=True)}</roe_3y_avg>
+    <revenue_cagr_3y>{_fmt(d.revenue_cagr_3y, pct=True)}</revenue_cagr_3y>
+    <revenue_yoy_latest>{_fmt(d.revenue_yoy_latest, pct=True)}</revenue_yoy_latest>
+    <fcf_positive_years>{d.fcf_positive_years if d.fcf_positive_years is not None else 'N/A'}</fcf_positive_years>
+    <eps_positive_quarters>{d.eps_positive_quarters if d.eps_positive_quarters is not None else 'N/A'}</eps_positive_quarters>
+    <debt_ratio>{_fmt(d.debt_ratio, pct=True)}</debt_ratio>
+    <return_3m>{_fmt(d.return_3m, pct=True)}</return_3m>
+    <return_6m>{_fmt(d.return_6m, pct=True)}</return_6m>
+    <rel_strength_6m>{_fmt(d.rel_strength_6m, pct=True)}</rel_strength_6m>
+    <rsi_14>{_fmt(d.rsi_14)}</rsi_14>
+    <foreign_net_20d>{d.foreign_net_20d if d.foreign_net_20d is not None else 'N/A'}</foreign_net_20d>
   </snapshot>
-  <factor_scores>
-{factor_lines}
-  </factor_scores>
-  <knowledge_base_excerpts>
-{x(kb_text)}
-  </knowledge_base_excerpts>
+
+  <scoring_trace>
+    <verdict>{_x(t.verdict)}</verdict>
+    <must_pass passed="{t.must_pass_count}" total="{t.must_pass_total}">
+{_checks_xml('items', t.must_pass)}
+    </must_pass>
+    <bonus passed="{t.bonus_passed}" required="{t.bonus_required}">
+{_checks_xml('items', t.bonus)}
+    </bonus>
+  </scoring_trace>
+
+  {val_block}
 </stock>
 """
 
 
-async def _evaluate_one(
-    llm,
-    sc: ScoredStock,
+async def _interpret_one(
+    structured_llm,
+    es: EvaluatedStock,
     profile: str,
-    kb_text: str,
-    default_citations: list[str],
-) -> EvaluatedPick | None:
-    snapshot = _build_snapshot_xml(sc, kb_text)
+) -> InterpretedPick | None:
+    snapshot = _build_snapshot_xml(es, profile)
     messages = [
-        SystemMessage(content=EVALUATOR_SYSTEM_PROMPT),
-        HumanMessage(content=build_user_prompt(profile, snapshot)),
+        SystemMessage(content=INTERPRETER_SYSTEM_PROMPT),
+        HumanMessage(content=build_interpreter_user_prompt(profile, snapshot)),
     ]
     try:
-        result = await llm.ainvoke(messages)
+        result = await structured_llm.ainvoke(messages)
     except Exception as e:
-        logger.warning("LLM eval failed for %s: %s", sc.factors.ticker, e)
+        logger.warning("LLM interpret failed for %s: %s", es.data.ticker, e)
         return None
 
-    if not isinstance(result, ScreenerEvaluation):
-        # with_structured_output 失敗時 fallback
-        logger.warning("Unexpected LLM output type for %s: %s", sc.factors.ticker, type(result))
+    if not isinstance(result, StockInterpretation):
+        logger.warning(
+            "Unexpected LLM output type for %s: %s",
+            es.data.ticker, type(result),
+        )
         return None
 
-    # 若 LLM 沒填 kb_citations，至少給 default
-    if not result.kb_citations:
-        result.kb_citations = default_citations[:3]
+    # Momentum profile force-reset value_trap_check
+    if profile == "momentum":
+        result.value_trap_check = "no_concern"
+        result.value_trap_reason = ""
 
     logger.info(
-        "Evaluated %s: confidence=%d upside=%.1f%%",
-        sc.factors.ticker,
-        result.confidence,
-        result.upside_pct,
+        "Interpreted %s: grade=%s value_trap=%s",
+        es.data.ticker, es.trace.final_grade, result.value_trap_check,
     )
-    return EvaluatedPick(scored=sc, evaluation=result)
+    return InterpretedPick(evaluated=es, interpretation=result)
 
 
-async def evaluate_candidates(
-    candidates: list[ScoredStock],
+async def interpret_picks(
+    picks: list[EvaluatedStock],
     *,
-    profile: str = "momentum",
-    confidence_threshold: int = 70,
+    profile: str = "value",
     max_concurrency: int = 4,
     model_name: str | None = None,
-) -> list[EvaluatedPick]:
-    """並行對候選股做 LLM 評估，回傳信心 ≥ threshold 的清單。"""
-    if not candidates:
+) -> list[InterpretedPick]:
+    """並行對所有 qualified picks 跑 LLM 解讀。失敗會被略過。"""
+    if not picks:
         return []
 
-    kb_text, citations = _kb_context(profile)
     base_llm = _build_llm(model_name)
-    structured_llm = base_llm.with_structured_output(ScreenerEvaluation)
+    structured_llm = base_llm.with_structured_output(StockInterpretation)
 
-    semaphore = asyncio.Semaphore(max_concurrency)
+    sem = asyncio.Semaphore(max_concurrency)
 
-    async def _bound(sc: ScoredStock):
-        async with semaphore:
-            return await _evaluate_one(structured_llm, sc, profile, kb_text, citations)
+    async def _bound(es: EvaluatedStock):
+        async with sem:
+            return await _interpret_one(structured_llm, es, profile)
 
-    results = await asyncio.gather(*[_bound(sc) for sc in candidates])
-    picks = [r for r in results if r is not None and r.evaluation.confidence >= confidence_threshold]
+    results = await asyncio.gather(*[_bound(es) for es in picks])
+    out = [r for r in results if r is not None]
     logger.info(
-        "Stage 3: %d candidates → %d picks (threshold=%d, model=%s)",
-        len(candidates),
-        len(picks),
-        confidence_threshold,
+        "Stage 3 [%s]: %d picks → %d interpreted (model=%s)",
+        profile, len(picks), len(out),
         model_name or settings.gemini_model_name,
     )
-    return picks
+    return out

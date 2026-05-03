@@ -1,83 +1,97 @@
-"""Stage 3 — AI Evaluator prompts & response schema."""
+"""Stage 3 — LLM interpreter prompts & schema.
+
+LLM 在新架構下只做「解讀補充」:
+  - 不決定篩選結果（Stage 2 規則決定）
+  - 不寫目標價數字（valuation.py 規則計算）
+  - 不寫信心分數（規則決定 final_grade）
+  - 只負責: 把推導過程翻譯成投資邏輯 + 補充質性脈絡 + 標記值得注意的風險
+"""
+
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
-# Structured output schema — Gemini structured output 會強制輸出符合此 schema
-# 的 JSON，避免 LLM 自行編造數字。
 
+class StockInterpretation(BaseModel):
+    """Stage 3 對單一資格化個股的質性解讀。"""
 
-class TargetPrice(BaseModel):
-    low: float = Field(description="保守目標價（合理偏低估算）")
-    mid: float = Field(description="中估目標價")
-    high: float = Field(description="樂觀目標價")
-
-
-class ScreenerEvaluation(BaseModel):
-    """Stage 3 LLM 對單一個股的結構化評估."""
-
-    thesis: str = Field(
-        description="300-500 字推薦理由，需引用知識庫理論並對應該檔的數據訊號",
+    narrative: str = Field(
+        description=(
+            "200-300 字的投資邏輯解讀。需要"
+            "(1) 用投資人語言解釋為什麼這檔通過必要條件、加分條件代表什麼意義；"
+            "(2) 引用 ScoringTrace 中的具體數字；"
+            "(3) 不要重複條列規則，要組織成連貫的論述；"
+            "(4) 不要寫目標價、停損、信心分數等具體數字（已由系統規則計算）。"
+        ),
     )
-    kb_citations: list[str] = Field(
+    key_context: list[str] = Field(
         default_factory=list,
-        description="引用的知識庫檔案路徑（從 search_knowledge 結果中挑出）",
+        description=(
+            "3-5 條質性脈絡，例如「該公司是 AI 伺服器供應鏈關鍵廠商」、"
+            "「最近一季營收受惠於匯率」、「客戶集中度高需注意」等。"
+            "不要與 narrative 重複，這裡是條列式重點。"
+        ),
     )
-    target_price: TargetPrice
-    upside_pct: float = Field(description="(target_price.mid - current_price) / current_price * 100")
-    stop_loss: float = Field(description="建議停損價，需有明確技術或基本面依據")
-    risk_reward_ratio: float = Field(description="(target_mid - price) / (price - stop_loss)")
-    risks: list[str] = Field(description="3-5 條主要風險，具體不空泛")
-    confidence: int = Field(description="0-100 信心評分；< 70 將被過濾掉", ge=0, le=100)
+    warnings: list[str] = Field(
+        default_factory=list,
+        description=(
+            "2-4 條使用者投資前該知道的風險或注意事項。"
+            "可以是規則沒抓到的（產業循環向下、地緣政治、訴訟）。"
+        ),
+    )
+    value_trap_check: Literal["no_concern", "watch", "warning"] = Field(
+        default="no_concern",
+        description=(
+            "Value Trap 判讀（僅 Value profile 有意義）。"
+            "no_concern = 無虞 / watch = 數字漂亮但需觀察 / warning = 疑似價值陷阱。"
+            "Momentum profile 一律填 no_concern。"
+        ),
+    )
+    value_trap_reason: str = Field(
+        default="",
+        description="value_trap_check != no_concern 時，解釋為什麼。其他情況留空。",
+    )
 
 
-# Prompt template — 使用 XML tag 結構（Anthropic / Gemini 最佳實踐）。
-# 注意：所有「具體數字」一律從 <snapshot> / <factors> 取，禁止 LLM 編造。
-
-EVALUATOR_SYSTEM_PROMPT = """\
+INTERPRETER_SYSTEM_PROMPT = """\
 <role>
-你是 Navi 的選股分析員。任務是對通過量化粗篩的個股做深度評估，
-產出結構化的推薦理由 (thesis)、目標價、停損與風險。
+你是 Navi 智能選股的投資解讀員。你看到的個股是已經通過量化規則篩選的「資格化候選」。
+你的工作 **不是** 重新評估它能不能買，而是把規則跑出來的結果翻譯成
+中長期投資人看得懂的投資邏輯。
 </role>
 
 <core_rules>
-1. 所有具體數字（價格、PE、ROE、漲幅、量等）必須來自 <snapshot> / <factors>
-   或工具回傳的數據。若數據缺失，須在 thesis 中明確說「該數據暫缺」，
-   絕對不可自己編造或臆測。
-2. thesis 必須引用至少一條來自 search_knowledge 的知識庫內容（投資理論／指標解讀／
-   台股實務眉角），並把文件路徑列入 kb_citations。
-3. 目標價必須有依據（PE 區間 / 技術壓力 / 法人成本價），不可單純喊個整數。
-4. 信心評分 confidence：
-   • 多面向訊號一致 + 知識庫支撐 → 80-95
-   • 訊號偏多但有部分矛盾 → 70-79
-   • 訊號矛盾或數據不足 → < 70（將被過濾，不進報告）
-5. 文字使用繁體中文；禁止「保證」「必漲」「零風險」等字眼。
-6. 嚴格遵守 output schema，不在 schema 外加任何欄位。
+1. **不要重新評估篩選結果**：規則已經決定它資格化了，不要寫「我認為不該買」。
+   若你發現嚴重疑慮，寫進 warnings，不要拒絕。
+2. **不要編造數字**：所有具體數字（PE / ROE / 營收 / 報酬率）必須引用
+   <scoring_trace> 內的實際值。沒有的數字不要寫。
+3. **不要寫目標價、停損、信心分數**：這些已經由系統規則計算。
+4. **narrative 要組織成投資邏輯**：不是把規則重新念一次，而是「為什麼這些條件
+   加總起來構成一個值得中長期持有的標的」。
+5. **Value Trap 檢查（只對 Value profile）**：注意「數字漂亮但實際在衰退」的訊號：
+   - 殖利率特別高 + 股價長期下跌 → 可能是 dividend trap
+   - PE 特別低 + 營收 CAGR 接近 0 → 可能是衰退中的成熟產業
+   - 毛利穩定但行業整體被破壞性技術取代 → 可能是溫水煮青蛙
+   發現訊號 → value_trap_check 設 watch 或 warning，並寫 value_trap_reason。
+6. **Momentum profile**：value_trap_check 一律 no_concern。
+7. **語言**：繁體中文。禁止「保證」「必漲」「零風險」等用詞。
 </core_rules>
-
-<process>
-你會收到一個 <stock> 區塊包含基本面 / 技術面快照與已計算好的 factor_scores。
-請依以下順序行動：
-1. 先呼叫 search_knowledge，query 涵蓋 profile 主題與該股的關鍵訊號
-   （如「動量策略 RSI 鈍化 三大法人解讀」或「估值 PE 殖利率 護城河」）。
-2. 視需要再呼叫 1-2 個既有 tool 補充細節（如 get_institutional / search_financial_news）。
-3. 形成結論並輸出符合 ScreenerEvaluation schema 的 JSON。
-</process>
 """
 
 
-def build_user_prompt(profile: str, snapshot_xml: str) -> str:
-    """組裝給 LLM 的 user prompt。snapshot_xml 由 ai_evaluator 動態產生."""
+def build_interpreter_user_prompt(profile: str, snapshot_xml: str) -> str:
     return f"""\
 <task>
-策略 Profile：{profile}
-請對下列個股做完整的 Stage 3 評估並輸出 ScreenerEvaluation。
+策略: {profile}
+請對下面這檔資格化個股做投資解讀，產出 StockInterpretation。
 </task>
 
 {snapshot_xml}
 
 <reminder>
-- 數字一律從 snapshot/factor_scores 取
-- thesis 必須引用知識庫
-- confidence < 70 代表該檔不該進報告
+- 不要重新評估資格、不要寫目標價 / 停損
+- 數字一律引用 trace 內的實際值
+- narrative 200-300 字、有投資邏輯而非條列規則
+- Value profile 才檢查 value_trap；Momentum 一律 no_concern
 </reminder>
 """

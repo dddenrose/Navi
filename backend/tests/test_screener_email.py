@@ -37,12 +37,19 @@ def test_render_email_html_includes_picks_and_unsubscribe():
                 "ticker": "2330.TW",
                 "name": "台積電",
                 "rank_in_industry": 1,
-                "confidence": 88,
-                "upside_pct": 14.8,
-                "target_price": {"low": 700, "mid": 750, "high": 820},
+                "final_grade": "Strong Pick",
                 "snapshot": {"price": 650},
-                "thesis": "AI 驅動先進製程需求強勁。",
-                "risks": ["地緣政治", "匯率"],
+                "valuation": {
+                    "fair_value_low": 700, "fair_value_mid": 750,
+                    "fair_value_high": 820, "implied_upside_mid_pct": 14.8,
+                },
+                "interpretation": {
+                    "narrative": "AI 驅動先進製程需求強勁。",
+                    "warnings": ["地緣政治", "匯率"],
+                    "value_trap_check": "no_concern",
+                    "value_trap_reason": "",
+                    "key_context": [],
+                },
             }
         ]
     }
@@ -55,7 +62,7 @@ def test_render_email_html_includes_picks_and_unsubscribe():
     )
     assert "台積電" in html
     assert "2330" in html
-    assert "信心 88" in html
+    assert "Strong Pick" in html
     assert "https://example.com/api/screener/unsubscribe?token=" in html
     assert "https://example.com/screener" in html
 
@@ -69,8 +76,12 @@ def test_send_report_email_dry_run_when_no_api_key(mock_load, mock_list):
     mock_load.return_value = (
         {"report_id": "r1", "final_count": 1, "industries_covered": []},
         {"半導體": [{"ticker": "2330.TW", "name": "TSMC", "rank_in_industry": 1,
-                    "confidence": 80, "upside_pct": 10, "target_price": {"mid": 700},
-                    "snapshot": {"price": 650}, "thesis": "ok", "risks": []}]},
+                    "final_grade": "Pick",
+                    "snapshot": {"price": 650},
+                    "valuation": {"fair_value_mid": 700, "implied_upside_mid_pct": 7.7},
+                    "interpretation": {"narrative": "ok", "warnings": [],
+                                       "value_trap_check": "no_concern",
+                                       "value_trap_reason": "", "key_context": []}}]},
     )
     mock_list.return_value = [{"user_id": "u1", "email": "u1@test.com", "enabled": True}]
 
@@ -92,8 +103,12 @@ def test_send_report_email_uses_sendgrid_when_key_present(mock_load, mock_list):
     mock_load.return_value = (
         {"report_id": "r1", "final_count": 1, "industries_covered": []},
         {"半導體": [{"ticker": "2330.TW", "name": "TSMC", "rank_in_industry": 1,
-                    "confidence": 80, "upside_pct": 10, "target_price": {"mid": 700},
-                    "snapshot": {"price": 650}, "thesis": "ok", "risks": []}]},
+                    "final_grade": "Pick",
+                    "snapshot": {"price": 650},
+                    "valuation": {"fair_value_mid": 700, "implied_upside_mid_pct": 7.7},
+                    "interpretation": {"narrative": "ok", "warnings": [],
+                                       "value_trap_check": "no_concern",
+                                       "value_trap_reason": "", "key_context": []}}]},
     )
     mock_list.return_value = [{"user_id": "u1", "email": "u1@test.com", "enabled": True}]
 
