@@ -95,18 +95,14 @@ echo "   Endpoint   : ${SERVICE_URL}/api/screener/run"
 echo "   Timezone   : ${TIMEZONE}"
 echo ""
 
-# Job 定義表：name | schedule | profile | frequency
-# 目前只啟用 weekly（週日晚上跑）。需要 daily 時把下方兩行取消註解。
-# JOBS 列格式：name|schedule|profile|frequency|path
-#   path = run 或 notify (預設 run)
+# Job 定義表：name | schedule | profile | frequency | path
+#   - momentum: 週一/三/五 14:30 跑 (盤後)，隔日早上 07:00 寄信
+#   - value:    週日 20:00 跑，週一 07:00 寄信
 JOBS=(
-  # "${JOB_PREFIX}-daily-momentum|0 6 * * 1-5|momentum|daily|run"
-  # "${JOB_PREFIX}-daily-value|5 6 * * 1-5|value|daily|run"
-  "${JOB_PREFIX}-weekly-momentum|0 20 * * 0|momentum|weekly|run"
-  "${JOB_PREFIX}-weekly-value|5 20 * * 0|value|weekly|run"
-  # Email notify：在 run 跑完後 90 分鐘觸發，預設週一 06:00 寄所有人
-  "${JOB_PREFIX}-notify-weekly-momentum|0 6 * * 1|momentum|weekly|notify"
-  "${JOB_PREFIX}-notify-weekly-value|5 6 * * 1|value|weekly|notify"
+  "${JOB_PREFIX}-momentum|30 14 * * 1,3,5|momentum|daily|run"
+  "${JOB_PREFIX}-weekly-value|0 20 * * 0|value|weekly|run"
+  "${JOB_PREFIX}-notify-momentum|0 7 * * 2,4,6|momentum|daily|notify"
+  "${JOB_PREFIX}-notify-weekly-value|0 7 * * 1|value|weekly|notify"
 )
 
 # ── --pause / --resume / --delete ───────────────────────────────────────────
@@ -168,5 +164,5 @@ echo ""
 echo "  gcloud scheduler jobs list --location=${REGION} --project=${PROJECT_ID}"
 echo ""
 echo "立即手動觸發（測試）："
-echo "  gcloud scheduler jobs run ${JOB_PREFIX}-weekly-momentum --location=${REGION}"
-echo "  gcloud scheduler jobs run ${JOB_PREFIX}-notify-weekly-momentum --location=${REGION}"
+echo "  gcloud scheduler jobs run ${JOB_PREFIX}-momentum --location=${REGION}"
+echo "  gcloud scheduler jobs run ${JOB_PREFIX}-weekly-value --location=${REGION}"

@@ -6,13 +6,16 @@ import {
   updateSubscription,
 } from "@/lib/api/screener";
 import type {
+  FinalGrade,
   PickDoc,
   ReportDetail,
+  RuleCheck,
   ScreenerFrequency,
   ScreenerProfile,
+  ValueTrapCheck,
 } from "@/types/screener";
 
-// ── 小工具 ────────────────────────────────────────────────────────────────
+// ── Formatters ─────────────────────────────────────────────────────────────
 
 function fmtPct(v: number | null | undefined, digits = 1): string {
   if (v == null || Number.isNaN(v)) return "—";
@@ -22,13 +25,65 @@ function fmtNum(v: number | null | undefined, digits = 2): string {
   if (v == null || Number.isNaN(v)) return "—";
   return v.toFixed(digits);
 }
-function confColor(c: number): string {
-  if (c >= 85) return "text-emerald-400 bg-emerald-400/10";
-  if (c >= 75) return "text-sky-400 bg-sky-400/10";
-  return "text-amber-400 bg-amber-400/10";
+function fmtSigned(v: number | null | undefined, digits = 1): string {
+  if (v == null || Number.isNaN(v)) return "—";
+  const sign = v >= 0 ? "+" : "";
+  return `${sign}${v.toFixed(digits)}%`;
+}
+function fmtRule(v: string | number | null): string {
+  if (v == null) return "—";
+  return String(v);
 }
 
-// ── ProfileTabs ──────────────────────────────────────────────────────────
+// ── Visual tokens ──────────────────────────────────────────────────────────
+
+function gradeStyle(grade: FinalGrade): {
+  text: string;
+  bg: string;
+  label: string;
+} {
+  switch (grade) {
+    case "Strong Pick":
+      return {
+        text: "text-emerald-300",
+        bg: "bg-emerald-400/15 border-emerald-500/30",
+        label: "Strong Pick",
+      };
+    case "Pick":
+      return {
+        text: "text-sky-300",
+        bg: "bg-sky-400/15 border-sky-500/30",
+        label: "Pick",
+      };
+    case "Watch":
+      return {
+        text: "text-amber-300",
+        bg: "bg-amber-400/15 border-amber-500/30",
+        label: "Watch",
+      };
+    default:
+      return {
+        text: "text-slate-400",
+        bg: "bg-slate-500/15 border-slate-500/30",
+        label: String(grade || "—"),
+      };
+  }
+}
+
+function valueTrapStyle(c: ValueTrapCheck): { text: string; label: string } {
+  switch (c) {
+    case "no_concern":
+      return { text: "text-emerald-400", label: "無重大疑慮" };
+    case "watch":
+      return { text: "text-amber-400", label: "觀察" };
+    case "concern":
+      return { text: "text-red-400", label: "疑似價值陷阱" };
+    default:
+      return { text: "text-slate-400", label: String(c || "—") };
+  }
+}
+
+// ── ProfileTabs ────────────────────────────────────────────────────────────
 
 function ProfileTabs({
   profile,
@@ -100,7 +155,7 @@ function ProfileTabs({
   );
 }
 
-// ── IndustryChips ────────────────────────────────────────────────────────
+// ── IndustryChips ─────────────────────────────────────────────────────────
 
 function IndustryChips({
   industries,
@@ -156,15 +211,25 @@ function IndustryChips({
   );
 }
 
-// ── PickCard ─────────────────────────────────────────────────────────────
+// ── PickCard ──────────────────────────────────────────────────────────────
 
-function PickCard({
-  pick,
-  onClick,
-}: {
-  pick: PickDoc;
-  onClick: () => void;
-}) {
+function GradeBadge({ grade }: { grade: FinalGrade }) {
+  const s = gradeStyle(grade);
+  return (
+    <span
+      className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${s.text} ${s.bg}`}
+    >
+      {s.label}
+    </span>
+  );
+}
+
+function PickCard({ pick, onClick }: { pick: PickDoc; onClick: () => void }) {
+  const v = pick.valuation;
+  const upside = v?.implied_upside_mid_pct;
+  const trap = pick.interpretation?.value_trap_check;
+  const trapStyle = trap ? valueTrapStyle(trap) : null;
+
   return (
     <button
       onClick={onClick}
@@ -185,20 +250,14 @@ function PickCard({
             </span>
           </div>
           <p className="text-xs text-slate-500 mt-0.5">
-            #{pick.rank_in_industry} · {pick.industry}
+            #{pick.rank_in_industry}/{pick.industry_size} · {pick.industry}
           </p>
         </div>
-        <span
-          className={`text-xs font-semibold px-2 py-0.5 rounded-full ${confColor(
-            pick.confidence,
-          )}`}
-        >
-          信心 {pick.confidence}
-        </span>
+        <GradeBadge grade={pick.final_grade} />
       </div>
 
       <p className="text-xs text-slate-400 line-clamp-3 mb-3 leading-relaxed">
-        {pick.thesis}
+        {pick.interpretation?.narrative || "—"}
       </p>
 
       <div className="grid grid-cols-3 gap-2 text-xs tabular-nums">
@@ -207,26 +266,230 @@ function PickCard({
           <p className="text-slate-200">${fmtNum(pick.snapshot.price)}</p>
         </div>
         <div>
-          <p className="text-slate-600">目標</p>
-          <p className="text-slate-200">${fmtNum(pick.target_price?.mid)}</p>
+          <p className="text-slate-600">合理中值</p>
+          <p className="text-slate-200">${fmtNum(v?.fair_value_mid)}</p>
         </div>
         <div>
           <p className="text-slate-600">上行</p>
           <p
             className={
-              pick.upside_pct >= 0 ? "text-emerald-400" : "text-red-400"
+              upside == null
+                ? "text-slate-500"
+                : upside >= 0
+                  ? "text-emerald-400"
+                  : "text-red-400"
             }
           >
-            {pick.upside_pct >= 0 ? "+" : ""}
-            {fmtNum(pick.upside_pct, 1)}%
+            {fmtSigned(upside)}
           </p>
         </div>
       </div>
+
+      {trapStyle && (
+        <div className="mt-3 pt-3 border-t border-slate-800/60 flex items-center justify-between text-[11px]">
+          <span className="text-slate-500">價值陷阱檢查</span>
+          <span className={trapStyle.text}>{trapStyle.label}</span>
+        </div>
+      )}
     </button>
   );
 }
 
-// ── PickDetailDrawer ─────────────────────────────────────────────────────
+// ── Detail components ──────────────────────────────────────────────────────
+
+function RuleRow({ c }: { c: RuleCheck }) {
+  const icon = c.passed ? "✓" : "✗";
+  const iconColor = c.passed
+    ? "text-emerald-400"
+    : c.severity === "critical"
+      ? "text-red-400"
+      : "text-amber-400";
+  const isMissing = String(c.actual ?? "").startsWith("資料不足");
+  return (
+    <div
+      className="flex items-start gap-3 py-2 px-3 rounded-lg text-xs"
+      style={{
+        background: "var(--card-bg)",
+        border: "1px solid var(--border)",
+      }}
+    >
+      <span className={`font-mono font-bold ${iconColor} pt-0.5`}>{icon}</span>
+      <div className="flex-1 min-w-0">
+        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+          <span className="font-semibold text-slate-200">{c.name}</span>
+          <span className="text-[10px] text-slate-500 font-mono">
+            {c.rule_id}
+          </span>
+        </div>
+        <p className="text-slate-500 mt-0.5">{c.rule}</p>
+        <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1 text-[11px]">
+          <span className={isMissing ? "text-amber-400/90" : "text-slate-300"}>
+            實際：{fmtRule(c.actual)}
+          </span>
+          {c.reference != null && c.reference !== "" && (
+            <span className="text-slate-500">門檻：{fmtRule(c.reference)}</span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CheckSection({
+  title,
+  summary,
+  checks,
+  emptyHint,
+}: {
+  title: string;
+  summary?: string;
+  checks: RuleCheck[];
+  emptyHint?: string;
+}) {
+  return (
+    <section className="mb-5">
+      <div className="flex items-baseline justify-between mb-2">
+        <h4 className="text-xs uppercase tracking-wider text-slate-400">
+          {title}
+        </h4>
+        {summary && (
+          <span className="text-[11px] text-slate-500">{summary}</span>
+        )}
+      </div>
+      {checks.length === 0 ? (
+        <p className="text-[11px] text-slate-600 italic">{emptyHint || "—"}</p>
+      ) : (
+        <div className="space-y-1.5">
+          {checks.map((c) => (
+            <RuleRow key={c.rule_id} c={c} />
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function ValuationBand({ pick }: { pick: PickDoc }) {
+  const v = pick.valuation;
+  const price = pick.snapshot.price ?? null;
+  const low = v?.fair_value_low ?? null;
+  const mid = v?.fair_value_mid ?? null;
+  const high = v?.fair_value_high ?? null;
+  const buy = v?.buy_zone_upper ?? null;
+  if (low == null || mid == null || high == null || price == null) {
+    return (
+      <div
+        className="rounded-xl p-4 text-xs text-slate-500"
+        style={{
+          background: "var(--card-bg)",
+          border: "1px solid var(--border)",
+        }}
+      >
+        估值資料不足
+      </div>
+    );
+  }
+
+  // 把 low/mid/high/price/buy 投影到 0~100% 軸
+  const min = Math.min(low, price) * 0.95;
+  const max = Math.max(high, price) * 1.05;
+  const span = max - min || 1;
+  const pos = (val: number) =>
+    `${Math.max(0, Math.min(100, ((val - min) / span) * 100))}%`;
+
+  return (
+    <div
+      className="rounded-xl p-4"
+      style={{
+        background: "var(--card-bg)",
+        border: "1px solid var(--border)",
+      }}
+    >
+      <div className="flex items-baseline justify-between mb-3">
+        <h4 className="text-xs uppercase tracking-wider text-slate-400">
+          估值區間（{v?.method || "—"}）
+        </h4>
+        <span
+          className={`text-xs tabular-nums ${
+            (v?.implied_upside_mid_pct ?? 0) >= 0
+              ? "text-emerald-400"
+              : "text-red-400"
+          }`}
+        >
+          上行 {fmtSigned(v?.implied_upside_mid_pct)}
+        </span>
+      </div>
+
+      {/* 帶狀圖 */}
+      <div className="relative h-9 mb-2">
+        <div
+          className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-1.5 rounded-full"
+          style={{ background: "var(--overlay-bg)" }}
+        />
+        {/* fair value band low~high */}
+        <div
+          className="absolute top-1/2 -translate-y-1/2 h-1.5 rounded-full"
+          style={{
+            left: pos(low),
+            width: `calc(${pos(high)} - ${pos(low)})`,
+            background:
+              "linear-gradient(90deg, rgba(99,102,241,0.6), rgba(139,92,246,0.6))",
+          }}
+        />
+        {/* buy zone */}
+        {buy != null && (
+          <div
+            className="absolute top-1/2 -translate-y-1/2 h-1.5 rounded-full"
+            style={{
+              left: pos(low),
+              width: `calc(${pos(buy)} - ${pos(low)})`,
+              background: "rgba(16,185,129,0.45)",
+            }}
+            title="建議買進區"
+          />
+        )}
+        {/* mid marker */}
+        <div
+          className="absolute top-1/2 -translate-y-1/2 w-0.5 h-3 rounded"
+          style={{ left: pos(mid), background: "rgba(255,255,255,0.6)" }}
+        />
+        {/* current price marker */}
+        <div
+          className="absolute top-1/2 -translate-y-1/2 w-2 h-5 rounded-sm"
+          style={{
+            left: `calc(${pos(price)} - 4px)`,
+            background: "rgba(251,191,36,1)",
+            boxShadow: "0 0 8px rgba(251,191,36,0.5)",
+          }}
+          title={`現價 ${price.toFixed(2)}`}
+        />
+      </div>
+
+      <div className="grid grid-cols-4 gap-2 text-[11px] tabular-nums">
+        <div>
+          <p className="text-slate-500">低</p>
+          <p className="text-slate-300">${fmtNum(low)}</p>
+        </div>
+        <div>
+          <p className="text-slate-500">中</p>
+          <p className="text-slate-300">${fmtNum(mid)}</p>
+        </div>
+        <div>
+          <p className="text-slate-500">高</p>
+          <p className="text-slate-300">${fmtNum(high)}</p>
+        </div>
+        <div>
+          <p className="text-slate-500">買進區上緣</p>
+          <p className="text-emerald-400">${fmtNum(buy)}</p>
+        </div>
+      </div>
+
+      {v?.notes && <p className="text-[11px] text-slate-500 mt-2">{v.notes}</p>}
+    </div>
+  );
+}
+
+// ── PickDetailDrawer ──────────────────────────────────────────────────────
 
 function PickDetailDrawer({
   pick,
@@ -238,14 +501,22 @@ function PickDetailDrawer({
   const navigate = useNavigate();
   if (!pick) return null;
 
+  const t = pick.scoring_trace;
+  const interp = pick.interpretation;
+  const trapStyle = valueTrapStyle(interp?.value_trap_check);
+
   const sendToChat = () => {
     const code = pick.ticker.replace(".TW", "").replace(".TWO", "");
+    const upside = pick.valuation?.implied_upside_mid_pct;
     const prompt = `請深入分析 ${pick.name}（${code}）。
 我看到 Screener 給出以下評估：
-- 投資論點：${pick.thesis}
-- 信心：${pick.confidence}
-- 目標價：${pick.target_price?.mid}（上行 ${pick.upside_pct.toFixed(1)}%）
-- 主要風險：${(pick.risks || []).join("、")}
+- 等級：${pick.final_grade}
+- 投資觀點：${interp?.narrative || "（無）"}
+- 估值中值：${pick.valuation?.fair_value_mid ?? "—"}（上行 ${
+      upside != null ? upside.toFixed(1) + "%" : "—"
+    }）
+- 主要警示：${(interp?.warnings || []).join("、") || "無"}
+- 價值陷阱檢查：${trapStyle.label}
 請結合最新基本面、技術面、籌碼面，告訴我這個論點目前是否仍成立？`;
     navigate("/chat", { state: { initialMessage: prompt } });
   };
@@ -267,16 +538,18 @@ function PickDetailDrawer({
       >
         <div className="flex items-start justify-between mb-6">
           <div>
-            <div className="flex items-baseline gap-2">
+            <div className="flex items-baseline gap-2 flex-wrap">
               <h2 className="text-2xl font-semibold text-slate-100">
                 {pick.name}
               </h2>
               <span className="text-sm text-slate-500">
                 {pick.ticker.replace(".TW", "").replace(".TWO", "")}
               </span>
+              <GradeBadge grade={pick.final_grade} />
             </div>
             <p className="text-xs text-slate-500 mt-1">
-              {pick.industry} · 產業 #{pick.rank_in_industry}
+              {pick.industry} · 產業 #{pick.rank_in_industry}/
+              {pick.industry_size}
             </p>
           </div>
           <button
@@ -288,144 +561,172 @@ function PickDetailDrawer({
           </button>
         </div>
 
-        {/* Thesis */}
+        {/* Narrative */}
         <section className="mb-6">
-          <h3 className="text-xs uppercase tracking-wider text-slate-500 mb-2">
-            投資論點
+          <h3 className="text-xs uppercase tracking-wider text-slate-400 mb-2">
+            投資觀點（AI 解讀）
           </h3>
           <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap">
-            {pick.thesis}
+            {interp?.narrative || "—"}
           </p>
+          {interp?.key_context && interp.key_context.length > 0 && (
+            <ul className="mt-3 text-xs text-slate-400 list-disc list-inside space-y-0.5">
+              {interp.key_context.map((k, i) => (
+                <li key={i}>{k}</li>
+              ))}
+            </ul>
+          )}
         </section>
 
-        {/* Target / SL */}
-        <section className="grid grid-cols-3 gap-3 mb-6">
-          <div
-            className="rounded-xl p-3"
-            style={{
-              background: "var(--card-bg)",
-              border: "1px solid var(--border)",
-            }}
-          >
-            <p className="text-xs text-slate-500">目標價區間</p>
-            <p className="text-sm text-slate-200 tabular-nums mt-1">
-              ${fmtNum(pick.target_price?.low)} ~ $
-              {fmtNum(pick.target_price?.high)}
-            </p>
-          </div>
-          <div
-            className="rounded-xl p-3"
-            style={{
-              background: "var(--card-bg)",
-              border: "1px solid var(--border)",
-            }}
-          >
-            <p className="text-xs text-slate-500">停損</p>
-            <p className="text-sm text-red-400 tabular-nums mt-1">
-              ${fmtNum(pick.stop_loss)}
-            </p>
-          </div>
-          <div
-            className="rounded-xl p-3"
-            style={{
-              background: "var(--card-bg)",
-              border: "1px solid var(--border)",
-            }}
-          >
-            <p className="text-xs text-slate-500">風報比</p>
-            <p className="text-sm text-slate-200 tabular-nums mt-1">
-              {fmtNum(pick.risk_reward_ratio, 2)}
-            </p>
-          </div>
-        </section>
-
-        {/* Snapshot */}
-        <section className="mb-6">
-          <h3 className="text-xs uppercase tracking-wider text-slate-500 mb-2">
-            基本面 / 動能 Snapshot
-          </h3>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-xs">
-            <Row label="PE" value={fmtNum(pick.snapshot.pe)} />
-            <Row label="PB" value={fmtNum(pick.snapshot.pb)} />
-            <Row label="ROE" value={fmtPct(pick.snapshot.roe)} />
-            <Row label="殖利率" value={fmtPct(pick.snapshot.dividend_yield)} />
-            <Row label="毛利率" value={fmtPct(pick.snapshot.profit_margin)} />
-            <Row label="營收 YoY" value={fmtPct(pick.snapshot.revenue_growth)} />
-            <Row label="3M 漲幅" value={fmtPct(pick.snapshot.return_3m)} />
-            <Row label="6M 漲幅" value={fmtPct(pick.snapshot.return_6m)} />
-            <Row
-              label="相對大盤"
-              value={fmtPct(pick.snapshot.rel_strength_3m)}
-            />
-          </div>
-        </section>
-
-        {/* Factor scores */}
-        <section className="mb-6">
-          <h3 className="text-xs uppercase tracking-wider text-slate-500 mb-2">
-            因子分數
-          </h3>
-          <div className="space-y-2">
-            {Object.entries(pick.factor_scores).map(([k, v]) => (
-              <div key={k} className="flex items-center gap-3">
-                <span className="text-xs text-slate-500 w-20">{k}</span>
-                <div
-                  className="flex-1 h-2 rounded-full overflow-hidden"
-                  style={{ background: "var(--overlay-bg)" }}
-                >
-                  <div
-                    className="h-full rounded-full"
-                    style={{
-                      width: `${Math.max(0, Math.min(100, v))}%`,
-                      background:
-                        "linear-gradient(90deg, rgba(99,102,241,0.6), rgba(139,92,246,0.8))",
-                    }}
-                  />
-                </div>
-                <span className="text-xs tabular-nums text-slate-300 w-10 text-right">
-                  {v.toFixed(0)}
-                </span>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        {/* Risks */}
-        {pick.risks?.length > 0 && (
+        {/* Warnings */}
+        {interp?.warnings && interp.warnings.length > 0 && (
           <section className="mb-6">
-            <h3 className="text-xs uppercase tracking-wider text-slate-500 mb-2">
-              主要風險
+            <h3 className="text-xs uppercase tracking-wider text-amber-400/90 mb-2">
+              ⚠ 警示
             </h3>
-            <ul className="text-sm text-slate-300 list-disc list-inside space-y-1">
-              {pick.risks.map((r, i) => (
-                <li key={i}>{r}</li>
+            <ul className="text-sm text-amber-200/90 list-disc list-inside space-y-1">
+              {interp.warnings.map((w, i) => (
+                <li key={i}>{w}</li>
               ))}
             </ul>
           </section>
         )}
 
-        {/* KB citations */}
-        {pick.kb_citations?.length > 0 && (
-          <section className="mb-6">
-            <h3 className="text-xs uppercase tracking-wider text-slate-500 mb-2">
-              知識庫引用
-            </h3>
-            <div className="flex flex-wrap gap-1.5">
-              {pick.kb_citations.map((c, i) => (
-                <span
-                  key={i}
-                  className="text-xs px-2 py-0.5 rounded-full text-slate-400"
-                  style={{
-                    background: "var(--overlay-bg)",
-                    border: "1px solid var(--border)",
-                  }}
-                >
-                  {c}
-                </span>
-              ))}
-            </div>
-          </section>
-        )}
+        {/* Value trap check */}
+        <section
+          className="mb-6 rounded-xl p-3 text-xs"
+          style={{
+            background: "var(--card-bg)",
+            border: "1px solid var(--border)",
+          }}
+        >
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-slate-400">價值陷阱檢查</span>
+            <span className={`font-semibold ${trapStyle.text}`}>
+              {trapStyle.label}
+            </span>
+          </div>
+          {interp?.value_trap_reason && (
+            <p className="text-slate-500 mt-1">{interp.value_trap_reason}</p>
+          )}
+        </section>
+
+        {/* Valuation */}
+        <section className="mb-6">
+          <ValuationBand pick={pick} />
+        </section>
+
+        {/* Snapshot */}
+        <section className="mb-6">
+          <h3 className="text-xs uppercase tracking-wider text-slate-400 mb-2">
+            數據快照
+          </h3>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-xs">
+            <SnapshotRow label="PE" value={fmtNum(pick.snapshot.pe)} />
+            <SnapshotRow label="PB" value={fmtNum(pick.snapshot.pb)} />
+            <SnapshotRow
+              label="EPS TTM"
+              value={fmtNum(pick.snapshot.eps_ttm)}
+            />
+            <SnapshotRow
+              label="ROE 3Y"
+              value={fmtPct(pick.snapshot.roe_3y_avg)}
+            />
+            <SnapshotRow
+              label="營收 3Y CAGR"
+              value={fmtPct(pick.snapshot.revenue_cagr_3y)}
+            />
+            <SnapshotRow
+              label="營收 YoY"
+              value={fmtPct(pick.snapshot.revenue_yoy_latest)}
+            />
+            <SnapshotRow
+              label="負債比"
+              value={fmtPct(pick.snapshot.debt_ratio)}
+            />
+            <SnapshotRow
+              label="流動比"
+              value={fmtNum(pick.snapshot.current_ratio)}
+            />
+            <SnapshotRow
+              label="殖利率"
+              value={fmtPct(pick.snapshot.dividend_yield)}
+            />
+            <SnapshotRow
+              label="6M 漲幅"
+              value={fmtPct(pick.snapshot.return_6m)}
+            />
+            <SnapshotRow
+              label="相對大盤 6M"
+              value={fmtPct(pick.snapshot.rel_strength_6m)}
+            />
+            <SnapshotRow
+              label="量比 5/20"
+              value={fmtNum(pick.snapshot.volume_ratio_5_20)}
+            />
+            <SnapshotRow label="RSI 14" value={fmtNum(pick.snapshot.rsi_14)} />
+            <SnapshotRow
+              label="產業 PE 中位"
+              value={fmtNum(pick.snapshot.industry_pe_median)}
+            />
+            <SnapshotRow
+              label="產業 PB 中位"
+              value={fmtNum(pick.snapshot.industry_pb_median)}
+            />
+          </div>
+        </section>
+
+        {/* Scoring trace */}
+        <section className="mb-6">
+          <h3 className="text-xs uppercase tracking-wider text-slate-400 mb-3">
+            評分軌跡（規則引擎，零 LLM）
+          </h3>
+
+          {t?.rejection_reason && (
+            <p className="text-xs text-amber-300/90 mb-3">
+              拒絕原因：{t.rejection_reason}
+            </p>
+          )}
+          {(t?.missing_data_count ?? 0) > 0 && (
+            <p className="text-[11px] text-slate-500 mb-3">
+              資料缺失規則 {t!.missing_data_count} 條（
+              {(t!.missing_data_rule_ids || []).join(", ")}）
+            </p>
+          )}
+
+          <CheckSection
+            title="Stage 1 — Universe 過濾"
+            checks={t?.stage1_checks ?? []}
+            emptyHint="無 Stage 1 紀錄"
+          />
+          <CheckSection
+            title="必要規則 (Must Pass)"
+            summary={
+              t?.must_pass
+                ? `${t.must_pass.passed}/${t.must_pass.total} 通過`
+                : undefined
+            }
+            checks={t?.must_pass?.checks ?? []}
+          />
+          <CheckSection
+            title="加分規則 (Bonus)"
+            summary={
+              t?.bonus
+                ? `${t.bonus.passed}/${t.bonus.required} 達門檻`
+                : undefined
+            }
+            checks={t?.bonus?.checks ?? []}
+          />
+          <CheckSection
+            title="剔除條件 (Disqualifier)"
+            summary={
+              t?.disqualifier?.triggered.length
+                ? `已觸發：${t.disqualifier.triggered.join(", ")}`
+                : "未觸發"
+            }
+            checks={t?.disqualifier?.checks ?? []}
+          />
+        </section>
 
         {/* CTA */}
         <button
@@ -444,7 +745,7 @@ function PickDetailDrawer({
   );
 }
 
-function Row({ label, value }: { label: string; value: string }) {
+function SnapshotRow({ label, value }: { label: string; value: string }) {
   return (
     <div
       className="flex items-center justify-between rounded-lg px-2.5 py-1.5"
@@ -459,7 +760,7 @@ function Row({ label, value }: { label: string; value: string }) {
   );
 }
 
-// ── EmailSubscribeToggle ─────────────────────────────────────────────────
+// ── EmailSubscribeToggle ──────────────────────────────────────────────────
 
 function EmailSubscribeToggle() {
   const [enabled, setEnabled] = useState(false);
@@ -492,7 +793,7 @@ function EmailSubscribeToggle() {
       const next = !enabled;
       await updateSubscription({ enabled: next });
       setEnabled(next);
-      setMsg(next ? "✓ 已開啟訂閱，週日晚上會收到報告" : "已停止訂閱");
+      setMsg(next ? "✓ 已開啟訂閱" : "已停止訂閱");
     } catch (e) {
       setMsg(e instanceof Error ? e.message : "更新失敗");
     } finally {
@@ -510,9 +811,7 @@ function EmailSubscribeToggle() {
         onClick={handleToggle}
         disabled={saving}
         className={`px-4 py-2 text-xs rounded-xl transition-all ${
-          enabled
-            ? "text-white"
-            : "text-slate-300 hover:text-white"
+          enabled ? "text-white" : "text-slate-300 hover:text-white"
         }`}
         style={{
           background: enabled
@@ -521,7 +820,11 @@ function EmailSubscribeToggle() {
           border: "1px solid var(--border)",
         }}
       >
-        {saving ? "更新中…" : enabled ? "✓ 已訂閱 Email 週報" : "📧 訂閱 Email 週報"}
+        {saving
+          ? "更新中…"
+          : enabled
+            ? "✓ 已訂閱 Email 報告"
+            : "📧 訂閱 Email 報告"}
       </button>
       {email && <span className="text-xs text-slate-500">{email}</span>}
       {msg && <span className="text-xs text-slate-400">{msg}</span>}
@@ -587,7 +890,7 @@ export default function Screener() {
           🔍 智能選股
         </h1>
         <p className="text-sm text-slate-500 mt-2">
-          每週自動跑三階段漏斗 — 量化粗篩 → 多因子打分 → AI 深度評估
+          四階段漏斗 — Universe 篩選 → 規則引擎 → 估值定錨 → AI 解讀
         </p>
       </div>
 
@@ -622,9 +925,9 @@ export default function Screener() {
           }}
         >
           {error.includes("404") || error.includes("No report")
-            ? `目前還沒有 ${profile === "momentum" ? "Momentum" : "Value"} ${
-                frequency === "weekly" ? "週報" : "日報"
-              }。週報於每週日 20:00 (Asia/Taipei) 自動產出。`
+            ? `目前還沒有 ${
+                profile === "momentum" ? "Momentum" : "Value"
+              } ${frequency === "weekly" ? "週報" : "日報"}。`
             : error}
         </div>
       )}
@@ -689,10 +992,7 @@ export default function Screener() {
         </>
       )}
 
-      <PickDetailDrawer
-        pick={activePick}
-        onClose={() => setActivePick(null)}
-      />
+      <PickDetailDrawer pick={activePick} onClose={() => setActivePick(null)} />
     </div>
   );
 }

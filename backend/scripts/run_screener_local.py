@@ -32,7 +32,6 @@ def main() -> None:
     parser.add_argument("--profile", choices=["value", "momentum"], default="momentum")
     parser.add_argument("--frequency", choices=["daily", "weekly"], default="daily")
     parser.add_argument("--top", type=int, default=3, help="每產業前 N 檔送 Stage 3")
-    parser.add_argument("--threshold", type=int, default=70, help="Stage 3 信心過濾門檻")
     parser.add_argument("--model", default=None, help="覆寫 LLM model 名稱（如 gemini-2.5-flash）")
     parser.add_argument("--skip-stage3", action="store_true", help="只跑 Stage 1+2 (零 LLM 成本)")
     parser.add_argument("--no-chips", action="store_true", help="關閉 Stage 2 chips 因子（TWSE bulk fetch）")
@@ -61,7 +60,6 @@ def main() -> None:
         frequency=args.frequency,
         tickers=tickers,
         top_per_industry=args.top,
-        confidence_threshold=args.threshold,
         model_name=args.model,
         persist=not args.no_persist,
         skip_stage3=args.skip_stage3,
@@ -75,41 +73,67 @@ def main() -> None:
     print(f"Report: {result['report_id']}")
     print(
         f"Profile={result['profile']} | Stage1={result['stage1_passed']} "
-        f"→ Stage2={result['stage2_passed']} → Picks={result['final_count']}"
+        f"→ Qualified={result['stage2_qualified']} → Picks={result['final_count']}"
     )
     print(f"Duration: {result['duration_seconds']}s | Industries: {result['industries_covered']}")
     print("=" * 70)
 
-    # 印 Stage 2 排名（每產業 top）
+    # Stage 2 候選 (每產業 top)
     print("\n📊 Stage 2 candidates (每產業 top):")
     by_industry: dict[str, list] = {}
-    for sc in result["candidates"]:
-        by_industry.setdefault(sc.factors.industry, []).append(sc)
+    for es in result["candidates"]:
+        by_industry.setdefault(es.data.industry, []).append(es)
     for industry, group in by_industry.items():
         print(f"\n  [{industry}]")
-        for sc in group:
-            f = sc.factors
+        for es in group:
+            d = es.data
+            t = es.trace
             print(
-                f"    #{sc.rank_in_industry} {f.ticker} {f.name:<8} "
-                f"final={sc.final_score:>5.1f} | "
-                f"value={sc.factor_scores.get('value', '-')} "
-                f"momentum={sc.factor_scores.get('momentum', '-')} "
-                f"quality={sc.factor_scores.get('quality', '-')}"
+                f"    #{es.industry_rank} {d.ticker} {d.name:<8} "
+                f"grade={t.final_grade:<12} "
+                f"must={t.must_pass_count}/{t.must_pass_total} "
+                f"bonus={t.bonus_passed}/{len(t.bonus)} "
+                f"DQ={'Y' if t.disqualifier_triggered else 'N'}"
             )
 
-    # 印 Stage 3 picks
-    if result["picks"]:
-        print("\n💎 Stage 3 picks:")
-        for p in result["picks"]:
-            sc = p.scored
-            e = p.evaluation
-            print(f"\n  {sc.factors.ticker} {sc.factors.name} ({sc.factors.industry})")
-            print(f"    Confidence: {e.confidence}/100  Upside: {e.upside_pct:.1f}%")
-            print(f"    Target: {e.target_price.low}/{e.target_price.mid}/{e.target_price.high}")
-            print(f"    Stop: {e.stop_loss}  R/R: {e.risk_reward_ratio}")
-            print(f"    Risks: {', '.join(e.risks[:3])}")
-            print(f"    Citations: {e.kb_citations}")
-            print(f"    Thesis: {e.thesis[:200]}…")
+    # 全量診斷（含被剔除的）—— 用 --verbose 看
+    if args.verbose:
+        print("\n🔬 全量診斷（含 rejected）:")
+        for es in result["evaluated"]:
+            d = es.data
+            t = es.trace
+            failed_must = [c.rule_id for c in t.must_pass if not c.passed]
+            dq = t.disqualifier_triggered
+            print(
+                f"  {d.ticker} {d.name:<8} {d.industry:<10} "
+                f"grade={t.final_grade:<12} "
+                f"must={t.must_pass_count}/{t.must_pass_total} "
+                f"bonus={t.bonus_passed}/{len(t.bonus)} "
+                f"failed_must={failed_must} dq={dq}"
+            )
+            for c in t.must_pass:
+                if not c.passed:
+                    print(f"    ✗ {c.rule_id} {c.name}: {c.actual} | {c.reference}")
+            if args.verbose:
+                bonus_pass = [c.rule_id for c in t.bonus if c.passed]
+                bonus_fail = [c.rule_id for c in t.bonus if not c.passed]
+                print(f"    bonus pass={bonus_pass} fail={bonus_fail}")
+
+    # Stage 3 解讀
+    if not args.skip_stage3 and result["pick_docs"]:
+        print("\n💎 Stage 3 interpretations:")
+        for d in result["pick_docs"]:
+            interp = d.get("interpretation") or {}
+            val = d.get("valuation") or {}
+            print(f"\n  {d['ticker']} {d['name']} ({d['industry']}) — {d['final_grade']}")
+            if val.get("fair_value_mid"):
+                print(
+                    f"    Fair value: {val.get('fair_value_low')}/{val.get('fair_value_mid')}"
+                    f"/{val.get('fair_value_high')}  buy_zone≤{val.get('buy_zone_upper')}  "
+                    f"upside={val.get('implied_upside_mid_pct'):.1f}%"
+                )
+            print(f"    Value-trap: {interp.get('value_trap_check', '-')}")
+            print(f"    Narrative: {(interp.get('narrative') or '')[:200]}…")
 
 
 if __name__ == "__main__":

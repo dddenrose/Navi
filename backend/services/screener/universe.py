@@ -7,9 +7,12 @@
 from __future__ import annotations
 
 import logging
+import random
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 
+import requests
 import yfinance as yf
 
 from services.screener.industry_mapper import all_tickers, get_industry, get_name
@@ -19,7 +22,11 @@ logger = logging.getLogger(__name__)
 # 預設門檻
 MIN_AVG_TURNOVER_TWD = 50_000_000  # 20 日均成交額 > 5,000 萬
 MIN_MARKET_CAP_TWD = 5_000_000_000  # 市值 > 50 億
-HISTORY_PERIOD = "3mo"  # Stage 2 也需用到，這裡一次抓
+HISTORY_PERIOD = "8mo"  # 需 ≥ 6 個月以算 sma_120 / return_6m / rel_strength_6m
+
+# yfinance 限流防護
+_MAX_RETRIES = 3
+_BASE_BACKOFF_SEC = 1.5
 
 
 @dataclass
@@ -35,9 +42,34 @@ class UniverseRecord:
 
 
 def _fetch_one(ticker: str) -> UniverseRecord | None:
+    last_err: Exception | None = None
+    df = None
+    info: dict = {}
+    for attempt in range(_MAX_RETRIES):
+        try:
+            t = yf.Ticker(ticker)
+            df = t.history(period=HISTORY_PERIOD)
+            try:
+                info = t.info or {}
+            except Exception as e:
+                logger.debug("info() failed for %s: %s", ticker, e)
+                info = {}
+            break
+        except Exception as e:
+            last_err = e
+            msg = str(e).lower()
+            if "rate" in msg or "429" in msg or "too many" in msg:
+                # 指數退避 + 抖動
+                delay = _BASE_BACKOFF_SEC * (2**attempt) + random.uniform(0, 0.5)
+                time.sleep(delay)
+                continue
+            break
+
+    if df is None:
+        logger.warning("fetch_one failed for %s: %s", ticker, last_err)
+        return None
+
     try:
-        t = yf.Ticker(ticker)
-        df = t.history(period=HISTORY_PERIOD)
         if df.empty or len(df) < 20:
             logger.debug("Skip %s: insufficient history (%d rows)", ticker, len(df))
             return None
@@ -45,12 +77,6 @@ def _fetch_one(ticker: str) -> UniverseRecord | None:
         # 成交額 = Close * Volume
         turnover = (df["Close"] * df["Volume"]).tail(20).mean()
         avg_turnover = float(turnover) if turnover else 0.0
-
-        info = {}
-        try:
-            info = t.info or {}
-        except Exception as e:
-            logger.debug("info() failed for %s: %s", ticker, e)
 
         market_cap = info.get("marketCap")
         price = float(df["Close"].iloc[-1])
@@ -70,12 +96,44 @@ def _fetch_one(ticker: str) -> UniverseRecord | None:
         return None
 
 
+def _fetch_excluded_tickers() -> set[str]:
+    """擷取 TWSE 注意/處置/全額交割股代號（best-effort，失敗回空集合）。
+
+    端點若改版可能失效；不阻塞主流程。
+    """
+    excluded: set[str] = set()
+    endpoints = [
+        # 處置股
+        "https://www.twse.com.tw/announcement/punish?response=json",
+        # 注意股
+        "https://www.twse.com.tw/announcement/notice?response=json",
+    ]
+    for url in endpoints:
+        try:
+            r = requests.get(url, timeout=8)
+            if r.status_code != 200:
+                continue
+            data = r.json()
+            rows = data.get("data") or data.get("aaData") or []
+            for row in rows:
+                if not row:
+                    continue
+                # row 各欄位順序視 endpoint 而異，掃 0~3 欄找像股號者
+                for cell in row[:4]:
+                    if isinstance(cell, str) and cell.isdigit() and 4 <= len(cell) <= 6:
+                        excluded.add(cell)
+                        break
+        except Exception as e:
+            logger.debug("Fetch excluded list from %s failed: %s", url, e)
+    return excluded
+
+
 def load_universe(
     tickers: list[str] | None = None,
     *,
     min_turnover: float = MIN_AVG_TURNOVER_TWD,
     min_market_cap: float = MIN_MARKET_CAP_TWD,
-    max_workers: int = 8,
+    max_workers: int = 4,
 ) -> list[UniverseRecord]:
     """並行載入 universe 並做 Stage 1 過濾.
 
@@ -89,6 +147,11 @@ def load_universe(
     logger.info("Stage 1: loading %d candidates", len(candidates))
 
     records: list[UniverseRecord] = []
+    excluded = _fetch_excluded_tickers()
+    if excluded:
+        candidates = [t for t in candidates if t.split(".")[0] not in excluded]
+        logger.info("Excluded %d disposed/full-delivery tickers", len(excluded))
+
     with ThreadPoolExecutor(max_workers=max_workers) as ex:
         futures = {ex.submit(_fetch_one, t): t for t in candidates}
         for fut in as_completed(futures):

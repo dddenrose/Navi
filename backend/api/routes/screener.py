@@ -63,7 +63,6 @@ class RunRequest(BaseModel):
     profile: str = Field("momentum", pattern="^(value|momentum)$")
     frequency: str = Field("daily", pattern="^(daily|weekly)$")
     top_per_industry: int = Field(3, ge=1, le=10)
-    confidence_threshold: int = Field(70, ge=0, le=100)
     model_name: str | None = None
     skip_stage3: bool = False
     enable_chips: bool = True
@@ -76,7 +75,7 @@ class RunResponse(BaseModel):
     frequency: str
     duration_seconds: float
     stage1_passed: int
-    stage2_passed: int
+    stage2_qualified: int
     final_count: int
     industries_covered: list[str]
     status: str = "completed"
@@ -98,16 +97,13 @@ class PickDoc(BaseModel):
     name: str = ""
     industry: str = ""
     rank_in_industry: int = 0
-    factor_scores: dict[str, float] = {}
+    industry_size: int = 0
+    final_grade: str = ""
+    verdict: str = ""
     snapshot: dict[str, Any] = {}
-    thesis: str = ""
-    kb_citations: list[str] = []
-    target_price: dict[str, float] = {}
-    upside_pct: float = 0
-    stop_loss: float = 0
-    risk_reward_ratio: float = 0
-    risks: list[str] = []
-    confidence: int = 0
+    scoring_trace: dict[str, Any] = {}
+    valuation: dict[str, Any] = {}
+    interpretation: dict[str, Any] = {}
 
 
 class ReportDetail(BaseModel):
@@ -160,7 +156,6 @@ async def run_screener_endpoint(payload: RunRequest) -> RunResponse:
         profile=payload.profile,  # type: ignore[arg-type]
         frequency=payload.frequency,
         top_per_industry=payload.top_per_industry,
-        confidence_threshold=payload.confidence_threshold,
         model_name=payload.model_name,
         skip_stage3=payload.skip_stage3,
         enable_chips=payload.enable_chips,
@@ -173,7 +168,7 @@ async def run_screener_endpoint(payload: RunRequest) -> RunResponse:
         frequency=result["frequency"],
         duration_seconds=result["duration_seconds"],
         stage1_passed=result["stage1_passed"],
-        stage2_passed=result["stage2_passed"],
+        stage2_qualified=result["stage2_qualified"],
         final_count=result["final_count"],
         industries_covered=result["industries_covered"],
     )

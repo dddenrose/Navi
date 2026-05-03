@@ -23,4 +23,8 @@ dist-ssr
 *.sln
 *.sw?
 .firebase/
-.env.production
+
+# Env files — only .env.example should be committed
+.env
+.env.*
+!.env.example

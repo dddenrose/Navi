@@ -135,29 +135,44 @@ def _load_report(report_id: str) -> tuple[dict | None, dict[str, list[dict]]]:
 def _render_pick_row(pick: dict) -> str:
     name = escape(str(pick.get("name", pick.get("ticker", ""))))
     code = escape(str(pick.get("ticker", "")).replace(".TW", "").replace(".TWO", ""))
-    confidence = int(pick.get("confidence", 0))
-    upside = float(pick.get("upside_pct", 0) or 0)
-    target = pick.get("target_price") or {}
-    target_mid = target.get("mid", 0)
+    grade = str(pick.get("final_grade", ""))
+    interp = pick.get("interpretation") or {}
+    narrative = escape(str(interp.get("narrative", "")))[:280]
+    warnings = interp.get("warnings") or []
+    warnings_text = escape("；".join(warnings[:2])) if warnings else "—"
+
+    valuation = pick.get("valuation") or {}
+    upside = float(valuation.get("implied_upside_mid_pct") or 0)
+    fv_mid = valuation.get("fair_value_mid")
     price = (pick.get("snapshot") or {}).get("price")
-    thesis = escape(str(pick.get("thesis", "")))[:280]
-    risks = pick.get("risks") or []
-    risks_text = escape("；".join(risks[:2])) if risks else "—"
 
     upside_color = "#10b981" if upside >= 0 else "#ef4444"
-    conf_bg = "#10b981" if confidence >= 85 else "#0ea5e9" if confidence >= 75 else "#f59e0b"
+    grade_bg = (
+        "#10b981" if grade == "Strong Pick"
+        else "#0ea5e9" if grade == "Pick"
+        else "#f59e0b"
+    )
+
+    fv_text = f"${price if price is not None else '—'}"
+    if fv_mid:
+        fv_text += f" → ${fv_mid}"
+    upside_html = (
+        f'<div style="color:{upside_color};font-size:12px;font-weight:600;">'
+        f'{"+" if upside >= 0 else ""}{upside:.1f}%</div>'
+        if fv_mid else ""
+    )
 
     return f"""
     <tr>
       <td style="padding:14px 12px;border-bottom:1px solid #e5e7eb;vertical-align:top;">
         <div style="font-weight:600;color:#111827;font-size:15px;">{name} <span style="color:#6b7280;font-weight:400;font-size:12px;">{code}</span></div>
-        <div style="margin-top:6px;color:#374151;font-size:13px;line-height:1.5;">{thesis}…</div>
-        <div style="margin-top:6px;color:#9ca3af;font-size:11px;">主要風險：{risks_text}</div>
+        <div style="margin-top:6px;color:#374151;font-size:13px;line-height:1.5;">{narrative}…</div>
+        <div style="margin-top:6px;color:#9ca3af;font-size:11px;">注意：{warnings_text}</div>
       </td>
       <td style="padding:14px 12px;border-bottom:1px solid #e5e7eb;text-align:right;vertical-align:top;white-space:nowrap;">
-        <span style="display:inline-block;padding:2px 8px;border-radius:999px;background:{conf_bg};color:#fff;font-size:11px;font-weight:600;">信心 {confidence}</span>
-        <div style="margin-top:8px;color:#111827;font-size:13px;">${price if price is not None else "—"} → ${target_mid}</div>
-        <div style="color:{upside_color};font-size:12px;font-weight:600;">{"+" if upside >= 0 else ""}{upside:.1f}%</div>
+        <span style="display:inline-block;padding:2px 8px;border-radius:999px;background:{grade_bg};color:#fff;font-size:11px;font-weight:600;">{escape(grade)}</span>
+        <div style="margin-top:8px;color:#111827;font-size:13px;">{fv_text}</div>
+        {upside_html}
       </td>
     </tr>
     """
