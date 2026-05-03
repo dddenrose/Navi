@@ -138,7 +138,7 @@ for entry in "${JOBS[@]}"; do
       --http-method=POST \
       --update-headers="Content-Type=application/json,X-Scheduler-Token=${TOKEN}" \
       --message-body="${body}" \
-      --attempt-deadline=900s \
+      --attempt-deadline=1800s \
       --quiet >/dev/null
     echo "   ↻ updated"
   else
@@ -151,7 +151,7 @@ for entry in "${JOBS[@]}"; do
       --http-method=POST \
       --headers="Content-Type=application/json,X-Scheduler-Token=${TOKEN}" \
       --message-body="${body}" \
-      --attempt-deadline=900s \
+      --attempt-deadline=1800s \
       --description="Navi Screener: ${profile} / ${frequency} / ${path}" \
       --quiet >/dev/null
     echo "   ✚ created"
