@@ -1,14 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  getLatestReport,
+  getReport,
   getSubscription,
+  listReports,
   updateSubscription,
 } from "@/lib/api/screener";
 import type {
   FinalGrade,
   PickDoc,
   ReportDetail,
+  ReportSummary,
   RuleCheck,
   ScreenerFrequency,
   ScreenerProfile,
@@ -33,6 +35,41 @@ function fmtSigned(v: number | null | undefined, digits = 1): string {
 function fmtRule(v: string | number | null): string {
   if (v == null) return "—";
   return String(v);
+}
+
+function reportTimestamp(value: ReportSummary["generated_at"]): Date | null {
+  if (!value) return null;
+  if (typeof value === "string") {
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+  const seconds = value.seconds ?? value._seconds;
+  if (typeof seconds !== "number") return null;
+  return new Date(seconds * 1000);
+}
+
+function reportDateFromId(reportId: string): Date | null {
+  const match = reportId.match(/^(\d{4})(\d{2})(\d{2})/);
+  if (!match) return null;
+  const [, year, month, day] = match;
+  const parsed = new Date(Number(year), Number(month) - 1, Number(day));
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function reportDate(summary: ReportSummary): Date | null {
+  return (
+    reportTimestamp(summary.generated_at) ?? reportDateFromId(summary.report_id)
+  );
+}
+
+function fmtReportDate(summary: ReportSummary, compact = false): string {
+  const date = reportDate(summary);
+  if (!date) return summary.report_id;
+  return date.toLocaleDateString("zh-TW", {
+    year: compact ? undefined : "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
 }
 
 // ── Visual tokens ──────────────────────────────────────────────────────────
@@ -760,6 +797,92 @@ function SnapshotRow({ label, value }: { label: string; value: string }) {
   );
 }
 
+// ── ReportHistory ────────────────────────────────────────────────────────
+
+function ReportHistory({
+  reports,
+  selectedReportId,
+  loading,
+  onSelect,
+}: {
+  reports: ReportSummary[];
+  selectedReportId: string | null;
+  loading: boolean;
+  onSelect: (reportId: string) => void;
+}) {
+  if (loading) {
+    return <p className="text-xs text-slate-500">載入歷史報告…</p>;
+  }
+
+  if (reports.length === 0) {
+    return null;
+  }
+
+  return (
+    <section className="mb-6">
+      <div className="flex items-center justify-between gap-3 mb-3">
+        <div>
+          <h2 className="text-sm font-semibold text-slate-200">歷史分析</h2>
+          <p className="text-xs text-slate-500 mt-1">
+            共 {reports.length} 份{" "}
+            {reports[0]?.frequency === "weekly" ? "週報" : "日報"}
+          </p>
+        </div>
+      </div>
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+        {reports.map((item, index) => {
+          const selected = item.report_id === selectedReportId;
+          return (
+            <button
+              key={item.report_id}
+              onClick={() => onSelect(item.report_id)}
+              className={`text-left rounded-xl p-3 transition-all hover:border-indigo-500/40 ${
+                selected ? "text-white" : "text-slate-400"
+              }`}
+              style={{
+                background: selected
+                  ? "linear-gradient(135deg, rgba(99,102,241,0.22), rgba(14,165,233,0.12))"
+                  : "var(--card-bg)",
+                border: selected
+                  ? "1px solid rgba(99,102,241,0.45)"
+                  : "1px solid var(--border)",
+              }}
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <p className="text-sm font-semibold text-slate-100">
+                    {fmtReportDate(item)}
+                  </p>
+                  <p className="text-[11px] text-slate-500 mt-0.5 font-mono truncate max-w-[11rem]">
+                    {item.report_id}
+                  </p>
+                </div>
+                {index === 0 && (
+                  <span className="rounded-full border border-emerald-500/30 bg-emerald-400/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-300">
+                    最新
+                  </span>
+                )}
+              </div>
+              <div className="mt-3 grid grid-cols-2 gap-2 text-[11px] tabular-nums">
+                <div>
+                  <p className="text-slate-600">入選</p>
+                  <p className="text-slate-300">{item.final_count} 檔</p>
+                </div>
+                <div>
+                  <p className="text-slate-600">產業</p>
+                  <p className="text-slate-300">
+                    {item.industries_covered.length} 類
+                  </p>
+                </div>
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 // ── EmailSubscribeToggle ──────────────────────────────────────────────────
 
 function EmailSubscribeToggle() {
@@ -837,20 +960,81 @@ function EmailSubscribeToggle() {
 export default function Screener() {
   const [profile, setProfile] = useState<ScreenerProfile>("momentum");
   const [frequency, setFrequency] = useState<ScreenerFrequency>("weekly");
+  const [reports, setReports] = useState<ReportSummary[]>([]);
+  const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
   const [report, setReport] = useState<ReportDetail | null>(null);
+  const [historyLoading, setHistoryLoading] = useState(true);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [selectedIndustry, setSelectedIndustry] = useState<string | null>(null);
   const [activePick, setActivePick] = useState<PickDoc | null>(null);
 
-  useEffect(() => {
-    let active = true;
+  const resetForReportList = () => {
+    setHistoryLoading(true);
+    setLoading(true);
+    setError("");
+    setReport(null);
+    setReports([]);
+    setSelectedReportId(null);
+    setSelectedIndustry(null);
+    setActivePick(null);
+  };
+
+  const resetForReportDetail = () => {
     setLoading(true);
     setError("");
     setReport(null);
     setSelectedIndustry(null);
-    getLatestReport(profile, frequency)
-      .then((r) => active && setReport(r))
+    setActivePick(null);
+  };
+
+  const handleProfile = (nextProfile: ScreenerProfile) => {
+    if (nextProfile === profile) return;
+    resetForReportList();
+    setProfile(nextProfile);
+  };
+
+  const handleFrequency = (nextFrequency: ScreenerFrequency) => {
+    if (nextFrequency === frequency) return;
+    resetForReportList();
+    setFrequency(nextFrequency);
+  };
+
+  const handleReportSelect = (reportId: string) => {
+    if (reportId === selectedReportId) return;
+    resetForReportDetail();
+    setSelectedReportId(reportId);
+  };
+
+  useEffect(() => {
+    let active = true;
+    listReports({ profile, frequency, limit: 24 })
+      .then((items) => {
+        if (!active) return;
+        setReports(items);
+        if (items.length === 0) {
+          setError("No report found");
+          setLoading(false);
+          return;
+        }
+        setSelectedReportId(items[0].report_id);
+      })
+      .catch((e) => {
+        if (!active) return;
+        setError(e instanceof Error ? e.message : "載入失敗");
+        setLoading(false);
+      })
+      .finally(() => active && setHistoryLoading(false));
+    return () => {
+      active = false;
+    };
+  }, [profile, frequency]);
+
+  useEffect(() => {
+    if (!selectedReportId) return;
+    let active = true;
+    getReport(selectedReportId)
+      .then((detail) => active && setReport(detail))
       .catch((e) => {
         if (!active) return;
         setError(e instanceof Error ? e.message : "載入失敗");
@@ -859,7 +1043,7 @@ export default function Screener() {
     return () => {
       active = false;
     };
-  }, [profile, frequency]);
+  }, [selectedReportId]);
 
   const industries = useMemo(
     () => (report ? Object.keys(report.picks_by_industry).sort() : []),
@@ -898,11 +1082,18 @@ export default function Screener() {
         <ProfileTabs
           profile={profile}
           frequency={frequency}
-          onProfile={setProfile}
-          onFrequency={setFrequency}
+          onProfile={handleProfile}
+          onFrequency={handleFrequency}
         />
         <EmailSubscribeToggle />
       </div>
+
+      <ReportHistory
+        reports={reports}
+        selectedReportId={selectedReportId}
+        loading={historyLoading}
+        onSelect={handleReportSelect}
+      />
 
       {loading && (
         <div
@@ -942,6 +1133,12 @@ export default function Screener() {
               border: "1px solid var(--border)",
             }}
           >
+            <div>
+              <p className="text-xs text-slate-500">報告日期</p>
+              <p className="text-sm text-slate-200">
+                {fmtReportDate(report.report)}
+              </p>
+            </div>
             <div>
               <p className="text-xs text-slate-500">報告編號</p>
               <p className="text-sm text-slate-200 font-mono">
