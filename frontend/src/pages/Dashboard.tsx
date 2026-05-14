@@ -1,7 +1,8 @@
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { getFeatureAccess } from "@/lib/api";
 import { useAuthStore } from "@/store/authStore";
-
-const quickStocks = ["AAPL", "TSLA", "NVDA", "MSFT", "AMZN", "GOOGL"];
+import { useTokenClaims } from "@/lib/useTokenClaims";
 
 const quickQuestions = [
   "什麼是 RSI 指標？",
@@ -10,15 +11,131 @@ const quickQuestions = [
   "如何計算本益比？",
 ];
 
+type FeatureCard = {
+  featureKey: string;
+  to: string;
+  emoji: string;
+  title: string;
+  description: string;
+  iconBg: string;
+  cardBg: string;
+  cardBorder: string;
+  glow: string;
+  arrowClass: string;
+};
+
+const featureCards: FeatureCard[] = [
+  {
+    featureKey: "chat",
+    to: "/chat",
+    emoji: "💬",
+    title: "開始 AI 對話",
+    description: "向 AI 提問投資策略、技術指標、個股分析",
+    iconBg: "rgba(99,102,241,0.25)",
+    cardBg:
+      "linear-gradient(135deg, rgba(99,102,241,0.2), rgba(139,92,246,0.12))",
+    cardBorder: "1px solid rgba(99,102,241,0.25)",
+    glow: "radial-gradient(circle at 50% 50%, rgba(99,102,241,0.12), transparent 70%)",
+    arrowClass:
+      "text-indigo-400/50 group-hover:text-indigo-400 transition-colors",
+  },
+  {
+    featureKey: "stock",
+    to: "/stock",
+    emoji: "📈",
+    title: "股票行情分析",
+    description: "即時股價、技術指標及基本面財務數據",
+    iconBg: "var(--overlay-subtle)",
+    cardBg: "var(--card-bg)",
+    cardBorder: "1px solid var(--border)",
+    glow: "radial-gradient(circle at 50% 50%, var(--card-bg-hover), transparent 70%)",
+    arrowClass: "text-slate-700 group-hover:text-slate-500 transition-colors",
+  },
+  {
+    featureKey: "portfolio",
+    to: "/portfolio",
+    emoji: "💼",
+    title: "投資組合",
+    description: "追蹤持股表現、損益與資產配置",
+    iconBg: "rgba(16,185,129,0.22)",
+    cardBg:
+      "linear-gradient(135deg, rgba(16,185,129,0.18), rgba(5,150,105,0.08))",
+    cardBorder: "1px solid rgba(16,185,129,0.22)",
+    glow: "radial-gradient(circle at 50% 50%, rgba(16,185,129,0.1), transparent 70%)",
+    arrowClass:
+      "text-emerald-400/50 group-hover:text-emerald-400 transition-colors",
+  },
+  {
+    featureKey: "backtest",
+    to: "/backtest",
+    emoji: "📊",
+    title: "策略回測",
+    description: "用歷史數據驗證均線交叉、RSI、MACD 策略績效",
+    iconBg: "rgba(245,158,11,0.2)",
+    cardBg:
+      "linear-gradient(135deg, rgba(245,158,11,0.12), rgba(251,191,36,0.06))",
+    cardBorder: "1px solid rgba(245,158,11,0.2)",
+    glow: "radial-gradient(circle at 50% 50%, rgba(245,158,11,0.08), transparent 70%)",
+    arrowClass:
+      "text-amber-600/50 group-hover:text-amber-500 transition-colors",
+  },
+  {
+    featureKey: "screener",
+    to: "/screener",
+    emoji: "🔍",
+    title: "智能選股",
+    description: "依條件篩選潛力股，快速找到符合策略的標的",
+    iconBg: "rgba(34,211,238,0.2)",
+    cardBg:
+      "linear-gradient(135deg, rgba(34,211,238,0.16), rgba(14,165,233,0.08))",
+    cardBorder: "1px solid rgba(34,211,238,0.22)",
+    glow: "radial-gradient(circle at 50% 50%, rgba(34,211,238,0.1), transparent 70%)",
+    arrowClass: "text-cyan-400/50 group-hover:text-cyan-400 transition-colors",
+  },
+];
+
 export default function Dashboard() {
   const { user } = useAuthStore();
+  const claims = useTokenClaims();
+  const [allowedFeatures, setAllowedFeatures] = useState<Set<string> | null>(
+    null,
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    getFeatureAccess()
+      .then((data) => {
+        if (cancelled) return;
+        setAllowedFeatures(
+          new Set(
+            data.features
+              .filter((feature) => feature.allowed)
+              .map((feature) => feature.feature_key),
+          ),
+        );
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setAllowedFeatures(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.uid]);
 
   // rerender-simple-expression-in-memo: trivial expression, no memo needed
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "早安" : hour < 18 ? "午安" : "晚安";
 
+  const visibleCards = featureCards.filter(
+    (card) =>
+      claims.admin ||
+      allowedFeatures === null ||
+      allowedFeatures.has(card.featureKey),
+  );
+
   return (
-    <div className="px-4 py-6 md:px-10 md:py-10 max-w-4xl mx-auto animate-fade-up">
+    <div className="px-4 py-6 md:px-10 md:py-10 max-w-5xl mx-auto animate-fade-up">
       {/* Header */}
       <div className="mb-8 md:mb-14">
         <p className="text-sm text-slate-600 mb-3 tracking-widest uppercase">
@@ -41,146 +158,44 @@ export default function Dashboard() {
         </p>
       </div>
 
-      {/* Quick actions */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-5 mb-10 md:mb-14">
-        <Link
-          to="/chat"
-          className="group relative rounded-2xl p-7 text-left transition-transform duration-200 overflow-hidden hover:scale-[1.02]"
-          style={{
-            background:
-              "linear-gradient(135deg, rgba(99,102,241,0.2), rgba(139,92,246,0.12))",
-            border: "1px solid rgba(99,102,241,0.25)",
-          }}
-        >
-          {/* Glow on hover */}
-          <div
-            className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
+      {/* Feature cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5 mb-10 md:mb-14">
+        {visibleCards.map((card) => (
+          <Link
+            key={card.featureKey}
+            to={card.to}
+            className="group relative rounded-2xl p-7 text-left transition-transform duration-200 overflow-hidden hover:scale-[1.02]"
             style={{
-              background:
-                "radial-gradient(circle at 50% 50%, rgba(99,102,241,0.12), transparent 70%)",
+              background: card.cardBg,
+              border: card.cardBorder,
             }}
-          />
-          <div className="relative">
-            <div
-              className="w-10 h-10 rounded-xl flex items-center justify-center mb-5 text-lg"
-              style={{ background: "rgba(99,102,241,0.25)" }}
-            >
-              💬
-            </div>
-            <h3 className="text-base font-semibold text-white mb-2.5">
-              開始 AI 對話
-            </h3>
-            <p className="text-sm text-slate-400 leading-relaxed">
-              向 AI 提問投資策略、技術指標、個股分析
-            </p>
-          </div>
-          <div
-            className="absolute bottom-5 right-5 text-indigo-400/50 group-hover:text-indigo-400 transition-colors text-xl"
-            aria-hidden="true"
           >
-            →
-          </div>
-        </Link>
-
-        <Link
-          to="/stock"
-          className="group relative rounded-2xl p-7 text-left transition-transform duration-200 overflow-hidden hover:scale-[1.02]"
-          style={{
-            background: "var(--card-bg)",
-            border: "1px solid var(--border)",
-          }}
-        >
-          <div
-            className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
-            style={{
-              background:
-                "radial-gradient(circle at 50% 50%, var(--card-bg-hover), transparent 70%)",
-            }}
-          />
-          <div className="relative">
             <div
-              className="w-10 h-10 rounded-xl flex items-center justify-center mb-5 text-lg"
-              style={{ background: "var(--overlay-subtle)" }}
-            >
-              📈
+              className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
+              style={{ background: card.glow }}
+            />
+            <div className="relative">
+              <div
+                className="w-10 h-10 rounded-xl flex items-center justify-center mb-5 text-lg"
+                style={{ background: card.iconBg }}
+              >
+                {card.emoji}
+              </div>
+              <h3 className="text-base font-semibold text-white mb-2.5">
+                {card.title}
+              </h3>
+              <p className="text-sm text-slate-400 leading-relaxed">
+                {card.description}
+              </p>
             </div>
-            <h3 className="text-base font-semibold text-white mb-2.5">
-              股票行情分析
-            </h3>
-            <p className="text-sm text-slate-500 leading-relaxed">
-              即時股價、技術指標及基本面財務數據
-            </p>
-          </div>
-          <div
-            className="absolute bottom-5 right-5 text-slate-700 group-hover:text-slate-500 transition-colors text-xl"
-            aria-hidden="true"
-          >
-            →
-          </div>
-        </Link>
-
-        <Link
-          to="/backtest"
-          className="group relative rounded-2xl p-7 text-left transition-transform duration-200 overflow-hidden hover:scale-[1.02]"
-          style={{
-            background:
-              "linear-gradient(135deg, rgba(245,158,11,0.12), rgba(251,191,36,0.06))",
-            border: "1px solid rgba(245,158,11,0.2)",
-          }}
-        >
-          <div
-            className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
-            style={{
-              background:
-                "radial-gradient(circle at 50% 50%, rgba(245,158,11,0.08), transparent 70%)",
-            }}
-          />
-          <div className="relative">
             <div
-              className="w-10 h-10 rounded-xl flex items-center justify-center mb-5 text-lg"
-              style={{ background: "rgba(245,158,11,0.2)" }}
+              className={`absolute bottom-5 right-5 text-xl ${card.arrowClass}`}
+              aria-hidden="true"
             >
-              📊
+              →
             </div>
-            <h3 className="text-base font-semibold text-white mb-2.5">
-              策略回測
-            </h3>
-            <p className="text-sm text-slate-500 leading-relaxed">
-              用歷史數據驗證均線交叉、RSI、MACD 策略績效
-            </p>
-          </div>
-          <div
-            className="absolute bottom-5 right-5 text-amber-600/50 group-hover:text-amber-500 transition-colors text-xl"
-            aria-hidden="true"
-          >
-            →
-          </div>
-        </Link>
-      </div>
-
-      {/* Quick stock chips */}
-      <div className="mb-10 md:mb-14">
-        <h2
-          className="text-xs font-medium text-slate-600 mb-4 md:mb-5 tracking-widest uppercase"
-          style={{ textWrap: "balance" }}
-        >
-          快速查詢股票
-        </h2>
-        <div className="flex flex-wrap gap-3">
-          {quickStocks.map((symbol) => (
-            <Link
-              key={symbol}
-              to={`/stock/${symbol}`}
-              className="stock-chip px-5 py-2 rounded-full text-xs font-medium text-slate-400 hover:text-slate-100 hover:scale-105"
-              style={{
-                background: "var(--overlay-bg)",
-                border: "1px solid var(--border)",
-              }}
-            >
-              {symbol}
-            </Link>
-          ))}
-        </div>
+          </Link>
+        ))}
       </div>
 
       {/* Quick questions */}
