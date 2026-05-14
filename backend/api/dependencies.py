@@ -1,6 +1,7 @@
 """Dependency injection for Navi API."""
 
 import logging
+from collections.abc import Callable
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -88,3 +89,62 @@ async def require_admin(user: dict = Depends(verify_firebase_token)) -> dict:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Admin check error")
 
     return user
+
+
+def require_feature_access(feature_key: str) -> Callable:
+    """Return a dependency that ensures the caller can access a feature."""
+
+    async def _require_feature_access(
+        user: dict = Depends(verify_firebase_token),
+    ) -> dict:
+        if not settings.auth_required:
+            return user
+
+        uid = user.get("uid", "")
+        if not uid:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No uid")
+
+        try:
+            from services import feature_access_service
+
+            result = feature_access_service.check_feature_access(
+                feature_key,
+                uid,
+                email=user.get("email", ""),
+                display_name=user.get("name", "") or user.get("display_name", ""),
+            )
+        except HTTPException:
+            raise
+        except Exception:
+            logger.exception("Feature access check failed for %s", feature_key)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Feature access check error",
+            )
+
+        if result.allowed:
+            return user
+
+        message = "此功能目前不開放。"
+        code = "FEATURE_ACCESS_DENIED"
+        if result.reason == "account_suspended":
+            message = "帳號已被停用，請聯絡管理員。"
+            code = "ACCOUNT_SUSPENDED"
+        elif result.reason == "feature_disabled":
+            message = "此功能目前已被管理員停用。"
+            code = "FEATURE_DISABLED"
+
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "code": code,
+                "message": message,
+                "feature_key": result.feature_key,
+                "display_name": result.display_name,
+                "tier": result.tier,
+                "allowed_tiers": result.allowed_tiers,
+                "reason": result.reason,
+            },
+        )
+
+    return _require_feature_access

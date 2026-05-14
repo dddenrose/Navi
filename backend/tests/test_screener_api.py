@@ -87,9 +87,9 @@ def fake_db():
 def test_list_reports_filters_by_profile(mock_get_db, fake_db):
     mock_get_db.return_value = fake_db
     # 用 dependency_overrides 完全跳過 Firebase auth
-    from api.routes.screener import verify_firebase_token  # 路由實際使用的同一個 obj
+    from api.routes.screener import require_screener_access
 
-    app.dependency_overrides[verify_firebase_token] = lambda: {"uid": "u", "email": "e"}
+    app.dependency_overrides[require_screener_access] = lambda: {"uid": "u", "email": "e"}
     try:
         with TestClient(app) as client:
             resp = client.get("/api/screener/reports?profile=momentum")

@@ -8,7 +8,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from api.routes import backtest, chat, knowledge, portfolio, screener, stock
+from api.routes import backtest, chat, features, knowledge, portfolio, screener, stock
 from api.routes import admin as admin_route
 from config import settings
 
@@ -114,6 +114,7 @@ app.include_router(knowledge.router)
 app.include_router(portfolio.router)
 app.include_router(backtest.router)
 app.include_router(screener.router)
+app.include_router(features.router)
 app.include_router(admin_route.router)
 
 

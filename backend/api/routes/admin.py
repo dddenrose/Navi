@@ -38,6 +38,12 @@ class UpdateQuotaConfigPayload(BaseModel):
     description: str | None = None
 
 
+class UpdateFeatureAccessConfigPayload(BaseModel):
+    enabled: bool | None = None
+    allowed_tiers: list[str] | None = None
+    description: str | None = None
+
+
 # ── Identity ─────────────────────────────────────────────────────────────────
 
 
@@ -119,6 +125,36 @@ async def update_quota_config(
     try:
         cfg = quota_service.update_quota_config(
             tier=tier, updates=updates, actor_uid=actor.get("uid", "")
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"config": cfg}
+
+
+# ── Feature access configs ──────────────────────────────────────────────────
+
+
+@router.get("/feature-access-configs")
+async def list_feature_access_configs(_: dict = Depends(require_admin)):
+    from services import feature_access_service
+
+    return {"configs": feature_access_service.list_feature_configs()}
+
+
+@router.put("/feature-access-configs/{feature_key}")
+async def update_feature_access_config(
+    feature_key: str,
+    payload: UpdateFeatureAccessConfigPayload,
+    actor: dict = Depends(require_admin),
+):
+    from services import feature_access_service
+
+    updates = {k: v for k, v in payload.model_dump().items() if v is not None}
+    try:
+        cfg = feature_access_service.update_feature_config(
+            feature_key=feature_key,
+            updates=updates,
+            actor_uid=actor.get("uid", ""),
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))

@@ -5,6 +5,7 @@ const items = [
   { to: "/admin", label: "總覽", end: true },
   { to: "/admin/users", label: "使用者" },
   { to: "/admin/quota", label: "額度設定" },
+  { to: "/admin/permissions", label: "功能權限" },
   { to: "/admin/logs", label: "Audit Log" },
 ];
 

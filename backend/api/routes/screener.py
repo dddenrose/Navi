@@ -15,7 +15,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, EmailStr, Field
 
-from api.dependencies import verify_firebase_token
+from api.dependencies import require_feature_access
 from config import settings
 from services.firestore_client import get_db
 from services.screener.email_sender import (
@@ -30,6 +30,7 @@ from services.screener.orchestrator import REPORTS_COLLECTION, run_screener_asyn
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/screener", tags=["screener"])
+require_screener_access = require_feature_access("screener")
 
 
 # ── Auth：Scheduler 用 shared-secret，使用者用 Firebase Auth ─────────────────
@@ -177,12 +178,12 @@ async def run_screener_endpoint(payload: RunRequest) -> RunResponse:
 @router.get(
     "/reports",
     response_model=list[ReportSummary],
-    dependencies=[Depends(verify_firebase_token)],
 )
 async def list_reports(
     profile: str | None = Query(None, pattern="^(value|momentum)$"),
     frequency: str | None = Query(None, pattern="^(daily|weekly)$"),
     limit: int = Query(20, ge=1, le=100),
+    _: dict = Depends(require_screener_access),
 ) -> list[ReportSummary]:
     """列出最近的 reports.
 
@@ -207,11 +208,11 @@ async def list_reports(
 @router.get(
     "/reports/latest",
     response_model=ReportDetail,
-    dependencies=[Depends(verify_firebase_token)],
 )
 async def latest_report(
     profile: str = Query("momentum", pattern="^(value|momentum)$"),
     frequency: str = Query("daily", pattern="^(daily|weekly)$"),
+    _: dict = Depends(require_screener_access),
 ) -> ReportDetail:
     db = get_db()
     docs = [snap.to_dict() or {} for snap in db.collection(REPORTS_COLLECTION).stream()]
@@ -232,9 +233,11 @@ async def latest_report(
 @router.get(
     "/reports/{report_id}",
     response_model=ReportDetail,
-    dependencies=[Depends(verify_firebase_token)],
 )
-async def get_report(report_id: str) -> ReportDetail:
+async def get_report(
+    report_id: str,
+    _: dict = Depends(require_screener_access),
+) -> ReportDetail:
     db = get_db()
     snap = db.collection(REPORTS_COLLECTION).document(report_id).get()
     if not snap.exists:
@@ -252,9 +255,12 @@ async def get_report(report_id: str) -> ReportDetail:
 @router.get(
     "/reports/{report_id}/picks/{ticker}",
     response_model=PickDoc,
-    dependencies=[Depends(verify_firebase_token)],
 )
-async def get_pick(report_id: str, ticker: str) -> PickDoc:
+async def get_pick(
+    report_id: str,
+    ticker: str,
+    _: dict = Depends(require_screener_access),
+) -> PickDoc:
     db = get_db()
     ref = (
         db.collection(REPORTS_COLLECTION)
@@ -292,7 +298,7 @@ class SubscriptionResponse(BaseModel):
     response_model=SubscriptionResponse,
 )
 async def get_my_subscription(
-    user: dict = Depends(verify_firebase_token),
+    user: dict = Depends(require_screener_access),
 ) -> SubscriptionResponse:
     user_id = user["uid"]
     sub = get_subscriber(user_id) or {}
@@ -311,7 +317,7 @@ async def get_my_subscription(
 )
 async def update_my_subscription(
     payload: SubscriptionPayload,
-    user: dict = Depends(verify_firebase_token),
+    user: dict = Depends(require_screener_access),
 ) -> SubscriptionResponse:
     user_id = user["uid"]
     existing = get_subscriber(user_id) or {}

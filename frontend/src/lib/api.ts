@@ -370,6 +370,31 @@ export async function getQuotaStatus(): Promise<QuotaStatus> {
   return apiFetch<QuotaStatus>(`/api/chat/quota`);
 }
 
+export interface FeatureAccessConfig {
+  feature_key: string;
+  display_name: string;
+  description: string;
+  allowed_tiers: string[];
+  enabled: boolean;
+  updated_at?: string;
+  updated_by?: string;
+}
+
+export interface FeatureAccessItem extends FeatureAccessConfig {
+  allowed: boolean;
+  reason: string | null;
+}
+
+export interface FeatureAccessResponse {
+  tier: string;
+  status: string;
+  features: FeatureAccessItem[];
+}
+
+export async function getFeatureAccess(): Promise<FeatureAccessResponse> {
+  return apiFetch<FeatureAccessResponse>(`/api/features/access`);
+}
+
 // ─── Admin ───────────────────────────────────────────────────────────────────
 
 export interface AdminUser {
@@ -474,6 +499,27 @@ export async function adminUpdateQuotaConfig(
     method: "PUT",
     body: JSON.stringify(patch),
   });
+}
+
+export async function adminListFeatureAccessConfigs(): Promise<{
+  configs: FeatureAccessConfig[];
+}> {
+  return apiFetch(`/api/admin/feature-access-configs`);
+}
+
+export async function adminUpdateFeatureAccessConfig(
+  featureKey: string,
+  patch: Partial<
+    Pick<FeatureAccessConfig, "enabled" | "allowed_tiers" | "description">
+  >,
+): Promise<{ config: FeatureAccessConfig }> {
+  return apiFetch(
+    `/api/admin/feature-access-configs/${encodeURIComponent(featureKey)}`,
+    {
+      method: "PUT",
+      body: JSON.stringify(patch),
+    },
+  );
 }
 
 export async function adminGetUsageSummary(
