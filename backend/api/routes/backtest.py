@@ -6,7 +6,7 @@ from dataclasses import asdict
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from api.dependencies import verify_firebase_token
+from api.dependencies import require_feature_access
 from services.backtest_service import run_backtest
 
 logger = logging.getLogger(__name__)
@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(
     prefix="/api/backtest",
     tags=["backtest"],
-    dependencies=[Depends(verify_firebase_token)],
+    dependencies=[Depends(require_feature_access("backtest"))],
 )
 
 

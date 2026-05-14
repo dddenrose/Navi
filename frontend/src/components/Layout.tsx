@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { signOut } from "firebase/auth";
 import { auth } from "@/lib/firebase";
+import { getFeatureAccess } from "@/lib/api";
 import { useAuthStore } from "@/store/authStore";
 import { useThemeStore } from "@/store/themeStore";
 import { useTokenClaims } from "@/lib/useTokenClaims";
@@ -25,6 +26,7 @@ const navItems = [
   {
     to: "/chat",
     label: "對話",
+    featureKey: "chat",
     icon: (
       <svg
         viewBox="0 0 20 20"
@@ -43,6 +45,7 @@ const navItems = [
   {
     to: "/stock",
     label: "股票",
+    featureKey: "stock",
     icon: (
       <svg
         viewBox="0 0 20 20"
@@ -61,6 +64,7 @@ const navItems = [
   {
     to: "/portfolio",
     label: "投資組合",
+    featureKey: "portfolio",
     icon: (
       <svg
         viewBox="0 0 20 20"
@@ -80,6 +84,7 @@ const navItems = [
   {
     to: "/backtest",
     label: "策略回測",
+    featureKey: "backtest",
     icon: (
       <svg
         viewBox="0 0 20 20"
@@ -94,6 +99,7 @@ const navItems = [
   {
     to: "/screener",
     label: "智能選股",
+    featureKey: "screener",
     icon: (
       <svg
         viewBox="0 0 20 20"
@@ -116,8 +122,33 @@ export default function Layout() {
   const { theme, toggleTheme } = useThemeStore();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
+  const [allowedFeatures, setAllowedFeatures] = useState<Set<string> | null>(
+    null,
+  );
   const claims = useTokenClaims();
   const location = useLocation();
+
+  useEffect(() => {
+    let cancelled = false;
+    getFeatureAccess()
+      .then((data) => {
+        if (cancelled) return;
+        setAllowedFeatures(
+          new Set(
+            data.features
+              .filter((feature) => feature.allowed)
+              .map((feature) => feature.feature_key),
+          ),
+        );
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setAllowedFeatures(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.uid]);
 
   // Close sidebar on route change (mobile)
   const [prevPathname, setPrevPathname] = useState(location.pathname);
@@ -134,6 +165,14 @@ export default function Layout() {
     user?.displayName?.[0]?.toUpperCase() ??
     user?.email?.[0]?.toUpperCase() ??
     "U";
+
+  const visibleNavItems = navItems.filter(
+    (item) =>
+      claims.admin ||
+      !item.featureKey ||
+      allowedFeatures === null ||
+      allowedFeatures.has(item.featureKey),
+  );
 
   return (
     <div
@@ -246,7 +285,7 @@ export default function Layout() {
         <nav
           className={`flex-1 overflow-y-auto ${collapsed ? "px-2" : "px-4"} py-6 space-y-2`}
         >
-          {navItems.map(({ to, label, icon }) => (
+          {visibleNavItems.map(({ to, label, icon }) => (
             <NavLink
               key={to}
               to={to}

@@ -4,6 +4,7 @@ import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { useAuthStore } from "@/store/authStore";
 import ErrorBoundary from "@/components/ErrorBoundary";
+import FeatureGuard from "@/components/FeatureGuard";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import Layout from "@/components/Layout";
 import Login from "@/pages/Login";
@@ -19,6 +20,9 @@ const AdminDashboard = lazy(() => import("@/pages/admin/AdminDashboard"));
 const AdminUsers = lazy(() => import("@/pages/admin/AdminUsers"));
 const AdminUserDetail = lazy(() => import("@/pages/admin/AdminUserDetail"));
 const AdminQuotaConfigs = lazy(() => import("@/pages/admin/AdminQuotaConfigs"));
+const AdminFeatureAccess = lazy(
+  () => import("@/pages/admin/AdminFeatureAccess"),
+);
 const AdminLogs = lazy(() => import("@/pages/admin/AdminLogs"));
 
 function PageFallback() {
@@ -82,41 +86,51 @@ export default function App() {
               <Route
                 path="stock"
                 element={
-                  <ErrorBoundary>
-                    <Stock />
-                  </ErrorBoundary>
+                  <FeatureGuard featureKey="stock" featureName="股票分析">
+                    <ErrorBoundary>
+                      <Stock />
+                    </ErrorBoundary>
+                  </FeatureGuard>
                 }
               />
               <Route
                 path="stock/:symbol"
                 element={
-                  <ErrorBoundary>
-                    <Stock />
-                  </ErrorBoundary>
+                  <FeatureGuard featureKey="stock" featureName="股票分析">
+                    <ErrorBoundary>
+                      <Stock />
+                    </ErrorBoundary>
+                  </FeatureGuard>
                 }
               />
               <Route
                 path="portfolio"
                 element={
-                  <ErrorBoundary>
-                    <Portfolio />
-                  </ErrorBoundary>
+                  <FeatureGuard featureKey="portfolio" featureName="投資組合">
+                    <ErrorBoundary>
+                      <Portfolio />
+                    </ErrorBoundary>
+                  </FeatureGuard>
                 }
               />
               <Route
                 path="backtest"
                 element={
-                  <ErrorBoundary>
-                    <Backtest />
-                  </ErrorBoundary>
+                  <FeatureGuard featureKey="backtest" featureName="策略回測">
+                    <ErrorBoundary>
+                      <Backtest />
+                    </ErrorBoundary>
+                  </FeatureGuard>
                 }
               />
               <Route
                 path="screener"
                 element={
-                  <ErrorBoundary>
-                    <Screener />
-                  </ErrorBoundary>
+                  <FeatureGuard featureKey="screener" featureName="智能選股">
+                    <ErrorBoundary>
+                      <Screener />
+                    </ErrorBoundary>
+                  </FeatureGuard>
                 }
               />
               <Route
@@ -131,6 +145,7 @@ export default function App() {
                 <Route path="users" element={<AdminUsers />} />
                 <Route path="users/:uid" element={<AdminUserDetail />} />
                 <Route path="quota" element={<AdminQuotaConfigs />} />
+                <Route path="permissions" element={<AdminFeatureAccess />} />
                 <Route path="logs" element={<AdminLogs />} />
               </Route>
             </Route>
