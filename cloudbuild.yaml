@@ -48,7 +48,7 @@ steps:
       - "--timeout"
       - "3600"
       - "--min-instances"
-      - "1"
+      - "0"
       - "--max-instances"
       - "3"
       - "--set-env-vars"
