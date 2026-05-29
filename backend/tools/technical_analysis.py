@@ -18,7 +18,13 @@ def analyze_technicals(ticker: str, period: str = "3mo") -> str:
     if data.current_price is None:
         return f"無法取得 {ticker} 的歷史數據，無法計算技術指標。"
 
-    parts = [f"📊 {data.ticker} 技術面分析（期間：{data.period}）現價：{data.current_price}", ""]
+    # current_price 為日線最後一根 K 棒的收盤價，非盤中即時報價；
+    # 明確標註避免 LLM 與 get_stock_price 的價格混用。
+    parts = [
+        f"📊 {data.ticker} 技術面分析（期間：{data.period}）",
+        f"日線最近收盤：{data.current_price}（用於技術位置計算，非即時報價）",
+        "",
+    ]
 
     # 均線
     if data.ma_trend:

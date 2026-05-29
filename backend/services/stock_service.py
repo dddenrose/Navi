@@ -1,16 +1,22 @@
-"""Stock Service — yfinance 即時股價、技術指標、財報數據."""
+"""Stock Service — TWSE/TPEx 收盤價、yfinance 技術指標、財報數據."""
 
 from __future__ import annotations
 
 import logging
 import time
 from dataclasses import dataclass, field
+from datetime import date, datetime, timedelta
 from functools import lru_cache
+from zoneinfo import ZoneInfo
 
 import requests
 import yfinance as yf
 
 logger = logging.getLogger(__name__)
+
+# 台股股價統一以 TWSE/TPEx Open API 收盤資料為準（穩定 + 官方），
+# yfinance 僅用於：美股、台股的 52w high/low 與 market_cap 等補充欄位、
+# 技術指標歷史 K 線（analyze_technicals）。
 
 # ── Cache ────────────────────────────────────────────────────────────────────
 
@@ -48,24 +54,96 @@ def _get_ticker_info(ticker: str) -> dict:
     return info
 
 
-# ── 台股名稱 → 代碼 動態查表 ─────────────────────────────────────────────────
+# ── 台股名稱 → 代碼 動態查表 + 收盤報價快取 ─────────────────────────────────
+
+_TPE_TZ = ZoneInfo("Asia/Taipei")
+
+
+@dataclass
+class _TWQuote:
+    """TWSE/TPEx Open API 解析後的單檔報價（最近一個交易日收盤資料）。"""
+
+    code: str
+    name: str
+    market: str  # ".TW" or ".TWO"
+    close: float | None = None
+    open: float | None = None
+    high: float | None = None
+    low: float | None = None
+    change: float | None = None
+    volume_shares: int | None = None  # 成交股數
+    transaction: int | None = None  # 成交筆數
+
 
 _tw_listing_cache: dict[str, str] = {}  # name → code (e.g. "緯創" → "3231")
 _tw_listing_market: dict[str, str] = {}  # code → market suffix (".TW" or ".TWO")
-_tw_listing_cache_time: float = 0
-_TW_LISTING_CACHE_TTL = 86400  # 24 hours
+_tw_quote_cache: dict[str, _TWQuote] = {}  # code → quote
+_tw_cache_time: float = 0
+_TW_CACHE_TTL = 1800  # 30 分鐘；收盤資料每日只變動一次，30 分鐘已足夠涵蓋盤後更新
 
 
-def _fetch_tw_stock_listing() -> dict[str, str]:
-    """從 TWSE + TPEx Open API 取得所有台股 name → code 對照表（24h 快取）。"""
-    global _tw_listing_cache, _tw_listing_market, _tw_listing_cache_time
+def _safe_float(val) -> float | None:
+    """將 TWSE/TPEx 字串型欄位轉 float；'-'、空字串、None 統一回 None。"""
+    if val is None:
+        return None
+    if isinstance(val, (int, float)):
+        return float(val)
+    s = str(val).strip().replace(",", "")
+    if not s or s == "-":
+        return None
+    try:
+        return float(s)
+    except ValueError:
+        return None
+
+
+def _safe_int(val) -> int | None:
+    f = _safe_float(val)
+    return int(f) if f is not None else None
+
+
+def _latest_tw_trading_date(now: datetime | None = None) -> date:
+    """回傳「最近一個 TW 交易日」的日期（不考慮國定假日/颱風假）。
+
+    判斷規則：
+    - 週末 → 回退到上週五
+    - 平日 14:30 之前 → 視為「今日尚未收盤」，回退到前一個工作日
+    - 平日 14:30 之後 → 今日
+
+    僅作為價格時點標註用；若 14:30 後遇到颱風休市，標註日期可能比實際晚一天，
+    可接受（與 TWSE Open API 行為一致：休市日不會更新資料，仍指向上次收盤）。
+    """
+    now = now or datetime.now(_TPE_TZ)
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=_TPE_TZ)
+    d = now.date()
+
+    if d.weekday() >= 5:  # Sat=5 / Sun=6
+        d = d - timedelta(days=d.weekday() - 4)
+        return d
+
+    # 平日：14:30 前還沒收盤
+    if now.hour < 14 or (now.hour == 14 and now.minute < 30):
+        d = d - timedelta(days=1)
+        while d.weekday() >= 5:
+            d = d - timedelta(days=1)
+    return d
+
+
+def _fetch_tw_quotes() -> dict[str, _TWQuote]:
+    """從 TWSE + TPEx Open API 取得所有台股的收盤報價與 listing（30 分鐘快取）。
+
+    回傳 dict[code, _TWQuote]；副作用：同時填入 listing/market 快取。
+    """
+    global _tw_listing_cache, _tw_listing_market, _tw_quote_cache, _tw_cache_time
 
     now = time.time()
-    if _tw_listing_cache and (now - _tw_listing_cache_time < _TW_LISTING_CACHE_TTL):
-        return _tw_listing_cache
+    if _tw_quote_cache and (now - _tw_cache_time < _TW_CACHE_TTL):
+        return _tw_quote_cache
 
-    mapping: dict[str, str] = {}
+    listing: dict[str, str] = {}
     market: dict[str, str] = {}
+    quotes: dict[str, _TWQuote] = {}
 
     # --- TWSE 上市 ---
     try:
@@ -75,13 +153,26 @@ def _fetch_tw_stock_listing() -> dict[str, str]:
         )
         resp.raise_for_status()
         for item in resp.json():
-            code = item.get("Code", "").strip()
-            name = item.get("Name", "").strip()
-            if code and name:
-                mapping[name] = code
-                market[code] = ".TW"
+            code = (item.get("Code") or "").strip()
+            name = (item.get("Name") or "").strip()
+            if not code or not name:
+                continue
+            listing[name] = code
+            market[code] = ".TW"
+            quotes[code] = _TWQuote(
+                code=code,
+                name=name,
+                market=".TW",
+                close=_safe_float(item.get("ClosingPrice")),
+                open=_safe_float(item.get("OpeningPrice")),
+                high=_safe_float(item.get("HighestPrice")),
+                low=_safe_float(item.get("LowestPrice")),
+                change=_safe_float(item.get("Change")),
+                volume_shares=_safe_int(item.get("TradeVolume")),
+                transaction=_safe_int(item.get("Transaction")),
+            )
     except Exception as e:
-        logger.warning("Failed to fetch TWSE stock listing: %s", e)
+        logger.warning("Failed to fetch TWSE quotes: %s", e)
 
     # --- TPEx 上櫃 ---
     try:
@@ -91,20 +182,45 @@ def _fetch_tw_stock_listing() -> dict[str, str]:
         )
         resp.raise_for_status()
         for item in resp.json():
-            code = item.get("SecuritiesCompanyCode", "").strip()
-            name = item.get("CompanyName", "").strip()
-            if code and name:
-                mapping[name] = code
-                market[code] = ".TWO"
+            code = (item.get("SecuritiesCompanyCode") or "").strip()
+            name = (item.get("CompanyName") or "").strip()
+            if not code or not name:
+                continue
+            listing[name] = code
+            market[code] = ".TWO"
+            # TPEx 欄位命名歷史上多次變動，採多重 fallback
+            quotes[code] = _TWQuote(
+                code=code,
+                name=name,
+                market=".TWO",
+                close=_safe_float(
+                    item.get("Close") or item.get("ClosingPrice") or item.get("LastestDealPrice")
+                ),
+                open=_safe_float(item.get("Open") or item.get("OpeningPrice")),
+                high=_safe_float(item.get("High") or item.get("HighestPrice")),
+                low=_safe_float(item.get("Low") or item.get("LowestPrice")),
+                change=_safe_float(item.get("Change")),
+                volume_shares=_safe_int(
+                    item.get("TradingShares") or item.get("TradeVolume")
+                ),
+                transaction=_safe_int(item.get("Transaction")),
+            )
     except Exception as e:
-        logger.warning("Failed to fetch TPEx stock listing: %s", e)
+        logger.warning("Failed to fetch TPEx quotes: %s", e)
 
-    if mapping:
-        _tw_listing_cache = mapping
+    if quotes:
+        _tw_listing_cache = listing
         _tw_listing_market = market
-        _tw_listing_cache_time = now
-        logger.info("Loaded %d TW stock listings (TWSE + TPEx)", len(mapping))
+        _tw_quote_cache = quotes
+        _tw_cache_time = now
+        logger.info("Loaded %d TW quotes (TWSE + TPEx)", len(quotes))
 
+    return _tw_quote_cache
+
+
+def _fetch_tw_stock_listing() -> dict[str, str]:
+    """回傳台股 name → code 對照表（透過 _fetch_tw_quotes 共用快取）。"""
+    _fetch_tw_quotes()
     return _tw_listing_cache
 
 
@@ -250,6 +366,10 @@ class StockOverviewData:
     exchange: str = ""
     high_52w: float | None = None  # 52 週最高價
     low_52w: float | None = None  # 52 週最低價
+    # 資料時點與來源（v2）
+    as_of_date: str = ""  # ISO 日期 e.g. "2026-05-26"；空字串代表未知
+    data_source: str = ""  # "TWSE" / "TPEx" / "yfinance"
+    is_intraday: bool = False  # True = 盤中即時，False = 收盤資料
 
 
 @dataclass
@@ -340,8 +460,63 @@ class FundamentalData:
 
 
 def get_stock_overview(ticker: str) -> StockOverviewData:
-    """取得股票基本概覽。"""
+    """取得股票基本概覽。
+
+    台股 (.TW / .TWO) → TWSE/TPEx Open API（最近一個交易日收盤，官方來源）
+    其他市場          → yfinance
+    """
     ticker = normalize_ticker(ticker)
+    if ticker.endswith(".TW") or ticker.endswith(".TWO"):
+        return _get_tw_overview(ticker)
+    return _get_yf_overview(ticker)
+
+
+def _get_tw_overview(ticker: str) -> StockOverviewData:
+    """台股：以 TWSE/TPEx Open API 收盤資料為準；market_cap / 52w 仍向 yfinance 補強。"""
+    code = ticker.rsplit(".", 1)[0]
+    quotes = _fetch_tw_quotes()
+    q = quotes.get(code)
+
+    if q is None or q.close is None:
+        # 明確失敗：不 fallback 到 yfinance 以維持資料一致性
+        logger.warning("TW quote not available for %s; returning empty overview", ticker)
+        return StockOverviewData(ticker=ticker)
+
+    change_pct: float | None = None
+    if q.change is not None:
+        prev_close = q.close - q.change
+        if prev_close:
+            change_pct = round((q.change / prev_close) * 100, 2)
+
+    market_name = "TWSE" if q.market == ".TW" else "TPEx"
+
+    # 補充 yfinance 提供的 52w 與 market_cap（不影響價格欄位）
+    yf_info: dict = {}
+    try:
+        yf_info = _get_ticker_info(ticker)
+    except Exception as e:  # pragma: no cover
+        logger.debug("yfinance enrichment failed for %s: %s", ticker, e)
+
+    return StockOverviewData(
+        ticker=ticker,
+        name=q.name,
+        price=q.close,
+        change=q.change,
+        change_percent=change_pct,
+        volume=q.volume_shares,
+        market_cap=yf_info.get("marketCap"),
+        currency="TWD",
+        exchange=market_name,
+        high_52w=yf_info.get("fiftyTwoWeekHigh"),
+        low_52w=yf_info.get("fiftyTwoWeekLow"),
+        as_of_date=_latest_tw_trading_date().isoformat(),
+        data_source=market_name,
+        is_intraday=False,
+    )
+
+
+def _get_yf_overview(ticker: str) -> StockOverviewData:
+    """美股 / 其他市場：沿用 yfinance ticker.info。"""
     info = _get_ticker_info(ticker)
     if not info:
         return StockOverviewData(ticker=ticker)
@@ -367,6 +542,9 @@ def get_stock_overview(ticker: str) -> StockOverviewData:
         exchange=info.get("exchange", ""),
         high_52w=info.get("fiftyTwoWeekHigh"),
         low_52w=info.get("fiftyTwoWeekLow"),
+        as_of_date="",
+        data_source="yfinance",
+        is_intraday=True,
     )
 
 
@@ -851,12 +1029,18 @@ def format_stock_data_for_prompt(
     parts.append(f"📌 {overview.name} ({overview.ticker})")
     if overview.price is not None:
         sign = "+" if (overview.change or 0) >= 0 else ""
+        if overview.is_intraday:
+            price_label = "現價"
+        elif overview.as_of_date:
+            price_label = f"收盤（{overview.as_of_date} {overview.data_source}）"
+        else:
+            price_label = "報價"
         parts.append(
-            f"   現價：{overview.currency} {overview.price}  "
+            f"   {price_label}：{overview.currency} {overview.price}  "
             f"{sign}{overview.change} ({sign}{overview.change_percent}%)"
         )
     if overview.volume:
-        # yfinance volume 單位為「股」（台股 1 張 = 1000 股）
+        # yfinance / TWSE 的 volume 單位都是「股」（台股 1 張 = 1000 股）
         parts.append(f"   成交量：{overview.volume:,} 股")
     if overview.market_cap:
         parts.append(f"   市值：{overview.market_cap:,}")
