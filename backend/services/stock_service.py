@@ -73,6 +73,7 @@ class _TWQuote:
     change: float | None = None
     volume_shares: int | None = None  # 成交股數
     transaction: int | None = None  # 成交筆數
+    date: str = ""  # API 回傳的資料日期 (ISO yyyy-mm-dd)；空字串代表未知
 
 
 _tw_listing_cache: dict[str, str] = {}  # name → code (e.g. "緯創" → "3231")
@@ -100,6 +101,22 @@ def _safe_float(val) -> float | None:
 def _safe_int(val) -> int | None:
     f = _safe_float(val)
     return int(f) if f is not None else None
+
+
+def _roc_date_to_iso(val) -> str:
+    """民國年 yyyMMdd（如 '1150528'）轉 ISO 'YYYY-MM-DD'；失敗回空字串。"""
+    if val is None:
+        return ""
+    s = str(val).strip()
+    if len(s) != 7 or not s.isdigit():
+        return ""
+    try:
+        year = int(s[:3]) + 1911
+        month = int(s[3:5])
+        day = int(s[5:7])
+        return f"{year:04d}-{month:02d}-{day:02d}"
+    except ValueError:
+        return ""
 
 
 def _latest_tw_trading_date(now: datetime | None = None) -> date:
@@ -170,6 +187,7 @@ def _fetch_tw_quotes() -> dict[str, _TWQuote]:
                 change=_safe_float(item.get("Change")),
                 volume_shares=_safe_int(item.get("TradeVolume")),
                 transaction=_safe_int(item.get("Transaction")),
+                date=_roc_date_to_iso(item.get("Date")),
             )
     except Exception as e:
         logger.warning("Failed to fetch TWSE quotes: %s", e)
@@ -204,6 +222,7 @@ def _fetch_tw_quotes() -> dict[str, _TWQuote]:
                     item.get("TradingShares") or item.get("TradeVolume")
                 ),
                 transaction=_safe_int(item.get("Transaction")),
+                date=_roc_date_to_iso(item.get("Date")),
             )
     except Exception as e:
         logger.warning("Failed to fetch TPEx quotes: %s", e)
@@ -509,7 +528,7 @@ def _get_tw_overview(ticker: str) -> StockOverviewData:
         exchange=market_name,
         high_52w=yf_info.get("fiftyTwoWeekHigh"),
         low_52w=yf_info.get("fiftyTwoWeekLow"),
-        as_of_date=_latest_tw_trading_date().isoformat(),
+        as_of_date=q.date or _latest_tw_trading_date().isoformat(),
         data_source=market_name,
         is_intraday=False,
     )
