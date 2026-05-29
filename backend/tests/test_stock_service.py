@@ -87,6 +87,103 @@ class TestGetStockOverview:
         assert result.price is None
         assert result.change is None
 
+    def test_us_overview_has_intraday_flag(self):
+        with patch("services.stock_service.yf.Ticker") as mock_ticker_cls:
+            mock_ticker = MagicMock()
+            mock_ticker.info = {
+                "shortName": "Apple Inc.",
+                "currentPrice": 150.0,
+                "previousClose": 148.0,
+                "currency": "USD",
+            }
+            mock_ticker_cls.return_value = mock_ticker
+            result = get_stock_overview("AAPL")
+        assert result.data_source == "yfinance"
+        assert result.is_intraday is True
+        assert result.as_of_date == ""
+
+    def test_tw_overview_uses_open_api(self):
+        """台股 .TW 應走 TWSE Open API，不依賴 yfinance 的價格欄位。"""
+        from datetime import date
+
+        import services.stock_service as svc
+
+        quote = svc._TWQuote(
+            code="2330",
+            name="台積電",
+            market=".TW",
+            close=580.0,
+            change=2.0,
+            volume_shares=28_156_000,
+        )
+        with (
+            patch.object(svc, "_fetch_tw_quotes", return_value={"2330": quote}),
+            patch.object(svc, "_get_ticker_info", return_value={"marketCap": 15_000_000_000_000}),
+            patch.object(svc, "_latest_tw_trading_date", return_value=date(2026, 5, 26)),
+        ):
+            result = svc.get_stock_overview("2330.TW")
+
+        assert result.price == 580.0
+        assert result.change == 2.0
+        assert result.change_percent == pytest.approx(0.35, abs=0.01)
+        assert result.currency == "TWD"
+        assert result.data_source == "TWSE"
+        assert result.is_intraday is False
+        assert result.as_of_date == "2026-05-26"
+        assert result.market_cap == 15_000_000_000_000  # yfinance 補強欄位
+
+    def test_tw_overview_missing_returns_empty(self):
+        """TWSE/TPEx 抓不到該檔時不可 fallback 到 yfinance；明確回傳 price=None。"""
+        import services.stock_service as svc
+
+        with patch.object(svc, "_fetch_tw_quotes", return_value={}):
+            result = svc.get_stock_overview("9999.TW")
+
+        assert result.price is None
+        assert result.data_source == ""
+
+
+# ── TWSE Open API helpers ────────────────────────────────────────────────────
+
+
+class TestTWHelpers:
+    def test_safe_float_handles_dash_and_empty(self):
+        from services.stock_service import _safe_float
+
+        assert _safe_float("580.00") == 580.0
+        assert _safe_float("-") is None
+        assert _safe_float("") is None
+        assert _safe_float(None) is None
+        assert _safe_float("1,234.5") == 1234.5
+        assert _safe_float(123) == 123.0
+
+    def test_latest_tw_trading_date_weekday_after_close(self):
+        from datetime import datetime
+
+        from services.stock_service import _TPE_TZ, _latest_tw_trading_date
+
+        # 週三 15:00 → 當天
+        wed = datetime(2026, 5, 27, 15, 0, tzinfo=_TPE_TZ)
+        assert _latest_tw_trading_date(wed).isoformat() == "2026-05-27"
+
+    def test_latest_tw_trading_date_weekday_before_close(self):
+        from datetime import datetime
+
+        from services.stock_service import _TPE_TZ, _latest_tw_trading_date
+
+        # 週三 10:00 → 回退到週二
+        wed_morning = datetime(2026, 5, 27, 10, 0, tzinfo=_TPE_TZ)
+        assert _latest_tw_trading_date(wed_morning).isoformat() == "2026-05-26"
+
+    def test_latest_tw_trading_date_weekend(self):
+        from datetime import datetime
+
+        from services.stock_service import _TPE_TZ, _latest_tw_trading_date
+
+        # 週日 → 回退到週五
+        sun = datetime(2026, 5, 24, 10, 0, tzinfo=_TPE_TZ)
+        assert _latest_tw_trading_date(sun).isoformat() == "2026-05-22"
+
 
 # ── get_technical_indicators ─────────────────────────────────────────────────
 

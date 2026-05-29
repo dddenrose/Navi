@@ -37,6 +37,9 @@ class StockOverview(BaseModel):
     exchange: str = ""
     high_52w: float | None = None
     low_52w: float | None = None
+    as_of_date: str = ""
+    data_source: str = ""
+    is_intraday: bool = False
 
 
 class TechnicalResponse(BaseModel):
