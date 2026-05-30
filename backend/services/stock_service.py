@@ -253,6 +253,142 @@ def _lookup_tw_name(name: str) -> str | None:
     return f"{code}{suffix}"
 
 
+# ── TW Quote Providers ──────────────────────────────────────────────────────
+#
+# 多來源股價的抽象：listing（名稱→代碼）一律共用 Open API 結果，
+# 但個股當前報價可插拔（openapi / mis / 未來其他）。
+# 透過 settings.tw_quote_provider 切換，不需改動下游程式碼。
+
+
+class TWQuoteProvider:
+    """單檔台股報價的 provider 介面。"""
+
+    name: str = ""
+
+    def get_quote(self, code: str, market: str) -> _TWQuote | None:  # noqa: ARG002
+        raise NotImplementedError
+
+    @property
+    def is_intraday(self) -> bool:
+        """資料是否可能是盤中即時數據（影響 UI 的「現價/收盤」標籤）。"""
+        return False
+
+    @property
+    def display_label(self) -> str:
+        """顯示給使用者的資料來源標籤。"""
+        return self.name.upper()
+
+
+class OpenApiProvider(TWQuoteProvider):
+    """TWSE STOCK_DAY_ALL + TPEx tpex_mainboard_quotes（T-1 收盤，穩定官方）。"""
+
+    name = "openapi"
+
+    def get_quote(self, code: str, market: str) -> _TWQuote | None:
+        quotes = _fetch_tw_quotes()
+        return quotes.get(code)
+
+    @property
+    def display_label(self) -> str:
+        # OpenAPI 來源對應的市場標籤交由 _get_tw_overview 處理（TWSE / TPEx）
+        return ""
+
+
+class MisProvider(TWQuoteProvider):
+    """TWSE MIS 即時報價系統（盤中每幾秒更新，盤後保留當日收盤）。
+
+    一次只查一檔；listing/名稱對照仍依賴 OpenApiProvider 的快取。
+    """
+
+    name = "mis"
+    _BASE = "https://mis.twse.com.tw/stock/api/getStockInfo.jsp"
+    _HEADERS = {
+        "User-Agent": (
+            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+            "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+        ),
+        "Referer": "https://mis.twse.com.tw/stock/",
+        "Accept": "application/json,text/plain,*/*",
+    }
+    _SHARES_PER_LOT = 1000  # MIS v 為「張」，轉成股數需 × 1000
+
+    def get_quote(self, code: str, market: str) -> _TWQuote | None:
+        ex = "tse" if market == ".TW" else "otc"
+        ex_ch = f"{ex}_{code}.tw"
+        try:
+            resp = requests.get(
+                self._BASE,
+                params={"ex_ch": ex_ch, "json": "1", "delay": "0",
+                        "_": str(int(time.time() * 1000))},
+                headers=self._HEADERS,
+                timeout=8,
+            )
+            resp.raise_for_status()
+            payload = resp.json()
+        except Exception as e:
+            logger.warning("MIS request failed for %s: %s", ex_ch, e)
+            return None
+
+        arr = payload.get("msgArray") or []
+        if not arr:
+            return None
+        s = arr[0]
+
+        close = _safe_float(s.get("z"))
+        prev_close = _safe_float(s.get("y"))
+        change: float | None = None
+        if close is not None and prev_close is not None:
+            change = round(close - prev_close, 2)
+
+        # 數量：MIS 的 v 是當日累計成交「張數」，轉股
+        volume_lots = _safe_int(s.get("v"))
+        volume_shares = (
+            volume_lots * self._SHARES_PER_LOT if volume_lots is not None else None
+        )
+
+        # 日期：'20260529' → '2026-05-29'
+        d_raw = (s.get("d") or "").strip()
+        date_iso = ""
+        if len(d_raw) == 8 and d_raw.isdigit():
+            date_iso = f"{d_raw[:4]}-{d_raw[4:6]}-{d_raw[6:8]}"
+
+        return _TWQuote(
+            code=code,
+            name=(s.get("n") or "").strip(),
+            market=market,
+            close=close,
+            open=_safe_float(s.get("o")),
+            high=_safe_float(s.get("h")),
+            low=_safe_float(s.get("l")),
+            change=change,
+            volume_shares=volume_shares,
+            transaction=None,  # MIS 不提供當日筆數
+            date=date_iso,
+        )
+
+    @property
+    def is_intraday(self) -> bool:
+        return True
+
+    @property
+    def display_label(self) -> str:
+        return "MIS"
+
+
+_PROVIDERS: dict[str, TWQuoteProvider] = {
+    OpenApiProvider.name: OpenApiProvider(),
+    MisProvider.name: MisProvider(),
+}
+
+
+def _select_tw_provider() -> TWQuoteProvider:
+    """根據 settings.tw_quote_provider 選擇報價來源（未知值回退到 openapi）。"""
+    from config import settings  # 延遲 import 避免循環依賴
+
+    name = (settings.tw_quote_provider or "openapi").strip().lower()
+    return _PROVIDERS.get(name) or _PROVIDERS["openapi"]
+
+
 # ── Ticker 正規化 ────────────────────────────────────────────────────────────
 
 # 常見台股代碼映射（離線備援，當 API 不可用時使用）
@@ -491,13 +627,25 @@ def get_stock_overview(ticker: str) -> StockOverviewData:
 
 
 def _get_tw_overview(ticker: str) -> StockOverviewData:
-    """台股：以 TWSE/TPEx Open API 收盤資料為準；market_cap / 52w 仍向 yfinance 補強。"""
+    """台股：報價由 settings.tw_quote_provider 選擇（openapi / mis）；
+    listing 與 market 對照永遠從 OpenAPI 取得；market_cap / 52w 仍向 yfinance 補強。
+    """
     code = ticker.rsplit(".", 1)[0]
-    quotes = _fetch_tw_quotes()
-    q = quotes.get(code)
+    # 確保 listing/market 對照已載入（也讓 OpenAPI 快取就緒供 fallback 使用）
+    _fetch_tw_quotes()
+    market = _tw_listing_market.get(code, ".TW" if ticker.endswith(".TW") else ".TWO")
+
+    provider = _select_tw_provider()
+    q = provider.get_quote(code, market)
+
+    # Fallback：選擇的 provider 失敗時，最後退回 OpenAPI 快取
+    used_provider = provider
+    if (q is None or q.close is None) and provider.name != OpenApiProvider.name:
+        logger.info("provider=%s failed for %s; fallback to openapi", provider.name, ticker)
+        used_provider = _PROVIDERS[OpenApiProvider.name]
+        q = used_provider.get_quote(code, market)
 
     if q is None or q.close is None:
-        # 明確失敗：不 fallback 到 yfinance 以維持資料一致性
         logger.warning("TW quote not available for %s; returning empty overview", ticker)
         return StockOverviewData(ticker=ticker)
 
@@ -507,7 +655,10 @@ def _get_tw_overview(ticker: str) -> StockOverviewData:
         if prev_close:
             change_pct = round((q.change / prev_close) * 100, 2)
 
-    market_name = "TWSE" if q.market == ".TW" else "TPEx"
+    market_name = "TWSE" if market == ".TW" else "TPEx"
+    # data_source 顯示策略：openapi 沿用市場名（TWSE/TPEx），其他 provider 顯示自己的 label
+    provider_label = used_provider.display_label
+    data_source = provider_label or market_name
 
     # 補充 yfinance 提供的 52w 與 market_cap（不影響價格欄位）
     yf_info: dict = {}
@@ -529,8 +680,8 @@ def _get_tw_overview(ticker: str) -> StockOverviewData:
         high_52w=yf_info.get("fiftyTwoWeekHigh"),
         low_52w=yf_info.get("fiftyTwoWeekLow"),
         as_of_date=q.date or _latest_tw_trading_date().isoformat(),
-        data_source=market_name,
-        is_intraday=False,
+        data_source=data_source,
+        is_intraday=used_provider.is_intraday,
     )
 
 
