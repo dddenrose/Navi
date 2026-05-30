@@ -185,6 +185,115 @@ class TestTWHelpers:
         assert _latest_tw_trading_date(sun).isoformat() == "2026-05-22"
 
 
+# ── TW Quote Provider 抽象 ─────────────────────────────────────────────────
+
+
+class TestTWQuoteProvider:
+    def test_default_provider_is_openapi(self):
+        import services.stock_service as svc
+
+        from config import settings
+
+        original = settings.tw_quote_provider
+        try:
+            settings.tw_quote_provider = ""
+            assert svc._select_tw_provider().name == "openapi"
+            settings.tw_quote_provider = "unknown_xyz"
+            assert svc._select_tw_provider().name == "openapi"
+        finally:
+            settings.tw_quote_provider = original
+
+    def test_select_mis_provider(self):
+        import services.stock_service as svc
+
+        from config import settings
+
+        original = settings.tw_quote_provider
+        try:
+            settings.tw_quote_provider = "mis"
+            p = svc._select_tw_provider()
+            assert p.name == "mis"
+            assert p.is_intraday is True
+            assert p.display_label == "MIS"
+        finally:
+            settings.tw_quote_provider = original
+
+    def test_mis_provider_parses_response(self):
+        """MisProvider 正確解析 MIS msgArray、處理張→股轉換、日期格式。"""
+        import services.stock_service as svc
+
+        fake_resp = MagicMock()
+        fake_resp.raise_for_status = MagicMock()
+        fake_resp.json.return_value = {
+            "msgArray": [
+                {
+                    "c": "0050", "n": "元大台灣50",
+                    "z": "105.4000", "y": "100.5000",
+                    "o": "103.20", "h": "105.40", "l": "102.70",
+                    "v": "102355", "d": "20260529", "t": "13:30:00", "ex": "tse",
+                }
+            ]
+        }
+        with patch.object(svc.requests, "get", return_value=fake_resp) as mock_get:
+            q = svc.MisProvider().get_quote("0050", ".TW")
+
+        assert q is not None
+        assert q.code == "0050"
+        assert q.name == "元大台灣50"
+        assert q.close == 105.4
+        assert q.change == round(105.4 - 100.5, 2)
+        assert q.open == 103.20
+        assert q.volume_shares == 102355 * 1000  # 張 → 股
+        assert q.date == "2026-05-29"
+        # 確認帶了正確的 ex_ch（上市 → tse_）
+        called_params = mock_get.call_args.kwargs.get("params", {})
+        assert called_params.get("ex_ch") == "tse_0050.tw"
+
+    def test_mis_provider_uses_otc_for_two(self):
+        import services.stock_service as svc
+
+        fake_resp = MagicMock()
+        fake_resp.raise_for_status = MagicMock()
+        fake_resp.json.return_value = {"msgArray": []}
+        with patch.object(svc.requests, "get", return_value=fake_resp) as mock_get:
+            svc.MisProvider().get_quote("6488", ".TWO")
+        assert mock_get.call_args.kwargs["params"]["ex_ch"] == "otc_6488.tw"
+
+    def test_mis_provider_handles_network_error(self):
+        """網路失敗時回傳 None，不丟例外。"""
+        import services.stock_service as svc
+
+        with patch.object(svc.requests, "get", side_effect=RuntimeError("timeout")):
+            assert svc.MisProvider().get_quote("0050", ".TW") is None
+
+    def test_overview_falls_back_to_openapi_when_mis_fails(self):
+        """選擇 MIS 但失敗時，應 fallback 到 OpenAPI 快取。"""
+        import services.stock_service as svc
+
+        from config import settings
+
+        openapi_quote = svc._TWQuote(
+            code="2330", name="台積電", market=".TW",
+            close=1000.0, change=10.0, volume_shares=12_345_000,
+            date="2026-05-28",
+        )
+        original = settings.tw_quote_provider
+        try:
+            settings.tw_quote_provider = "mis"
+            with (
+                patch.object(svc, "_fetch_tw_quotes", return_value={"2330": openapi_quote}),
+                patch.dict(svc._tw_listing_market, {"2330": ".TW"}, clear=False),
+                patch.object(svc.MisProvider, "get_quote", return_value=None),
+                patch.object(svc, "_get_ticker_info", return_value={}),
+            ):
+                result = svc.get_stock_overview("2330.TW")
+            assert result.price == 1000.0
+            assert result.data_source == "TWSE"  # fallback 後回到 openapi 的市場 label
+            assert result.is_intraday is False
+        finally:
+            settings.tw_quote_provider = original
+
+
 # ── get_technical_indicators ─────────────────────────────────────────────────
 
 
