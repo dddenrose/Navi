@@ -8,6 +8,7 @@ import asyncio
 import logging
 import re
 from collections.abc import AsyncGenerator
+from datetime import UTC, datetime
 from typing import Any, Literal, TypedDict
 
 import vertexai
@@ -50,8 +51,210 @@ class ToolEndEvent(TypedDict):
     tool: str
 
 
-ThinkingEvent = IntentEvent | ToolStartEvent | ToolEndEvent
+class Citation(TypedDict, total=False):
+    id: int
+    type: str  # tool category: price | technicals | fundamentals | institutional | margin | news | knowledge | backtest | portfolio
+    source: str  # human-readable provider name
+    title: str | None  # news article title / knowledge doc title
+    url: str | None  # link to source (news article, TWSE page, etc.)
+    detail: str | None  # e.g. "ticker=2330, period=3mo"
+    note: str | None  # compliance / sanity note
+    fetched_at: str  # ISO timestamp
+
+
+class CitationsEvent(TypedDict):
+    type: Literal["citations"]
+    citations: list[Citation]
+
+
+ThinkingEvent = IntentEvent | ToolStartEvent | ToolEndEvent | CitationsEvent
 StreamChunk = str | ThinkingEvent
+
+
+# ── Citation Source Registry ─────────────────────────────────────────────────
+
+_TOOL_SOURCE_INFO: dict[str, dict[str, str | None]] = {
+    "get_stock_price": {
+        "type": "price",
+        "source": "Yahoo Finance / 台灣證券交易所（收盤資料）",
+        "url": None,
+    },
+    "analyze_technicals": {
+        "type": "technicals",
+        "source": "Yahoo Finance（歷史 K 線）",
+        "url": None,
+    },
+    "analyze_fundamentals": {
+        "type": "fundamentals",
+        "source": "Yahoo Finance（公司財務）",
+        "url": None,
+    },
+    "get_institutional": {
+        "type": "institutional",
+        "source": "台灣證券交易所（三大法人買賣超）",
+        "url": "https://www.twse.com.tw/zh/trading/foreign/bfi82u.html",
+    },
+    "get_margin_trading": {
+        "type": "margin",
+        "source": "台灣證券交易所（融資融券）",
+        "url": "https://www.twse.com.tw/zh/trading/exchange/MI_MARGN.html",
+    },
+    "search_knowledge": {
+        "type": "knowledge",
+        "source": "Navi 投資知識庫",
+        "url": None,
+    },
+    "run_strategy_backtest": {
+        "type": "backtest",
+        "source": "Navi 內部回測（歷史資料來自 Yahoo Finance）",
+        "url": None,
+    },
+    "get_portfolio": {
+        "type": "portfolio",
+        "source": "Navi 投資組合（使用者資料）",
+        "url": None,
+    },
+    "search_financial_news": {
+        "type": "news",
+        "source": "Google News",
+        "url": None,
+    },
+}
+
+
+# Regex to extract per-item news citations from search_financial_news output.
+# Tool format (after refactor): "[1] Title（Source） — time\n   🔗 url"
+# Title stops at first 「（」 or 「—」 so source/time are captured separately.
+_NEWS_ITEM_RE = re.compile(
+    r"\[(\d+)\]\s*([^（—\n]+?)\s*(?:（([^）\n]+)）)?\s*(?:—\s*([^\n]+?))?\s*\n\s*🔗\s*(\S+)"
+)
+
+# Regex for knowledge base items: "[1] Title（Category）"
+_KB_ITEM_RE = re.compile(r"\[(\d+)\]\s*(.+?)（(.+?)）")
+
+
+def _build_citations(tool_calls: list[dict]) -> list[Citation]:
+    """Build citation list from collected tool call records.
+
+    Args:
+        tool_calls: list of {"name": str, "input": dict, "output": str}
+    """
+    citations: list[Citation] = []
+    seen: set[tuple[str, str | None, str | None]] = set()
+    fetched_at = datetime.now(UTC).isoformat(timespec="seconds")
+    next_id = 1
+
+    def _add(cit: Citation) -> None:
+        nonlocal next_id
+        key = (cit.get("type", ""), cit.get("title"), cit.get("url"))
+        if key in seen:
+            return
+        seen.add(key)
+        cit["id"] = next_id
+        cit.setdefault("fetched_at", fetched_at)
+        citations.append(cit)
+        next_id += 1
+
+    for call in tool_calls:
+        name = call.get("name", "")
+        tool_input = call.get("input") or {}
+        output = call.get("output") or ""
+
+        info = _TOOL_SOURCE_INFO.get(name)
+        if info is None:
+            continue
+
+        ticker = tool_input.get("ticker") if isinstance(tool_input, dict) else None
+        query = tool_input.get("query") if isinstance(tool_input, dict) else None
+        detail_parts: list[str] = []
+        if ticker:
+            detail_parts.append(f"ticker={ticker}")
+        if query and name != "search_financial_news":
+            detail_parts.append(f"query={query}")
+        detail = "、".join(detail_parts) if detail_parts else None
+
+        # Per-item citations: news
+        if name == "search_financial_news":
+            matches = _NEWS_ITEM_RE.findall(output)
+            if matches:
+                for _idx, title, source, _time, url in matches:
+                    _add(
+                        Citation(
+                            type="news",
+                            source=(source.strip() if source else "Google News"),
+                            title=title.strip(),
+                            url=url.strip(),
+                            detail=None,
+                            note=None,
+                            fetched_at=fetched_at,
+                        )
+                    )
+                continue
+            # Fallback: single generic citation
+            _add(
+                Citation(
+                    type="news",
+                    source="Google News",
+                    title=None,
+                    url=None,
+                    detail=(f"query={query}" if query else None),
+                    note=None,
+                    fetched_at=fetched_at,
+                )
+            )
+            continue
+
+        # Per-item citations: knowledge base
+        if name == "search_knowledge":
+            matches = _KB_ITEM_RE.findall(output)
+            if matches:
+                for _idx, title, category in matches:
+                    _add(
+                        Citation(
+                            type="knowledge",
+                            source="Navi 投資知識庫",
+                            title=f"{title.strip()}（{category.strip()}）",
+                            url=None,
+                            detail=None,
+                            note=None,
+                            fetched_at=fetched_at,
+                        )
+                    )
+                continue
+            _add(
+                Citation(
+                    type="knowledge",
+                    source="Navi 投資知識庫",
+                    title=None,
+                    url=None,
+                    detail=detail,
+                    note=None,
+                    fetched_at=fetched_at,
+                )
+            )
+            continue
+
+        # Generic single citation per tool
+        note: str | None = None
+        if name == "analyze_fundamentals":
+            note = "Forward EPS / Forward PE 為第三方分析師共識估值，非 Navi 預測"
+        elif name == "run_strategy_backtest":
+            note = "回測績效不代表未來表現"
+
+        _add(
+            Citation(
+                type=str(info["type"]),
+                source=str(info["source"]),
+                title=None,
+                url=info["url"],
+                detail=detail,
+                note=note,
+                fetched_at=fetched_at,
+            )
+        )
+
+    return citations
+
 
 
 # ── Prompt ───────────────────────────────────────────────────────────────────
@@ -772,14 +975,20 @@ def _init_tool_registry() -> None:
         _TOOL_REGISTRY = {tool.name: tool for tool in ALL_TOOLS}
 
 
-async def _prefetch_tool_results(ticker: str, tool_names: list[str]) -> str:
-    """平行呼叫所有必要工具，回傳格式化的結果文字。"""
+async def _prefetch_tool_results(
+    ticker: str, tool_names: list[str]
+) -> tuple[str, list[dict]]:
+    """平行呼叫所有必要工具。
+
+    Returns:
+        (formatted_text, tool_calls) — tool_calls 為 citations 構建用的原始紀錄。
+    """
     _init_tool_registry()
 
-    async def _call(name: str) -> tuple[str, str]:
+    async def _call(name: str) -> tuple[str, dict, str]:
         tool_fn = _TOOL_REGISTRY.get(name)
         if not tool_fn:
-            return name, f"⚠️ 工具 {name} 不存在"
+            return name, {}, f"⚠️ 工具 {name} 不存在"
         try:
             if name == "search_financial_news":
                 inp = {"query": ticker}
@@ -796,17 +1005,20 @@ async def _prefetch_tool_results(ticker: str, tool_names: list[str]) -> str:
             else:
                 inp = {"ticker": ticker}
             output = await asyncio.to_thread(tool_fn.invoke, inp)
-            return name, str(output)
+            return name, inp, str(output)
         except Exception as e:
             logger.warning("Prefetch tool %s failed: %s", name, e)
-            return name, f"⚠️ {name} 查詢失敗：{e}"
+            return name, {}, f"⚠️ {name} 查詢失敗：{e}"
 
     tasks = [_call(name) for name in tool_names]
     results = await asyncio.gather(*tasks)
     parts = []
-    for name, output in results:
+    tool_calls: list[dict] = []
+    for name, inp, output in results:
         parts.append(f"── {name} ──\n{output}")
-    return "\n\n".join(parts)
+        tool_calls.append({"name": name, "input": inp, "output": output})
+    return "\n\n".join(parts), tool_calls
+
 
 
 # ── Prefetch Mode ────────────────────────────────────────────────────────────
@@ -834,12 +1046,17 @@ async def _run_prefetch_mode(
         thinking_steps.append(dict(start_event))
         yield start_event
 
-    tool_results = await _prefetch_tool_results(ticker, tool_names)
+    tool_results, tool_calls = await _prefetch_tool_results(ticker, tool_names)
 
     for name in tool_names:
         end_event = ToolEndEvent(type="tool_end", tool=name)
         thinking_steps.append(dict(end_event))
         yield end_event
+
+    citations = _build_citations(tool_calls)
+    citations_event: CitationsEvent | None = None
+    if citations:
+        citations_event = CitationsEvent(type="citations", citations=citations)
 
     format_instructions = _ENTRY_FORMAT if intent == "entry_analysis" else _COMPREHENSIVE_FORMAT
     system_msg = _PREFETCH_SYSTEM_TEMPLATE.format(
@@ -865,6 +1082,9 @@ async def _run_prefetch_mode(
                 full_output += chunk.content
                 yield chunk.content
 
+        if citations_event is not None:
+            yield citations_event
+
         if conversation_id and full_output:
             try:
                 save_history(
@@ -873,12 +1093,14 @@ async def _run_prefetch_mode(
                     full_output,
                     user_id=user_id,
                     thinking=thinking_steps or None,
+                    citations=citations or None,
                 )
             except Exception as e:
                 logger.warning("Failed to save history: %s", e)
     except Exception:
         logger.exception("Prefetch mode failed")
         yield "抱歉，分析過程中發生錯誤，請稍後再試。"
+
 
 
 
@@ -949,6 +1171,8 @@ async def _run_agent_mode(
     try:
         full_output = ""
         active_tools: set[str] = set()
+        # tool_call_id → {"name", "input", "output"} for citation building
+        tool_calls_by_run: dict[str, dict] = {}
 
         async for event in agent.astream_events(
             {"messages": input_messages},
@@ -958,16 +1182,32 @@ async def _run_agent_mode(
             if kind == "on_tool_start":
                 tool_name = event["name"]
                 active_tools.add(tool_name)
+                run_id = event.get("run_id", "")
+                tool_input = event["data"].get("input", {}) or {}
+                tool_calls_by_run[run_id] = {
+                    "name": tool_name,
+                    "input": tool_input if isinstance(tool_input, dict) else {},
+                    "output": "",
+                }
                 start_event = ToolStartEvent(
                     type="tool_start",
                     tool=tool_name,
-                    input=event["data"].get("input", {}),
+                    input=tool_input if isinstance(tool_input, dict) else {},
                 )
                 thinking_steps.append(dict(start_event))
                 yield start_event
             elif kind == "on_tool_end":
                 tool_name = event["name"]
                 active_tools.discard(tool_name)
+                run_id = event.get("run_id", "")
+                output = event["data"].get("output")
+                # output may be a ToolMessage or raw string
+                if hasattr(output, "content"):
+                    output_str = str(output.content)
+                else:
+                    output_str = str(output) if output is not None else ""
+                if run_id in tool_calls_by_run:
+                    tool_calls_by_run[run_id]["output"] = output_str
                 end_event = ToolEndEvent(type="tool_end", tool=tool_name)
                 thinking_steps.append(dict(end_event))
                 yield end_event
@@ -984,6 +1224,10 @@ async def _run_agent_mode(
                 full_output = last_msg.content
                 yield full_output
 
+        citations = _build_citations(list(tool_calls_by_run.values()))
+        if citations:
+            yield CitationsEvent(type="citations", citations=citations)
+
         if conversation_id and full_output:
             try:
                 save_history(
@@ -992,12 +1236,14 @@ async def _run_agent_mode(
                     full_output,
                     user_id=user_id,
                     thinking=thinking_steps or None,
+                    citations=citations or None,
                 )
             except Exception as e:
                 logger.warning("Failed to save history for %s: %s", conversation_id, e)
     except Exception:
         logger.exception("Agent execution failed")
         yield "抱歉，分析過程中發生錯誤，請稍後再試。"
+
 
 
 # ── Public API ───────────────────────────────────────────────────────────────
