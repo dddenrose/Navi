@@ -26,6 +26,8 @@ def search_financial_news(query: str, max_results: int = 5) -> str:
         source_tag = f"（{article.source}）" if article.source else ""
         time_tag = f" — {article.published}" if article.published else ""
         parts.append(f"[{i}] {article.title}{source_tag}{time_tag}")
+        if article.link:
+            parts.append(f"   🔗 {article.link}")
 
     parts.append("")
     parts.append("💡 提示：以上新聞來自 Google News，僅供參考。")

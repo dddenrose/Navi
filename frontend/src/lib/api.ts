@@ -137,6 +137,7 @@ export interface StoredMessage {
   role: string;
   content: string;
   thinking?: ThinkingStep[];
+  citations?: Citation[];
 }
 
 export async function getConversationMessages(
@@ -171,6 +172,17 @@ export type ThinkingStep =
   | { type: "tool_start"; tool: string; input?: Record<string, unknown> }
   | { type: "tool_end"; tool: string };
 
+export interface Citation {
+  id: number;
+  type: string;
+  source: string;
+  title?: string | null;
+  url?: string | null;
+  detail?: string | null;
+  note?: string | null;
+  fetched_at?: string;
+}
+
 export interface QuotaErrorPayload {
   code: "QUOTA_EXCEEDED" | "ACCOUNT_SUSPENDED";
   message: string;
@@ -186,6 +198,7 @@ export interface ChatStreamOptions {
   conversationId?: string;
   onChunk: (text: string) => void;
   onThinkingStep: (step: ThinkingStep) => void;
+  onCitations?: (citations: Citation[]) => void;
   onDone: (conversationId: string) => void;
   onError: (error: string) => void;
   onQuotaHeaders?: (headers: Headers) => void;
@@ -198,6 +211,7 @@ export async function streamChat(options: ChatStreamOptions): Promise<void> {
     conversationId,
     onChunk,
     onThinkingStep,
+    onCitations,
     onDone,
     onError,
     onQuotaHeaders,
@@ -294,6 +308,12 @@ export async function streamChat(options: ChatStreamOptions): Promise<void> {
             parsed.type === "tool_end"
           ) {
             onThinkingStep(parsed as ThinkingStep);
+            continue;
+          }
+
+          // Citations event: {"type": "citations", "citations": [...]}
+          if (parsed.type === "citations" && Array.isArray(parsed.citations)) {
+            onCitations?.(parsed.citations as Citation[]);
             continue;
           }
 

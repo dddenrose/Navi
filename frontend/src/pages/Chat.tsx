@@ -6,8 +6,9 @@ import {
   getConversationMessages,
   deleteConversation,
 } from "@/lib/api";
-import type { ThinkingStep, StoredMessage } from "@/lib/api";
+import type { ThinkingStep, StoredMessage, Citation } from "@/lib/api";
 import { ThinkingPanel } from "@/components/ThinkingPanel";
+import { CitationsList } from "@/components/CitationsList";
 import { MarkdownRenderer } from "@/components/MarkdownRenderer";
 import { QuotaBadge } from "@/components/QuotaBadge";
 import { useQuotaStore } from "@/store/quotaStore";
@@ -17,6 +18,7 @@ interface Message {
   content: string;
   streaming?: boolean;
   thinkingSteps?: ThinkingStep[];
+  citations?: Citation[];
 }
 
 interface Conversation {
@@ -85,6 +87,7 @@ export default function Chat() {
             role: m.role === "human" ? "user" : "assistant",
             content: m.content,
             thinkingSteps: m.thinking,
+            citations: m.citations,
           }),
         );
         setMessages(loaded);
@@ -160,6 +163,19 @@ export default function Chat() {
             updated[updated.length - 1] = {
               ...last,
               thinkingSteps: [...(last.thinkingSteps ?? []), step],
+            };
+          }
+          return updated;
+        });
+      },
+      onCitations: (citations) => {
+        setMessages((prev) => {
+          const updated = [...prev];
+          const last = updated[updated.length - 1];
+          if (last.role === "assistant") {
+            updated[updated.length - 1] = {
+              ...last,
+              citations,
             };
           }
           return updated;
@@ -486,6 +502,11 @@ export default function Chat() {
                       <span className="cursor-blink inline-block w-0.5 h-4 bg-indigo-400 ml-0.5 align-text-bottom" />
                     )}
                   </div>
+                  {msg.role === "assistant" &&
+                    msg.citations &&
+                    msg.citations.length > 0 && (
+                      <CitationsList citations={msg.citations} />
+                    )}
                 </div>
               </div>
             ))}

@@ -59,12 +59,16 @@ def save_history(
     assistant_message: str,
     user_id: str = "",
     thinking: list[dict] | None = None,
+    citations: list[dict] | None = None,
 ) -> None:
     """Append a turn (user + assistant) to the conversation in Firestore.
 
     If ``thinking`` is provided, it will be stored on the assistant message
     as a ``thinking`` field so the UI can later restore the Gemini-style
     "show thinking" panel for historical conversations.
+
+    If ``citations`` is provided, it will be stored on the assistant message
+    so the UI can render the source list for historical conversations.
     """
     db = get_db()
     doc_ref = db.collection(COLLECTION).document(conversation_id)
@@ -80,6 +84,8 @@ def save_history(
     ai_msg: dict = {"role": "ai", "content": assistant_message}
     if thinking:
         ai_msg["thinking"] = thinking
+    if citations:
+        ai_msg["citations"] = citations
     messages.append(ai_msg)
 
     # Trim old messages
