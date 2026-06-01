@@ -43,8 +43,8 @@ class Settings(BaseSettings):
     screener_unsubscribe_secret: str = ""
     screener_public_base_url: str = "https://navi-stock-analyzer.web.app"
 
-    # TW 股價來源：'openapi'（TWSE/TPEx Open API，T-1 收盤）或 'mis'（MIS 即時報價，T-0）
-    tw_quote_provider: str = "openapi"
+    # TW 股價來源：'mis'（MIS 即時報價，T-0）或 'openapi'（TWSE/TPEx Open API，T-1 收盤）
+    tw_quote_provider: str = "mis"
 
 
 settings = Settings()
