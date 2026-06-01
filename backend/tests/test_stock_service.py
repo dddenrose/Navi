@@ -108,6 +108,8 @@ class TestGetStockOverview:
 
         import services.stock_service as svc
 
+        from config import settings
+
         quote = svc._TWQuote(
             code="2330",
             name="台積電",
@@ -116,12 +118,17 @@ class TestGetStockOverview:
             change=2.0,
             volume_shares=28_156_000,
         )
-        with (
-            patch.object(svc, "_fetch_tw_quotes", return_value={"2330": quote}),
-            patch.object(svc, "_get_ticker_info", return_value={"marketCap": 15_000_000_000_000}),
-            patch.object(svc, "_latest_tw_trading_date", return_value=date(2026, 5, 26)),
-        ):
-            result = svc.get_stock_overview("2330.TW")
+        original = settings.tw_quote_provider
+        try:
+            settings.tw_quote_provider = "openapi"
+            with (
+                patch.object(svc, "_fetch_tw_quotes", return_value={"2330": quote}),
+                patch.object(svc, "_get_ticker_info", return_value={"marketCap": 15_000_000_000_000}),
+                patch.object(svc, "_latest_tw_trading_date", return_value=date(2026, 5, 26)),
+            ):
+                result = svc.get_stock_overview("2330.TW")
+        finally:
+            settings.tw_quote_provider = original
 
         assert result.price == 580.0
         assert result.change == 2.0
@@ -189,7 +196,7 @@ class TestTWHelpers:
 
 
 class TestTWQuoteProvider:
-    def test_default_provider_is_openapi(self):
+    def test_default_provider_is_mis(self):
         import services.stock_service as svc
 
         from config import settings
@@ -197,9 +204,9 @@ class TestTWQuoteProvider:
         original = settings.tw_quote_provider
         try:
             settings.tw_quote_provider = ""
-            assert svc._select_tw_provider().name == "openapi"
+            assert svc._select_tw_provider().name == "mis"
             settings.tw_quote_provider = "unknown_xyz"
-            assert svc._select_tw_provider().name == "openapi"
+            assert svc._select_tw_provider().name == "mis"
         finally:
             settings.tw_quote_provider = original
 

@@ -382,11 +382,11 @@ _PROVIDERS: dict[str, TWQuoteProvider] = {
 
 
 def _select_tw_provider() -> TWQuoteProvider:
-    """根據 settings.tw_quote_provider 選擇報價來源（未知值回退到 openapi）。"""
+    """根據 settings.tw_quote_provider 選擇報價來源（未知值回退到 mis）。"""
     from config import settings  # 延遲 import 避免循環依賴
 
-    name = (settings.tw_quote_provider or "openapi").strip().lower()
-    return _PROVIDERS.get(name) or _PROVIDERS["openapi"]
+    name = (settings.tw_quote_provider or MisProvider.name).strip().lower()
+    return _PROVIDERS.get(name) or _PROVIDERS[MisProvider.name]
 
 
 # ── Ticker 正規化 ────────────────────────────────────────────────────────────
