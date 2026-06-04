@@ -273,6 +273,33 @@ class TestTWQuoteProvider:
         with patch.object(svc.requests, "get", side_effect=RuntimeError("timeout")):
             assert svc.MisProvider().get_quote("0050", ".TW") is None
 
+    def test_mis_provider_falls_back_to_bid_ask_when_z_dash(self):
+        """`z` 為 "-"（5 秒撮合間隔）時，改用最佳買賣價中位估算現價。"""
+        import services.stock_service as svc
+
+        fake_resp = MagicMock()
+        fake_resp.raise_for_status = MagicMock()
+        fake_resp.json.return_value = {
+            "msgArray": [
+                {
+                    "c": "2330", "n": "台積電",
+                    "z": "-", "y": "2425.0000",
+                    "a": "2410.0000_2415.0000_2420.0000_2425.0000_2430.0000_",
+                    "b": "2405.0000_2400.0000_2395.0000_2390.0000_2385.0000_",
+                    "o": "2385.0000", "h": "2410.0000", "l": "2385.0000",
+                    "v": "12066", "d": "20260604", "t": "11:25:40", "ex": "tse",
+                }
+            ]
+        }
+        with patch.object(svc.requests, "get", return_value=fake_resp):
+            q = svc.MisProvider().get_quote("2330", ".TW")
+
+        assert q is not None
+        # 中位 = (2405 + 2410) / 2 = 2407.5
+        assert q.close == 2407.5
+        assert q.change == round(2407.5 - 2425.0, 2)
+        assert q.date == "2026-06-04"
+
     def test_overview_falls_back_to_openapi_when_mis_fails(self):
         """選擇 MIS 但失敗時，應 fallback 到 OpenAPI 快取。"""
         import services.stock_service as svc

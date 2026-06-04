@@ -103,6 +103,17 @@ def _safe_int(val) -> int | None:
     return int(f) if f is not None else None
 
 
+def _first_price(val) -> float | None:
+    """MIS 的 best5 欄位形如 '2410.0000_2415.0000_..._'；取第一個有效價格。"""
+    if not val:
+        return None
+    for part in str(val).split("_"):
+        p = _safe_float(part)
+        if p is not None and p > 0:
+            return p
+    return None
+
+
 def _roc_date_to_iso(val) -> str:
     """民國年 yyyMMdd（如 '1150528'）轉 ISO 'YYYY-MM-DD'；失敗回空字串。"""
     if val is None:
@@ -334,7 +345,21 @@ class MisProvider(TWQuoteProvider):
             return None
         s = arr[0]
 
+        # `z` 為最近一筆撮合價；TWSE 每 5 秒撮合一次，間隔內 z 會是 "-"
+        # → 退而用最佳買賣價中位 (b[0]+a[0])/2，再退到 pz / 開盤價，最後到昨收
         close = _safe_float(s.get("z"))
+        if close is None:
+            best_bid = _first_price(s.get("b"))
+            best_ask = _first_price(s.get("a"))
+            if best_bid is not None and best_ask is not None:
+                close = round((best_bid + best_ask) / 2, 4)
+            elif best_bid is not None:
+                close = best_bid
+            elif best_ask is not None:
+                close = best_ask
+            else:
+                close = _safe_float(s.get("pz")) or _safe_float(s.get("o"))
+
         prev_close = _safe_float(s.get("y"))
         change: float | None = None
         if close is not None and prev_close is not None:
