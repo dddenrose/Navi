@@ -76,7 +76,7 @@ StreamChunk = str | ThinkingEvent
 _TOOL_SOURCE_INFO: dict[str, dict[str, str | None]] = {
     "get_stock_price": {
         "type": "price",
-        "source": "Yahoo Finance / 台灣證券交易所（收盤資料）",
+        "source": "TWSE MIS 盤中即時報價 / TWSE / TPEx Open API（盤後收盤）/ Yahoo Finance（美股）",
         "url": None,
     },
     "analyze_technicals": {
@@ -118,6 +118,21 @@ _TOOL_SOURCE_INFO: dict[str, dict[str, str | None]] = {
         "type": "news",
         "source": "Google News",
         "url": None,
+    },
+    "get_market_overview": {
+        "type": "market_index",
+        "source": "TWSE MIS 指數即時報價 / TWSE Open API（盤後）",
+        "url": None,
+    },
+    "get_market_institutional_flows": {
+        "type": "institutional",
+        "source": "台灣證券交易所（三大法人買賣金額統計表 BFI82U）",
+        "url": "https://www.twse.com.tw/zh/trading/foreign/bfi82u.html",
+    },
+    "get_market_futures_positions": {
+        "type": "futures",
+        "source": "臺灣期貨交易所（三大法人區分各期貨契約類別交易情形）",
+        "url": "https://www.taifex.com.tw/cht/3/futContractsDate",
     },
 }
 
@@ -329,6 +344,9 @@ AGENT_SYSTEM_PROMPT = """\
 | 回測 / 策略績效 | run_strategy_backtest（strategy: ma_cross/rsi/macd；period: 3mo/6mo/1y/2y）|
 | 投資理論 / 教學 / 名詞解釋 | search_knowledge |
 | 我的持股 / 投資組合 | get_portfolio（user_id 使用 <context> 區塊提供的值）|
+| 大盤現在多少 / 加權指數 / 櫃買 | get_market_overview（market="TWSE" 或 "TPEx"）|
+| 外資今天買賣超 / 三大法人總額 / 市場資金流向 | get_market_institutional_flows |
+| 台指期 / 外資多空單 / 期貨未平倉 | get_market_futures_positions（commodity="TXF" 預設）|
 
 預設呼叫原則：可平行呼叫的工具（同一檔股票的多個面向）應同時觸發，不要串行等待。
 
@@ -501,6 +519,23 @@ def _build_llm() -> ChatVertexAI:
 
 # Regex patterns for intent classification (compiled once)
 _INTENT_PATTERNS: list[tuple[str, re.Pattern, float]] = [
+    # macro_overview: 大盤 / 外資總額 / 期貨多空（無個股 ticker）
+    (
+        "macro_overview",
+        re.compile(
+            r"(大盤|加權指數|加權.{0,3}指|TAIEX|台股.{0,3}指|"
+            r"櫃買|OTC指|"
+            r"外資.{0,3}(今天|今日|昨天|本週|這週|現在).{0,5}(買|賣|超|動向|流向)|"
+            r"外資.{0,4}買賣超.{0,3}(多少|金額|總額)|"
+            r"外資.{0,5}(未平倉|淨多單|淨空單|多空(?!.*[一-龥]{2,5}))|"
+            r"三大法人.{0,5}(總額|彙總|整體|今天|昨天)|"
+            r"市場.{0,3}(資金|籌碼).{0,6}(流向|流入|流出)|"
+            r"台指期|臺指期|TXF|小台|微台|MXF|TMF|"
+            r"期貨.{0,5}(多空|未平倉|淨多單|淨空單|大戶))",
+            re.IGNORECASE,
+        ),
+        0.9,
+    ),
     # entry_analysis: 進場、買入、目標價
     (
         "entry_analysis",
@@ -743,6 +778,9 @@ def _classify_intent(question: str) -> tuple[str, str | None, float]:
     # Match intent patterns (first match wins — patterns ordered by specificity)
     for intent, pattern, confidence in _INTENT_PATTERNS:
         if pattern.search(q):
+            # macro_overview is market-wide; suppress any noisy ticker extraction
+            if intent in _NON_TICKER_PREFETCH_INTENTS:
+                return intent, None, confidence
             return intent, ticker, confidence
 
     # Fallback: if we found a ticker but no specific intent → comprehensive
@@ -895,7 +933,16 @@ _PREFETCH_INTENTS: dict[str, list[str]] = {
         "search_financial_news",
         "search_knowledge",
     ],
+    "macro_overview": [
+        "get_market_overview",
+        "get_market_institutional_flows",
+        "get_market_futures_positions",
+        "search_knowledge",
+    ],
 }
+
+# Macro intent 不需要 ticker，但仍走 prefetch 流程；這個集合用於 dispatch 判斷
+_NON_TICKER_PREFETCH_INTENTS: frozenset[str] = frozenset({"macro_overview"})
 
 # ── 預取模式回答格式 ─────────────────────────────────────────────────────────
 
@@ -916,6 +963,21 @@ _COMPREHENSIVE_FORMAT = """\
 🏦 籌碼面：法人動向摘要
 📰 近期新聞：重點消息
 💡 綜合判斷與建議：看多/看空/中性判斷與操作建議"""
+
+_MACRO_FORMAT = """\
+📈 大盤現況：加權指數現價、漲跌、（如有）盤中區間
+🏦 三大法人：整體買賣超摘要（外資為重點，金額單位「億元」）
+   - 逐日方向是否一致？是否出現連續買/賣超？
+   - 投信、自營商方向是否與外資一致？
+📐 期貨籌碼：外資臺指期未平倉淨額（多單偏多 / 空單偏空）與當日交易方向
+   - 與現貨方向是否一致？（背離可能暗示避險或方向轉換）
+💡 綜合判斷：以「資料中可觀察到的方向」描述（偏多/偏空/分歧），不可推測指數點位
+⚠️ 風險提醒：大盤分析僅作為個股決策的環境背景，不構成短線進出依據
+
+引用紀律：
+- 數字一律使用 <prefetched_data> 中已格式化的金額（例：+434 億元），不要自行換算單位。
+- 期貨「口」與股市「張」是不同單位，不可混用。
+- 若某項資料顯示 ⚠️ 失敗，明確跳過該欄位並說明資料暫不可得。"""
 
 _PREFETCH_SYSTEM_TEMPLATE = """\
 <role>
@@ -991,19 +1053,34 @@ async def _prefetch_tool_results(
             return name, {}, f"⚠️ 工具 {name} 不存在"
         try:
             if name == "search_financial_news":
-                inp = {"query": ticker}
+                inp = {"query": ticker} if ticker else {"query": "台股 大盤 外資"}
             elif name == "search_knowledge":
-                # 進場/全面分析時主動引入「眉角」與台股實務解讀
-                inp = {
-                    "query": (
-                        "進場分析 目標價 估值常見誤判 RSI鈍化強多頭 "
-                        "台股三大法人解讀 位階與風險控制 行為金融偏誤"
-                    )
-                }
+                if ticker:
+                    # 個股分析：引入「眉角」與台股實務解讀
+                    inp = {
+                        "query": (
+                            "進場分析 目標價 估值常見誤判 RSI鈍化強多頭 "
+                            "台股三大法人解讀 位階與風險控制 行為金融偏誤"
+                        )
+                    }
+                else:
+                    # 大盤分析：引入大盤解讀的 KB 內容
+                    inp = {
+                        "query": (
+                            "大盤趨勢 三大法人解讀 外資 台指期 未平倉 多空"
+                            " 籌碼面 風險管理"
+                        )
+                    }
             elif name == "analyze_technicals":
                 inp = {"ticker": ticker, "period": "3mo"}
+            elif name == "get_market_overview":
+                inp = {"market": "TWSE"}
+            elif name == "get_market_institutional_flows":
+                inp = {"days": 3}
+            elif name == "get_market_futures_positions":
+                inp = {"commodity": "TXF"}
             else:
-                inp = {"ticker": ticker}
+                inp = {"ticker": ticker} if ticker else {}
             output = await asyncio.to_thread(tool_fn.invoke, inp)
             return name, inp, str(output)
         except Exception as e:
@@ -1041,7 +1118,7 @@ async def _run_prefetch_mode(
 
     for name in tool_names:
         start_event = ToolStartEvent(
-            type="tool_start", tool=name, input={"ticker": ticker}
+            type="tool_start", tool=name, input={"ticker": ticker} if ticker else {}
         )
         thinking_steps.append(dict(start_event))
         yield start_event
@@ -1058,7 +1135,12 @@ async def _run_prefetch_mode(
     if citations:
         citations_event = CitationsEvent(type="citations", citations=citations)
 
-    format_instructions = _ENTRY_FORMAT if intent == "entry_analysis" else _COMPREHENSIVE_FORMAT
+    if intent == "entry_analysis":
+        format_instructions = _ENTRY_FORMAT
+    elif intent == "macro_overview":
+        format_instructions = _MACRO_FORMAT
+    else:
+        format_instructions = _COMPREHENSIVE_FORMAT
     system_msg = _PREFETCH_SYSTEM_TEMPLATE.format(
         tool_results=tool_results,
         format_instructions=format_instructions,
@@ -1276,12 +1358,13 @@ async def run_agent(
 
     # Step 2: 分流執行策略
     prefetch_tools = _PREFETCH_INTENTS.get(intent)
-    if prefetch_tools and ticker:
-        logger.info("→ Prefetch mode (%d tools)", len(prefetch_tools))
+    needs_ticker = intent not in _NON_TICKER_PREFETCH_INTENTS
+    if prefetch_tools and (ticker or not needs_ticker):
+        logger.info("→ Prefetch mode (%d tools, ticker=%s)", len(prefetch_tools), ticker or "—")
         async for chunk in _run_prefetch_mode(
             question,
             intent,
-            ticker,
+            ticker or "",
             prefetch_tools,
             llm,
             conversation_id,
