@@ -412,6 +412,28 @@ export default function Backtest() {
             />
           </div>
 
+          {/* 模型假設與警語（後端隨結果回傳，必須揭露） */}
+          {result.notes && result.notes.length > 0 && (
+            <div
+              className="rounded-2xl p-4 md:p-5"
+              style={{
+                background: "var(--bg-surface)",
+                border: "1px solid var(--border)",
+              }}
+            >
+              <h3 className="text-xs font-semibold text-slate-400 mb-2">
+                📎 模型假設與限制
+              </h3>
+              <ul className="space-y-1">
+                {result.notes.map((n, i) => (
+                  <li key={i} className="text-xs text-slate-500 leading-relaxed">
+                    • {n}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           {/* Equity curve chart */}
           {result.equity_curve.length > 0 && (
             <div
@@ -438,14 +460,14 @@ export default function Backtest() {
                         <stop
                           offset="5%"
                           stopColor={
-                            result.total_return >= 0 ? "#4ade80" : "#f87171"
+                            result.total_return >= 0 ? "#f87171" : "#4ade80"
                           }
                           stopOpacity={0.3}
                         />
                         <stop
                           offset="95%"
                           stopColor={
-                            result.total_return >= 0 ? "#4ade80" : "#f87171"
+                            result.total_return >= 0 ? "#f87171" : "#4ade80"
                           }
                           stopOpacity={0}
                         />
@@ -503,7 +525,7 @@ export default function Backtest() {
                     <Area
                       type="monotone"
                       dataKey="equity"
-                      stroke={result.total_return >= 0 ? "#4ade80" : "#f87171"}
+                      stroke={result.total_return >= 0 ? "#f87171" : "#4ade80"}
                       strokeWidth={2}
                       fill="url(#equityGrad)"
                     />

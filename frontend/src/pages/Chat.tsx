@@ -130,7 +130,8 @@ export default function Chat() {
     const quotaApply = useQuotaStore.getState().applyHeaders;
     const quotaSetExhausted = useQuotaStore.getState().setExhausted;
 
-    await streamChat({
+    try {
+      await streamChat({
       message: trimmed,
       conversationId: currentConvId,
       onQuotaHeaders: (headers) => quotaApply(headers),
@@ -243,7 +244,32 @@ export default function Chat() {
         });
         setStreaming(false);
       },
-    });
+      });
+    } catch {
+      // 網路中斷或串流讀取失敗時，onError/onDone 都不會觸發，
+      // 必須在這裡收尾，否則輸入框會因 streaming 卡在 true 而永久鎖死。
+      setMessages((prev) => {
+        const updated = [...prev];
+        const last = updated[updated.length - 1];
+        if (last?.role === "assistant" && last.streaming) {
+          const partial = streamContentRef.current;
+          updated[updated.length - 1] = {
+            ...last,
+            content: partial
+              ? `${partial}\n\n⚠️ 連線中斷，以上回覆可能不完整，請重新提問。`
+              : "⚠️ 連線中斷，請檢查網路後重新送出。",
+            streaming: false,
+          };
+        }
+        return updated;
+      });
+    } finally {
+      if (rafRef.current != null) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
+      setStreaming(false);
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -383,7 +409,7 @@ export default function Chat() {
                     handleDeleteConversation(conv.conversation_id, e)
                   }
                   aria-label="刪除對話"
-                  className="opacity-0 group-hover:opacity-100 text-slate-700 hover:text-red-400 transition-opacity ml-1 flex-shrink-0 text-xs"
+                  className="opacity-100 md:opacity-0 md:group-hover:opacity-100 focus-visible:opacity-100 text-slate-700 hover:text-red-400 transition-opacity ml-1 flex-shrink-0 text-xs"
                 >
                   ✕
                 </button>
@@ -529,6 +555,9 @@ export default function Chat() {
               }}
             >
               ⚠️ {quotaExhaustedMessage ?? "今日訊息額度已用完。"}
+              <span className="block mt-1 text-slate-500">
+                需要更多額度？升級方案可提高每日對話數並解鎖進階分析功能。
+              </span>
             </div>
           )}
           <div
@@ -550,7 +579,7 @@ export default function Chat() {
               onKeyDown={handleKeyDown}
               placeholder={
                 quotaExhausted
-                  ? "今日額度已用完，明日 00:00 重置"
+                  ? "今日額度已用完，將於每日重置時間恢復"
                   : "輸入問題… (Enter 發送，Shift+Enter 換行)"
               }
               disabled={streaming || quotaExhausted}
@@ -600,7 +629,7 @@ export default function Chat() {
             </button>
           </div>
           <p className="text-xs text-slate-700 text-center mt-2.5">
-            Navi 可能會犯錯，重要投資決策請自行驗證
+            Navi 為 AI 分析工具，非合格投顧；所有內容僅供學習研究，不構成投資建議，且可能有誤，重要決策請自行驗證
           </p>
         </div>
       </div>
