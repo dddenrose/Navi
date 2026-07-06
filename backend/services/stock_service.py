@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import math
 import time
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
@@ -592,9 +593,9 @@ class TechnicalIndicators:
     swing_high: float | None = None  # 近期波段最高點
     swing_low: float | None = None  # 近期波段最低點
     # 停損建議
-    stop_loss: float | None = None  # 建議停損價位
-    stop_loss_note: str = ""  # 停損依據說明
-    risk_reward_note: str = ""  # 風險報酬比參考
+    stop_loss: float | None = None  # 趨勢警戒參考位（教育性，非停損指令）
+    stop_loss_note: str = ""  # 警戒位依據說明
+    risk_reward_note: str = ""  # deprecated：法遵移除風險報酬比輸出，保留欄位相容舊前端
     # 綜合
     summary: str = ""
 
@@ -783,9 +784,11 @@ def get_technical_indicators(ticker: str, period: str = "3mo") -> TechnicalIndic
             result.ma_trend = "糾結"
 
     # ── RSI (14) ──
+    # Wilder's smoothing（ewm alpha=1/14），與券商看盤軟體/TradingView 一致；
+    # 用 SMA 會算出與使用者看盤畫面不同的 RSI，造成信任落差。
     delta = close.diff()
-    gain = delta.where(delta > 0, 0.0).rolling(14).mean()
-    loss = (-delta.where(delta < 0, 0.0)).rolling(14).mean()
+    gain = delta.where(delta > 0, 0.0).ewm(alpha=1 / 14, adjust=False).mean()
+    loss = (-delta.where(delta < 0, 0.0)).ewm(alpha=1 / 14, adjust=False).mean()
     rs = gain / loss
     rsi = 100 - (100 / (1 + rs))
     rsi_val = float(rsi.iloc[-1])
@@ -824,7 +827,9 @@ def get_technical_indicators(ticker: str, period: str = "3mo") -> TechnicalIndic
     if len(close) >= 9:
         low_9 = df["Low"].rolling(9).min()
         high_9 = df["High"].rolling(9).max()
-        rsv = (close - low_9) / (high_9 - low_9) * 100
+        # 連續一字板時 high_9 == low_9，RSV 分母為 0；視為中性 50 避免 NaN 汙染 K/D
+        spread_9 = (high_9 - low_9).replace(0, float("nan"))
+        rsv = ((close - low_9) / spread_9 * 100).fillna(50.0)
 
         k = rsv.ewm(com=2, adjust=False).mean()
         d = k.ewm(com=2, adjust=False).mean()
@@ -1062,28 +1067,25 @@ def _calc_support_resistance(df, result: TechnicalIndicators) -> None:
     # 壓力：由低到高（最近壓力在前）
     result.resistances = _dedup(sorted(resistances, key=lambda x: x[1]))
 
-    # ── 停損建議 ──
-    # 策略：以最近一道支撐位下方 3% 為停損，若無支撐位則用布林下軌下方 3%
+    # ── 趨勢警戒參考位 ──
+    # 法遵：不得輸出「建議停損 X 元」等特定價位操作指令（投顧紅線）。
+    # 這裡僅以教育性框架描述「跌破哪個技術位置常被視為趨勢轉弱」，判斷權留給使用者。
+    # 亦不輸出「潛在獲利/風險報酬比」——那是以「現在進場」為前提的交易框架。
     if result.supports:
         nearest_support_label, nearest_support_val = result.supports[0]
         sl = round(nearest_support_val * 0.97, 2)
         result.stop_loss = sl
-        result.stop_loss_note = f"最近支撐 {nearest_support_label} 下方 3%"
+        result.stop_loss_note = (
+            f"技術上若跌破最近支撐（{nearest_support_label}）約 3% 以上，"
+            "常被視為趨勢轉弱訊號；此為教育性參考位，非操作建議"
+        )
     elif result.bb_lower is not None:
         sl = round(result.bb_lower * 0.97, 2)
         result.stop_loss = sl
-        result.stop_loss_note = f"布林下軌 {result.bb_lower} 下方 3%"
-
-    # 風險報酬比（以最近壓力 vs 停損計算）
-    if result.stop_loss and result.resistances and price:
-        nearest_resist_val = result.resistances[0][1]
-        potential_gain = nearest_resist_val - price
-        potential_loss = price - result.stop_loss
-        if potential_loss > 0:
-            rr = round(potential_gain / potential_loss, 1)
-            result.risk_reward_note = (
-                f"潛在獲利 {potential_gain:.1f} / 潛在虧損 {potential_loss:.1f} → 風險報酬比 1:{rr}"
-            )
+        result.stop_loss_note = (
+            f"技術上若跌破布林下軌（{result.bb_lower}）約 3% 以上，"
+            "常被視為趨勢轉弱訊號；此為教育性參考位，非操作建議"
+        )
 
 
 def _calc_valuation(
@@ -1091,10 +1093,12 @@ def _calc_valuation(
 ) -> dict:
     """用歷史本益比區間計算便宜/合理/昂貴價位。
 
-    策略：
-    1. 嘗試從歷史股價 + EPS 反推 PE 區間（最精確）
-    2. 若無法取得歷史資料，使用 yfinance info 中的 trailingPE + forwardPE 推估
-    3. 都不行就回傳空值
+    方法論注意事項（曾是誤導來源，勿走回頭路）：
+    1. 歷史 PE 必須用「當時股價 ÷ 當年度 EPS」（point-in-time）。用「歷史股價 ÷ 當前 EPS」
+       對獲利成長股會算出極低的假 PE，把便宜/合理價整體往下拉。
+    2. 歷史股價必須用未還原值（auto_adjust=False）。還原價會因除息回溯下修，再壓低 PE 區間。
+    3. 資料不足時不得用「當前 PE ±30%」湊出價位帶——那在數學上恆等於「現價≈合理價」，
+       等於告訴使用者隨時買都合理。寧可不給數字。
     """
     result: dict = {}
 
@@ -1104,15 +1108,24 @@ def _calc_valuation(
         result["valuation_note"] = "EPS 為負或不可用，無法進行本益比估值"
         return result
 
-    # 嘗試從歷史股價推算 PE 區間
     pe_values: list[float] = []
+    used_point_in_time = False
     try:
         stock = yf.Ticker(ticker_str)
-        # 取近 3 年月收盤價
-        hist = stock.history(period="3y", interval="1mo")
-        if not hist.empty and eps and eps > 0:
-            for price in hist["Close"]:
-                pe = float(price) / eps
+        # 未還原月收盤，避免除息回溯壓低歷史 PE
+        hist = stock.history(period="3y", interval="1mo", auto_adjust=False)
+        if not hist.empty:
+            eps_by_year = _historical_eps_by_year(stock, info.get("sharesOutstanding"))
+            used_point_in_time = len(eps_by_year) >= 2
+            for dt, price in hist["Close"].items():
+                if used_point_in_time:
+                    # 財報滯後：當年度年報未公布前，市場看到的是前一年 EPS
+                    ref_eps = eps_by_year.get(dt.year) or eps_by_year.get(dt.year - 1)
+                else:
+                    ref_eps = eps if eps and eps > 0 else None
+                if not ref_eps or ref_eps <= 0:
+                    continue
+                pe = float(price) / ref_eps
                 if 0 < pe < 200:  # 過濾異常值
                     pe_values.append(pe)
     except Exception as e:
@@ -1130,33 +1143,54 @@ def _calc_valuation(
         result["cheap_price"] = round(base_eps * pe_low, 2)
         result["fair_price"] = round(base_eps * pe_mid, 2)
         result["expensive_price"] = round(base_eps * pe_high, 2)
-        result["valuation_note"] = (
-            f"以近 3 年歷史 PE 區間 ({result['pe_low']}~{result['pe_high']}) × "
-            f"{'Forward' if forward_eps else 'TTM'} EPS {base_eps:.2f} 計算"
-        )
-    else:
-        # fallback: 用 info 中的 PE 估算 ±30% 區間
-        trailing_pe = info.get("trailingPE")
-        forward_pe_val = info.get("forwardPE")
-        ref_pe = forward_pe_val or trailing_pe
-        if ref_pe and 0 < ref_pe < 200:
-            pe_low = ref_pe * 0.7
-            pe_mid = ref_pe
-            pe_high = ref_pe * 1.3
-            result["pe_low"] = round(pe_low, 1)
-            result["pe_mid"] = round(pe_mid, 1)
-            result["pe_high"] = round(pe_high, 1)
-            result["cheap_price"] = round(base_eps * pe_low, 2)
-            result["fair_price"] = round(base_eps * pe_mid, 2)
-            result["expensive_price"] = round(base_eps * pe_high, 2)
+        eps_label = "Forward" if forward_eps else "TTM"
+        if used_point_in_time:
             result["valuation_note"] = (
-                f"歷史數據不足，以當前 PE {ref_pe:.1f} ±30% 範圍估算 × "
-                f"{'Forward' if forward_eps else 'TTM'} EPS {base_eps:.2f}"
+                f"以近 3 年（未還原股價 ÷ 各年度 EPS）之 PE 分位數 "
+                f"({result['pe_low']}~{result['pe_high']}) × {eps_label} EPS {base_eps:.2f} 估算；"
+                "為統計參考帶，非目標價"
             )
         else:
-            result["valuation_note"] = "無法取得有效的 PE 數據進行估值"
+            result["valuation_note"] = (
+                f"以近 3 年未還原股價 ÷ 當前 EPS 之 PE 分位數 "
+                f"({result['pe_low']}~{result['pe_high']}) × {eps_label} EPS {base_eps:.2f} 估算；"
+                "注意：缺少歷史 EPS，若公司獲利近年大幅成長，此估值帶會系統性偏低，僅供參考"
+            )
+    else:
+        # 資料不足：不給價位帶。舊版「當前 PE ±30%」恆得出「現價≈合理價」，會誤導使用者。
+        result["valuation_note"] = (
+            "歷史資料不足，無法可靠估算便宜/合理/昂貴估值帶；"
+            "請改以同業比較與獲利趨勢自行判斷"
+        )
 
     return result
+
+
+def _historical_eps_by_year(stock, shares_outstanding) -> dict[int, float]:
+    """由年度損益表淨利 ÷ 目前流通股數，近似各年度 EPS（point-in-time）.
+
+    近似限制：以目前股數回推歷史（忽略增減資/庫藏股），且僅涵蓋 yfinance
+    提供的最近約 4 個年度。無法取得時回傳空 dict，由呼叫端 fallback。
+    """
+    if not shares_outstanding or shares_outstanding <= 0:
+        return {}
+    try:
+        income = stock.income_stmt
+        if income is None or income.empty or "Net Income" not in income.index:
+            return {}
+        out: dict[int, float] = {}
+        for col in income.columns:
+            ni = income.loc["Net Income", col]
+            try:
+                ni_val = float(ni)
+            except (TypeError, ValueError):
+                continue
+            if math.isnan(ni_val) or ni_val <= 0:
+                continue
+            out[col.year] = ni_val / float(shares_outstanding)
+        return out
+    except Exception:
+        return {}
 
 
 def get_fundamental_data(ticker: str) -> FundamentalData:

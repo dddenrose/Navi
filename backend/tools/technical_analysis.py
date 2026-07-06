@@ -76,12 +76,10 @@ def analyze_technicals(ticker: str, period: str = "3mo") -> str:
         for i, (label, val) in enumerate(data.resistances[:5], 1):
             parts.append(f"  R{i}. {label}")
 
-    # 停損建議
+    # 趨勢警戒參考位（教育性描述，非停損指令 — 法遵要求，勿改回「建議停損」句型）
     if data.stop_loss is not None:
         parts.append("")
-        parts.append(f"🛑 建議停損：{data.stop_loss}（{data.stop_loss_note}）")
-    if data.risk_reward_note:
-        parts.append(f"📊 {data.risk_reward_note}")
+        parts.append(f"📉 趨勢警戒參考位：{data.stop_loss}（{data.stop_loss_note}）")
 
     # 綜合
     if data.summary:
