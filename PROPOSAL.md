@@ -835,42 +835,38 @@ executor = AgentExecutor(agent=agent, tools=tools, verbose=True)
 
 ---
 
-## 10. 費用預估
+## 10. 費用預估（2026-07 更新）
 
-### 開發期（~$0/月）
+> ⚠️ 舊版估算建立在 Gemini 2.0 Flash 免費額度上，已與現實脫節。
+> 專案現行為 **tier 分層模型**：free 層用 `gemini-2.5-flash`、pro+ 層用
+> `gemini-2.5-pro`（`config.model_for_tier`），成本結構如下。
 
-```
-Firebase Firestore          → 免費額度（50K reads/day）
-Gemini 2.0 Flash API        → 免費額度（1,500 requests/day）
-text-embedding-004           → 免費額度
-Cloud Run                    → 免費額度（200萬次 requests/month）
-Firebase Hosting             → 免費額度（10GB storage / 360MB/day transfer）
-GitHub                       → 免費
-──────────────────────────────────────────────
-總計：$0/月
-```
-
-### 上線後 — 個人使用（~$5-15/月）
+### LLM 單位成本（主要成本驅動）
 
 ```
-Firebase Firestore           → ~$0-5（低用量）
-Gemini API                   → ~$3-5（超出免費額度部分）
-Cloud Run                    → ~$3-5（低 traffic）
-Firebase Hosting             → 免費（個人用量極低）
-──────────────────────────────────────────────
-總計：~$5-15/月
+單次 chat（prefetch/agent，輸入 5k-20k tokens、輸出 1-2k tokens）：
+  gemini-2.5-pro    → 約 US$0.02-0.15/則
+  gemini-2.5-flash  → 約 US$0.002-0.015/則（低一個數量級）
+
+免費層（Flash、10 則/日）    → 每活躍用戶上限約 US$0.6-4.5/月
+付費層（Pro、100 則/日）     → 每活躍用戶上限約 US$60-450/月（重度）
+Screener 跑批（Pro、每檔一次 structured output）
+                              → 每份報告數十次呼叫，需持續監控
 ```
 
-### 上線後 — 多人使用（~$15-30/月）
+### 基礎設施（相對次要）
 
 ```
-Firebase Firestore           → ~$5-10
-Gemini API                   → ~$5-10
-Cloud Run                    → ~$5-10
-Firebase Hosting             → ~$1-3（超出免費額度）
-──────────────────────────────────────────────
-總計：~$15-30/月
+Firebase Firestore           → ~$5-10/月（中低用量）
+Cloud Run（max 3 instances） → ~$5-15/月
+Firebase Hosting             → ~$0-3/月
 ```
+
+### 商業化含義
+
+- 免費層以 Flash + 10 則/日控制在可承受範圍，作為轉換漏斗
+- 付費定價必須覆蓋重度用戶的 Pro 成本（考慮每月 quota 而非無限制）
+- Screener 排程頻率（daily×2 profiles）是隱藏成本項，調整頻率前先估算
 
 ---
 
@@ -912,7 +908,8 @@ Phase 7 ──▶ 策略模式（Strategy Pattern）、回測引擎設計、績�
 - [x] Phase 3 — AI Agent + Streaming API + Cloud Run 部署
 - [x] Phase 4 — 前端 Dashboard
 - [x] Phase 5 — 即時數據 Tools 擴充（籌碼面 + 融資融券 + 新聞 + Gemini 2.5 Pro）
-- [x] Phase 6 — 投資組合追蹤（CRUD API + Agent Tool + 前端頁面 + 每日快照）
+- [x] Phase 6 — 投資組合追蹤（CRUD API + Agent Tool + 前端頁面 + 交易紀錄/已實現損益）
+      ※ 規劃中的「每日快照 + /api/portfolio/performance 績效曲線」尚未實作（jobs/ 目錄不存在）
 - [x] Phase 7 — 策略回測引擎（回測引擎 + 內建策略 + Agent Tool + API + 前端視覺化）
 
 ### 下一步

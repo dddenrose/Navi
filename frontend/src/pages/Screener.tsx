@@ -482,7 +482,7 @@ function ValuationBand({ pick }: { pick: PickDoc }) {
               width: `calc(${pos(buy)} - ${pos(low)})`,
               background: "rgba(16,185,129,0.45)",
             }}
-            title="建議買進區"
+            title="估值偏低參考區（非買進建議）"
           />
         )}
         {/* mid marker */}
@@ -516,7 +516,7 @@ function ValuationBand({ pick }: { pick: PickDoc }) {
           <p className="text-slate-300">${fmtNum(high)}</p>
         </div>
         <div>
-          <p className="text-slate-500">買進區上緣</p>
+          <p className="text-slate-500">估值偏低區上緣</p>
           <p className="text-emerald-400">${fmtNum(buy)}</p>
         </div>
       </div>
@@ -1188,6 +1188,10 @@ export default function Screener() {
           )}
         </>
       )}
+
+      <p className="text-xs text-slate-500 leading-relaxed mt-6">
+        ⚠️ 選股報告由規則引擎與 AI 產生，僅供學習與研究用途，不構成投資建議；「估值偏低區」為統計參考，非買進訊號。
+      </p>
 
       <PickDetailDrawer pick={activePick} onClose={() => setActivePick(null)} />
     </div>

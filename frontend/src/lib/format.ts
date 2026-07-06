@@ -41,16 +41,16 @@ export function fmt(n: number, decimals = 0): string {
   });
 }
 
-/** Tailwind text color class for P&L values */
+/** Tailwind text color class for P&L values（台股慣例：紅漲綠跌，全站統一） */
 export function pnlColor(n: number): string {
-  if (n > 0) return "text-emerald-400";
-  if (n < 0) return "text-red-400";
+  if (n > 0) return "text-red-400";
+  if (n < 0) return "text-emerald-400";
   return "text-slate-400";
 }
 
-/** Inline background color for P&L card backgrounds */
+/** Inline background color for P&L card backgrounds（台股慣例：紅漲綠跌） */
 export function pnlBg(n: number): string {
-  if (n > 0) return "rgba(52,211,153,0.08)";
-  if (n < 0) return "rgba(248,113,113,0.08)";
+  if (n > 0) return "rgba(248,113,113,0.08)";
+  if (n < 0) return "rgba(52,211,153,0.08)";
   return "rgba(255,255,255,0.03)";
 }

@@ -336,7 +336,7 @@ export default function StockTechnicalTab({
           </div>
         )}
 
-      {/* Stop Loss & Risk/Reward */}
+      {/* 趨勢警戒參考位（教育性資訊，非停損指令） */}
       {technicalData.stop_loss != null && (
         <div
           className="rounded-2xl p-6"
@@ -345,10 +345,10 @@ export default function StockTechnicalTab({
             border: "1px solid var(--border)",
           }}
         >
-          <p className="text-sm text-slate-400 mb-4">停損建議 / 風報比</p>
+          <p className="text-sm text-slate-400 mb-4">趨勢警戒參考位</p>
           <div className="grid grid-cols-2 gap-5 mb-4">
             <div>
-              <p className="text-xs text-slate-500">建議停損價</p>
+              <p className="text-xs text-slate-500">技術警戒位</p>
               <p className="text-lg font-bold text-red-400 mt-1 tabular-nums">
                 {fmtNum(technicalData.stop_loss)}
               </p>
@@ -372,13 +372,15 @@ export default function StockTechnicalTab({
               {technicalData.stop_loss_note}
             </p>
           )}
-          {technicalData.risk_reward_note && (
-            <p className="text-xs text-slate-500 leading-relaxed">
-              {technicalData.risk_reward_note}
-            </p>
-          )}
+          <p className="text-xs text-slate-500 leading-relaxed">
+            此為技術面觀察位置，非停損或進出場指令；請依自身投資週期與風險承受度判斷。
+          </p>
         </div>
       )}
+
+      <p className="text-xs text-slate-500 leading-relaxed">
+        ⚠️ 以上技術分析僅供學習與研究用途，不構成投資建議；資料可能延遲，交易前請以券商報價為準。
+      </p>
     </div>
   );
 }

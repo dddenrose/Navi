@@ -16,8 +16,11 @@ class Settings(BaseSettings):
     google_cloud_project: str = ""
     google_application_credentials: str = ""
 
-    # Gemini LLM
-    gemini_model_name: str = "gemini-2.5-pro"
+    # Gemini LLM — 依 tier 分層控制成本：
+    # free 用 Flash（單價低一個數量級），付費層才用 Pro。
+    # 免費層跑 Pro 時每則對話約 US$0.02-0.15，免費額度 10 則/日在規模化後不可持續。
+    gemini_model_name: str = "gemini-2.5-pro"  # pro/unlimited/admin 層
+    gemini_model_name_free: str = "gemini-2.5-flash"  # free 層
 
     # Embedding
     embedding_model_name: str = "text-embedding-004"
@@ -48,6 +51,13 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+
+def model_for_tier(tier: str) -> str:
+    """依使用者 tier 選擇 LLM 模型（成本分層）."""
+    if tier in ("pro", "unlimited", "admin"):
+        return settings.gemini_model_name
+    return settings.gemini_model_name_free
 
 # Sync credentials path to OS env so that google.auth.default() can find it.
 if settings.google_application_credentials:

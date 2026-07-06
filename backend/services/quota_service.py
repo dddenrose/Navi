@@ -223,17 +223,44 @@ def _effective_daily_limit(user: dict[str, Any], config: dict[str, Any]) -> int:
     return int(config.get("daily_limit", 10))
 
 
+# chat 以外功能的每日額度（-1 = 無限制）。
+# backtest 每次會觸發 yfinance 抓取 + 密集運算，無額度時是成本與濫用破口。
+# 可被 quota_configs 文件中的 "{feature}_daily_limit" 欄位覆寫。
+FEATURE_DAILY_LIMITS: dict[str, dict[str, int]] = {
+    "backtest": {"free": 5, "pro": 50, "unlimited": -1, "admin": -1},
+}
+
+
+def _feature_daily_limit(
+    feature: str, tier: str, user: dict[str, Any], config: dict[str, Any]
+) -> int:
+    if feature == "chat":
+        return _effective_daily_limit(user, config)
+    override = config.get(f"{feature}_daily_limit")
+    if override is not None:
+        return int(override)
+    return int(FEATURE_DAILY_LIMITS.get(feature, {}).get(tier, -1))
+
+
 # ── Check & consume (atomic) ─────────────────────────────────────────────────
 
 
-def check_and_consume(uid: str, email: str = "", display_name: str = "") -> QuotaCheckResult:
+def check_and_consume(
+    uid: str, email: str = "", display_name: str = "", feature: str = "chat"
+) -> QuotaCheckResult:
     """Atomically check daily quota and increment counter.
+
+    Args:
+        feature: 計量的功能（"chat" / "backtest"…），各自獨立計數與限額。
 
     Returns ``QuotaCheckResult``. On Firestore failure, fail-open (allow=True)
     with reason="firestore_error" so the site stays up.
+    注意：fail-open 路徑不計數；呼叫端必須另有 in-memory per-minute limiter
+    作為 fail-open 時的硬上限，否則可被誘發錯誤繞過額度。
     """
     if not uid:
         raise ValueError("uid required")
+    count_field = f"{feature}_count"
 
     try:
         user = get_or_create_user(uid, email=email, display_name=display_name)
@@ -263,7 +290,7 @@ def check_and_consume(uid: str, email: str = "", display_name: str = "") -> Quot
 
     tier = str(user.get("tier", "free"))
     config = get_quota_config(tier)
-    daily_limit = _effective_daily_limit(user, config)
+    daily_limit = _feature_daily_limit(feature, tier, user, config)
     today = _today_str()
     reset_at = _next_midnight_taipei()
 
@@ -277,7 +304,7 @@ def check_and_consume(uid: str, email: str = "", display_name: str = "") -> Quot
                 {
                     "uid": uid,
                     "date": today,
-                    "chat_count": firestore_module.Increment(1),
+                    count_field: firestore_module.Increment(1),
                     "last_request_at": firestore_module.SERVER_TIMESTAMP,
                     "expires_at": datetime.now(tz=timezone.utc)
                     + timedelta(days=USAGE_TTL_DAYS),
@@ -299,7 +326,7 @@ def check_and_consume(uid: str, email: str = "", display_name: str = "") -> Quot
     @firestore_module.transactional
     def _txn(transaction: firestore_module.Transaction) -> tuple[bool, int]:
         snap = counter_ref.get(transaction=transaction)
-        used = (snap.to_dict() or {}).get("chat_count", 0) if snap.exists else 0
+        used = (snap.to_dict() or {}).get(count_field, 0) if snap.exists else 0
         if used >= daily_limit:
             return (False, used)
         transaction.set(
@@ -307,7 +334,7 @@ def check_and_consume(uid: str, email: str = "", display_name: str = "") -> Quot
             {
                 "uid": uid,
                 "date": today,
-                "chat_count": used + 1,
+                count_field: used + 1,
                 "last_request_at": firestore_module.SERVER_TIMESTAMP,
                 "expires_at": datetime.now(tz=timezone.utc) + timedelta(days=USAGE_TTL_DAYS),
             },

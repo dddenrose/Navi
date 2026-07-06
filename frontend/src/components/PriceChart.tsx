@@ -63,7 +63,7 @@ export default function PriceChart({ history, isPositive }: PriceChartProps) {
         <Line
           type="monotone"
           dataKey="close"
-          stroke={isPositive ? "#4ade80" : "#f87171"}
+          stroke={isPositive ? "#f87171" : "#4ade80"}
           strokeWidth={2}
           dot={false}
         />

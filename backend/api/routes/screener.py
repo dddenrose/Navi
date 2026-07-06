@@ -25,11 +25,16 @@ from services.screener.email_sender import (
     upsert_subscriber,
     verify_unsubscribe_token,
 )
+from api.rate_limit import api_limiter, rate_limited
 from services.screener.orchestrator import REPORTS_COLLECTION, run_screener_async
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/screener", tags=["screener"])
+router = APIRouter(
+    prefix="/api/screener",
+    tags=["screener"],
+    dependencies=[Depends(rate_limited(api_limiter))],
+)
 require_screener_access = require_feature_access("screener")
 
 

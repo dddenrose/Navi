@@ -4,6 +4,33 @@ import { signInWithPopup, signInWithEmailAndPassword } from "firebase/auth";
 import { auth, googleProvider } from "@/lib/firebase";
 import { useAuthStore } from "@/store/authStore";
 
+/** Firebase 錯誤碼 → 中文可行動訊息（原始英文錯誤碼對散戶不可讀） */
+function authErrorMessage(e: unknown): string {
+  const code =
+    typeof e === "object" && e !== null && "code" in e
+      ? String((e as { code: unknown }).code)
+      : "";
+  switch (code) {
+    case "auth/invalid-credential":
+    case "auth/wrong-password":
+    case "auth/user-not-found":
+      return "帳號或密碼錯誤，請重新輸入";
+    case "auth/invalid-email":
+      return "電子郵件格式不正確";
+    case "auth/too-many-requests":
+      return "嘗試次數過多，請稍後再試";
+    case "auth/user-disabled":
+      return "此帳號已被停用，請聯繫管理員";
+    case "auth/popup-closed-by-user":
+    case "auth/cancelled-popup-request":
+      return "登入視窗已關閉，請再試一次";
+    case "auth/network-request-failed":
+      return "網路連線異常，請檢查網路後重試";
+    default:
+      return "登入失敗，請稍後再試";
+  }
+}
+
 export default function Login() {
   const { user, loading } = useAuthStore();
   const [email, setEmail] = useState("");
@@ -21,7 +48,7 @@ export default function Login() {
     try {
       await signInWithPopup(auth, googleProvider);
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "登入失敗");
+      setError(authErrorMessage(e));
     } finally {
       setSubmitting(false);
     }
@@ -34,7 +61,7 @@ export default function Login() {
     try {
       await signInWithEmailAndPassword(auth, email, password);
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "登入失敗");
+      setError(authErrorMessage(e));
     } finally {
       setSubmitting(false);
     }

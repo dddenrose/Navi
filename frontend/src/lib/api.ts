@@ -22,6 +22,31 @@ export async function getAuthHeaders(): Promise<Record<string, string>> {
 }
 
 /**
+ * 把後端錯誤轉成可顯示的中文訊息。
+ * 原始 body 可能是 HTML 錯誤頁或 stack trace，直接顯示會嚇到使用者又不可行動。
+ */
+export async function toUserMessage(res: Response): Promise<string> {
+  let detail = "";
+  try {
+    const text = await res.text();
+    if (text && !text.trimStart().startsWith("<")) {
+      const parsed = JSON.parse(text);
+      const d = parsed?.detail ?? parsed?.message ?? parsed?.error;
+      if (typeof d === "string") detail = d;
+    }
+  } catch {
+    // body 不是 JSON（HTML/純文字）→ 忽略，用狀態碼對應的訊息
+  }
+  if (detail) return detail;
+  if (res.status === 401) return "登入已過期，請重新登入";
+  if (res.status === 403) return "你沒有使用此功能的權限";
+  if (res.status === 404) return "查無資料，請確認輸入是否正確";
+  if (res.status === 429) return "請求太頻繁，請稍後再試";
+  if (res.status >= 500) return "伺服器暫時無法回應，請稍後再試";
+  return `請求失敗（${res.status}），請稍後再試`;
+}
+
+/**
  * Unified fetch wrapper: handles auth headers, base URL, and error unwrapping.
  * Pass pre-fetched `headers` to avoid redundant getIdToken() calls when
  * firing multiple parallel requests (e.g. Stock page parallel fetches).
@@ -33,7 +58,7 @@ async function apiFetch<T>(
 ): Promise<T> {
   const h = headers ?? (await getAuthHeaders());
   const res = await fetch(`${BASE_URL}${path}`, { ...init, headers: h });
-  if (!res.ok) throw new Error(await res.text());
+  if (!res.ok) throw new Error(await toUserMessage(res));
   const text = await res.text();
   return (text ? JSON.parse(text) : undefined) as T;
 }
@@ -251,7 +276,7 @@ export async function streamChat(options: ChatStreamOptions): Promise<void> {
   }
 
   if (!res.ok) {
-    onError(`HTTP ${res.status}: ${await res.text()}`);
+    onError(await toUserMessage(res));
     return;
   }
 
@@ -261,7 +286,7 @@ export async function streamChat(options: ChatStreamOptions): Promise<void> {
 
   const reader = res.body?.getReader();
   if (!reader) {
-    onError("No response body");
+    onError("伺服器沒有回傳內容，請稍後再試");
     return;
   }
 
@@ -363,6 +388,7 @@ export interface PortfolioSummary {
   total_cost: number;
   total_pnl: number;
   total_pnl_percent: number;
+  realized_pnl: number;
   holdings_count: number;
   holdings: HoldingWithPrice[];
 }
@@ -373,6 +399,63 @@ export async function getPortfolio(): Promise<PortfolioSummary> {
 
 export async function getPortfolioHoldings(): Promise<HoldingData[]> {
   return apiFetch(`/api/portfolio/holdings`);
+}
+
+export interface PortfolioTransaction {
+  id: string;
+  ticker: string;
+  name: string;
+  action: "buy" | "sell";
+  shares: number;
+  price: number;
+  fee: number;
+  tax: number;
+  amount: number;
+  realized_pnl: number;
+  trade_date: string;
+  notes: string;
+  created_at: string;
+}
+
+export interface AddTransactionInput {
+  ticker: string;
+  action: "buy" | "sell";
+  shares: number;
+  price: number;
+  trade_date?: string;
+  name?: string;
+  notes?: string;
+  fee?: number;
+}
+
+export async function addPortfolioTransaction(
+  input: AddTransactionInput,
+): Promise<PortfolioTransaction> {
+  return apiFetch(`/api/portfolio/transactions`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function getPortfolioTransactions(): Promise<
+  PortfolioTransaction[]
+> {
+  return apiFetch(`/api/portfolio/transactions`);
+}
+
+export async function estimateTransactionCosts(
+  ticker: string,
+  action: string,
+  shares: number,
+  price: number,
+): Promise<{ fee: number; tax: number }> {
+  const params = new URLSearchParams({
+    ticker,
+    action,
+    shares: String(shares),
+    price: String(price),
+  });
+  return apiFetch(`/api/portfolio/transactions/estimate?${params}`);
 }
 
 // ─── Quota ───────────────────────────────────────────────────────────────────
@@ -628,8 +711,10 @@ export interface BacktestResult {
   avg_win: number;
   avg_loss: number;
   benchmark_return: number;
+  total_fees: number;
   trades: BacktestTrade[];
   equity_curve: EquityPoint[];
+  notes: string[];
   error: string;
 }
 

@@ -17,6 +17,18 @@ function getTypeLabel(t: string): string {
   return TYPE_LABELS[t] ?? t;
 }
 
+function formatFetchedAt(iso: string): string {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return iso;
+  return d.toLocaleString("zh-TW", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+}
+
 interface CitationsListProps {
   citations: Citation[];
 }
@@ -100,6 +112,11 @@ export const CitationsList = memo(function CitationsList({
                   )}
                   {c.title && c.source && (
                     <span className="text-slate-600">· {c.source}</span>
+                  )}
+                  {c.fetched_at && (
+                    <span className="text-slate-600 tabular-nums">
+                      · 取得於 {formatFetchedAt(c.fetched_at)}
+                    </span>
                   )}
                 </div>
                 {c.note && (

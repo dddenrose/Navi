@@ -12,6 +12,9 @@ export interface StockPrice {
   exchange: string;
   high_52w: number | null;
   low_52w: number | null;
+  as_of_date: string;
+  data_source: string;
+  is_intraday: boolean;
   history?: Array<{ date: string; close: number }>;
 }
 

@@ -8,6 +8,7 @@ from fastapi.responses import StreamingResponse
 
 from api.dependencies import verify_firebase_token
 from api.rate_limit import chat_limiter, get_rate_limit_key
+from config import model_for_tier
 from models.schemas import ChatRequest
 from services import quota_service
 from services.agent_service import run_agent
@@ -31,6 +32,7 @@ async def _sse_generator(
     question: str,
     conversation_id: str | None = None,
     user_id: str = "",
+    model_name: str | None = None,
 ):
     """Wrap Agent streaming output in SSE format."""
     # Auto-generate conversation_id if not provided
@@ -41,7 +43,9 @@ async def _sse_generator(
     yield f"data: {meta}\n\n"
 
     try:
-        async for chunk in run_agent(question, conversation_id=cid, user_id=user_id):
+        async for chunk in run_agent(
+            question, conversation_id=cid, user_id=user_id, model_name=model_name
+        ):
             if isinstance(chunk, str):
                 data = json.dumps({"text": chunk}, ensure_ascii=False)
             else:
@@ -49,9 +53,12 @@ async def _sse_generator(
                 data = json.dumps(chunk, ensure_ascii=False)
             yield f"data: {data}\n\n"
         yield "data: [DONE]\n\n"
-    except Exception as e:
+    except Exception:
         logger.exception("Error during agent analysis")
-        error_data = json.dumps({"error": str(e)}, ensure_ascii=False)
+        # 不把原始例外（可能含內部路徑/第三方錯誤細節）送到前端
+        error_data = json.dumps(
+            {"error": "分析過程發生錯誤，請稍後再試"}, ensure_ascii=False
+        )
         yield f"data: {error_data}\n\n"
 
 
@@ -121,6 +128,7 @@ async def chat(
             request.message,
             conversation_id=request.conversation_id,
             user_id=uid,
+            model_name=model_for_tier(quota.tier),
         ),
         media_type="text/event-stream",
         headers={

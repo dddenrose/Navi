@@ -9,6 +9,8 @@ from datetime import datetime, timedelta
 
 import requests
 
+from services.twse_parsers import parse_t86_row, shares_to_lots
+
 logger = logging.getLogger(__name__)
 
 # ── TWSE / TPEx Open API endpoints ──
@@ -49,14 +51,6 @@ class InstitutionalSummary:
     dealer_total_net: int = 0
     total_net: int = 0
     error: str = ""
-
-
-def _parse_int(s: str) -> int:
-    """Parse comma-separated integer string, e.g. '1,234' → 1234."""
-    try:
-        return int(s.replace(",", "").replace(" ", ""))
-    except (ValueError, AttributeError):
-        return 0
 
 
 def _recent_trading_dates(n: int = 5) -> list[str]:
@@ -102,21 +96,25 @@ def _fetch_twse_institutional(date_str: str, ticker: str) -> InstitutionalDaily 
     for row in payload["data"]:
         row_code = str(row[0]).strip()
         if row_code == code:
-            # Columns: 證券代號, 證券名稱, 外資買, 外資賣, 外資淨, 投信買, 投信賣, 投信淨,
-            #          自營商買, 自營商賣, 自營商淨, 合計淨
+            # 欄位對應集中在 twse_parsers（T86 為 19 欄新版 schema）。
             # NOTE: TWSE T86 API 回傳單位為「股」，這裡換算成「張」（1 張 = 1000 股）。
+            try:
+                parsed = parse_t86_row(row)
+            except ValueError as e:
+                logger.error("T86 schema mismatch for %s: %s", date_str, e)
+                return None
             return InstitutionalDaily(
                 date=f"{date_str[:4]}/{date_str[4:6]}/{date_str[6:]}",
-                foreign_buy=_parse_int(row[2]) // 1000,
-                foreign_sell=_parse_int(row[3]) // 1000,
-                foreign_net=_parse_int(row[4]) // 1000,
-                investment_trust_buy=_parse_int(row[5]) // 1000,
-                investment_trust_sell=_parse_int(row[6]) // 1000,
-                investment_trust_net=_parse_int(row[7]) // 1000,
-                dealer_buy=_parse_int(row[8]) // 1000,
-                dealer_sell=_parse_int(row[9]) // 1000,
-                dealer_net=_parse_int(row[10]) // 1000,
-                total_net=_parse_int(row[11]) // 1000,
+                foreign_buy=shares_to_lots(parsed.foreign_buy),
+                foreign_sell=shares_to_lots(parsed.foreign_sell),
+                foreign_net=shares_to_lots(parsed.foreign_net),
+                investment_trust_buy=shares_to_lots(parsed.trust_buy),
+                investment_trust_sell=shares_to_lots(parsed.trust_sell),
+                investment_trust_net=shares_to_lots(parsed.trust_net),
+                dealer_buy=shares_to_lots(parsed.dealer_buy),
+                dealer_sell=shares_to_lots(parsed.dealer_sell),
+                dealer_net=shares_to_lots(parsed.dealer_net),
+                total_net=shares_to_lots(parsed.total_net),
             )
     return None
 

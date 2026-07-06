@@ -337,7 +337,7 @@ AGENT_SYSTEM_PROMPT = """\
 2. 需要呼叫哪些工具？能否平行呼叫？
 3. 工具回傳的數據有哪些關鍵訊號？
 4. 多面向訊號是否一致？若矛盾，取較保守的結論。
-5. 形成結論，附帶風險提示與停損建議（如適用）。
+5. 形成結論，附帶風險提示與「趨勢警戒位」等中性風險說明（不得給停損價位指令）。
 </reasoning_process>
 
 <tool_guide>
@@ -534,10 +534,10 @@ _AGENT_FORMAT_INSTRUCTIONS: dict[str, str] = {
 }
 
 
-def _build_llm() -> ChatVertexAI:
+def _build_llm(model_name: str | None = None) -> ChatVertexAI:
     vertexai.init(project=settings.google_cloud_project)
     return ChatVertexAI(
-        model_name=settings.gemini_model_name,
+        model_name=model_name or settings.gemini_model_name,
         temperature=0.3,
         project=settings.google_cloud_project,
     )
@@ -1172,6 +1172,19 @@ async def _prefetch_tool_results(
 # ── Prefetch Mode ────────────────────────────────────────────────────────────
 
 
+_DISCLAIMER_TEXT = "\n\n⚠️ 免責聲明：所有分析僅供學習與研究用途，不構成投資建議。"
+
+
+def _missing_disclaimer(full_output: str) -> str:
+    """免責聲明不能依賴 LLM 自律附加（串流截斷或模型漏寫時會消失）。
+
+    回傳需要補上的免責文字；輸出已含免責聲明或為空時回傳空字串。
+    """
+    if not full_output or "免責聲明" in full_output:
+        return ""
+    return _DISCLAIMER_TEXT
+
+
 async def _run_prefetch_mode(
     question: str,
     intent: str,
@@ -1226,7 +1239,7 @@ async def _run_prefetch_mode(
     chat_history: list = []
     if conversation_id:
         try:
-            chat_history = load_history(conversation_id)
+            chat_history = load_history(conversation_id, user_id=user_id)
         except Exception as e:
             logger.warning("Failed to load history: %s", e)
 
@@ -1240,6 +1253,11 @@ async def _run_prefetch_mode(
             if chunk.content:
                 full_output += chunk.content
                 yield chunk.content
+
+        disclaimer = _missing_disclaimer(full_output)
+        if disclaimer:
+            full_output += disclaimer
+            yield disclaimer
 
         if citations_event is not None:
             yield citations_event
@@ -1320,7 +1338,7 @@ async def _run_agent_mode(
     chat_history_messages: list = []
     if conversation_id:
         try:
-            chat_history_messages = load_history(conversation_id)
+            chat_history_messages = load_history(conversation_id, user_id=user_id)
         except Exception as e:
             logger.warning("Failed to load history for %s: %s", conversation_id, e)
 
@@ -1383,6 +1401,11 @@ async def _run_agent_mode(
                 full_output = last_msg.content
                 yield full_output
 
+        disclaimer = _missing_disclaimer(full_output)
+        if disclaimer:
+            full_output += disclaimer
+            yield disclaimer
+
         citations = _build_citations(list(tool_calls_by_run.values()))
         if citations:
             yield CitationsEvent(type="citations", citations=citations)
@@ -1412,6 +1435,7 @@ async def run_agent(
     question: str,
     conversation_id: str | None = None,
     user_id: str = "",
+    model_name: str | None = None,
 ) -> AsyncGenerator[StreamChunk, None]:
     """Run the tool-calling agent with hybrid intent classification.
 
@@ -1421,8 +1445,11 @@ async def run_agent(
         2a. If entry/comprehensive analysis with ticker → prefetch mode
             (parallel tool calls → direct LLM streaming)
         2b. Otherwise → LangGraph ReAct agent mode
+
+    Args:
+        model_name: 依使用者 tier 傳入（config.model_for_tier）；None 用預設 Pro。
     """
-    llm = _build_llm()
+    llm = _build_llm(model_name)
 
     # Step 1: 混合式意圖分類（regex 為主，低信心時 LLM 補強）
     intent, ticker, confidence = await _classify_intent_hybrid(question, llm)

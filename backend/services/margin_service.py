@@ -9,6 +9,8 @@ from datetime import datetime, timedelta
 
 import requests
 
+from services.twse_parsers import parse_margn_row
+
 logger = logging.getLogger(__name__)
 
 # TWSE 融資融券 API
@@ -48,20 +50,6 @@ class MarginSummary:
     margin_change: int = 0  # 融資餘額近期變化
     short_change: int = 0  # 融券餘額近期變化
     error: str = ""
-
-
-def _parse_int(s: str) -> int:
-    try:
-        return int(s.replace(",", "").replace(" ", "").replace("--", "0"))
-    except (ValueError, AttributeError):
-        return 0
-
-
-def _parse_float(s: str) -> float:
-    try:
-        return float(s.replace(",", "").replace(" ", "").replace("%", "").replace("--", "0"))
-    except (ValueError, AttributeError):
-        return 0.0
 
 
 def _recent_trading_dates(n: int = 5) -> list[str]:
@@ -115,32 +103,30 @@ def _fetch_twse_margin(date_str: str, ticker: str) -> MarginDaily | None:
     for row in data_list:
         row_code = str(row[0]).strip()
         if row_code == code:
-            # Row format (typical):
-            # [0] 代號, [1] 名稱,
-            # [2] 融資買進, [3] 融資賣出, [4] 融資現償, [5] 融資前日餘額,
-            # [6] 融資今日餘額, [7] 融資限額,
-            # [8] 融券賣出, [9] 融券買進, [10] 融券現券償還,
-            # [11] 融券前日餘額, [12] 融券今日餘額,
-            # [13] 資券互抵
-            margin_balance = _parse_int(row[6]) if len(row) > 6 else 0
-            margin_limit = _parse_int(row[7]) if len(row) > 7 else 0
+            # 欄位對應集中在 twse_parsers（MI_MARGN tables[1] 為 16 欄 schema）。
+            try:
+                parsed = parse_margn_row(row)
+            except ValueError as e:
+                logger.error("MI_MARGN schema mismatch for %s: %s", date_str, e)
+                return None
             utilization = (
-                round((margin_balance / margin_limit * 100), 2) if margin_limit > 0 else 0.0
+                round((parsed.margin_balance / parsed.margin_limit * 100), 2)
+                if parsed.margin_limit > 0
+                else 0.0
             )
-
             return MarginDaily(
                 date=f"{date_str[:4]}/{date_str[4:6]}/{date_str[6:]}",
-                margin_buy=_parse_int(row[2]),
-                margin_sell=_parse_int(row[3]),
-                margin_cash_repay=_parse_int(row[4]) if len(row) > 4 else 0,
-                margin_balance=margin_balance,
-                margin_limit=margin_limit,
+                margin_buy=parsed.margin_buy,
+                margin_sell=parsed.margin_sell,
+                margin_cash_repay=parsed.margin_cash_repay,
+                margin_balance=parsed.margin_balance,
+                margin_limit=parsed.margin_limit,
                 margin_utilization=utilization,
-                short_sell=_parse_int(row[8]) if len(row) > 8 else 0,
-                short_buy=_parse_int(row[9]) if len(row) > 9 else 0,
-                short_cash_repay=_parse_int(row[10]) if len(row) > 10 else 0,
-                short_balance=_parse_int(row[12]) if len(row) > 12 else 0,
-                offset=_parse_int(row[13]) if len(row) > 13 else 0,
+                short_sell=parsed.short_sell,
+                short_buy=parsed.short_buy,
+                short_cash_repay=parsed.short_repay,
+                short_balance=parsed.short_balance,
+                offset=parsed.offset,
             )
     return None
 

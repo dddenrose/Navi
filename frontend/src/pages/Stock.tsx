@@ -324,13 +324,18 @@ export default function Stock() {
                 </div>
                 <div
                   className={`text-sm font-medium tabular-nums mt-2 ${
-                    isPositive ? "text-emerald-400" : "text-red-400"
+                    isPositive ? "text-red-400" : "text-emerald-400"
                   }`}
                 >
                   {isPositive ? "▲" : "▼"}{" "}
                   {Math.abs(priceData.change ?? 0).toFixed(2)} (
                   {Math.abs(priceData.change_percent ?? 0).toFixed(2)}%)
                 </div>
+                <p className="text-[11px] text-slate-500 mt-1.5 tabular-nums">
+                  {priceData.is_intraday ? "盤中報價（可能延遲）" : "收盤資料"}
+                  {priceData.as_of_date ? ` · 截至 ${priceData.as_of_date}` : ""}
+                  {priceData.data_source ? ` · 來源 ${priceData.data_source}` : ""}
+                </p>
               </div>
             </div>
 
@@ -397,7 +402,24 @@ export default function Stock() {
               marginData={marginData}
               isTW={isTW}
             />
-          ) : null}
+          ) : (
+            // 該分頁資料載入失敗時不能靜默空白，要給可行動的訊息
+            <div
+              role="alert"
+              className="rounded-2xl p-8 text-center text-sm text-slate-400"
+              style={{
+                background: "var(--card-bg)",
+                border: "1px solid var(--border)",
+              }}
+            >
+              此分頁資料暫時無法取得，可能是資料來源異常或該股票不支援此分析。
+              請稍後重試，或改查其他分頁。
+            </div>
+          )}
+
+          <p className="text-xs text-slate-500 leading-relaxed mt-6">
+            ⚠️ 本頁數據與估值僅供學習與研究用途，不構成投資建議；「便宜／合理／昂貴」為統計估算的估值帶，非目標價。資料可能延遲，交易前請以券商報價為準。
+          </p>
         </>
       )}
     </div>

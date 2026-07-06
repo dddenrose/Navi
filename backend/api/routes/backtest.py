@@ -3,18 +3,21 @@
 import logging
 from dataclasses import asdict
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 
-from api.dependencies import require_feature_access
+from api.dependencies import require_feature_access, verify_firebase_token
+from api.rate_limit import backtest_limiter, get_rate_limit_key
+from services import quota_service
 from services.backtest_service import run_backtest
 
 logger = logging.getLogger(__name__)
 
+# 基線 auth 掛在 router；execute 另外要求 feature access + 限流 + 日額度
 router = APIRouter(
     prefix="/api/backtest",
     tags=["backtest"],
-    dependencies=[Depends(require_feature_access("backtest"))],
+    dependencies=[Depends(verify_firebase_token)],
 )
 
 
@@ -46,6 +49,7 @@ class TradeResponse(BaseModel):
     shares: int
     value: float
     reason: str = ""
+    fee: float = 0.0
 
 
 class EquityPointResponse(BaseModel):
@@ -73,8 +77,10 @@ class BacktestResponse(BaseModel):
     avg_win: float = 0.0
     avg_loss: float = 0.0
     benchmark_return: float = 0.0
+    total_fees: float = 0.0
     trades: list[TradeResponse] = []
     equity_curve: list[EquityPointResponse] = []
+    notes: list[str] = []
     error: str = ""
 
 
@@ -82,8 +88,40 @@ class BacktestResponse(BaseModel):
 
 
 @router.post("", response_model=BacktestResponse)
-async def execute_backtest(req: BacktestRequest):
-    """執行策略回測，回傳績效報告、交易紀錄與權益曲線."""
+async def execute_backtest(
+    req: BacktestRequest,
+    request: Request,
+    user: dict = Depends(require_feature_access("backtest")),
+):
+    """執行策略回測，回傳績效報告、交易紀錄與權益曲線.
+
+    回測會觸發外部資料抓取與密集運算，除 feature access 外另有
+    per-minute 限流（fail-open 時的硬上限）與每日額度。
+    """
+    # In-memory 限流：同時是 quota fail-open 時的硬上限
+    backtest_limiter.check(get_rate_limit_key(request, user))
+
+    uid = user.get("uid", "")
+    quota = quota_service.check_and_consume(
+        uid,
+        email=user.get("email", ""),
+        display_name=user.get("name", "") or user.get("display_name", ""),
+        feature="backtest",
+    )
+    if not quota.allowed:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail={
+                "code": "QUOTA_EXCEEDED",
+                "message": "今日回測額度已用完，明日 00:00（台北時間）重置。",
+                "tier": quota.tier,
+                "daily_limit": quota.daily_limit,
+                "used_today": quota.used_today,
+                "remaining": quota.remaining,
+                "reset_at": quota.reset_at.isoformat(),
+            },
+        )
+
     allowed_strategies = {"ma_cross", "rsi", "macd", "custom"}
     if req.strategy not in allowed_strategies:
         raise HTTPException(
@@ -122,7 +160,9 @@ async def execute_backtest(req: BacktestRequest):
 
     except Exception as e:
         logger.exception("Backtest failed for %s", req.ticker)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(
+            status_code=500, detail="回測執行失敗，請稍後再試"
+        ) from e
 
 
 @router.get("/strategies")
