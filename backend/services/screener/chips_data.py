@@ -19,6 +19,8 @@ from datetime import datetime, timedelta
 
 import requests
 
+from services.twse_parsers import parse_margn_row, parse_t86_row, shares_to_lots
+
 logger = logging.getLogger(__name__)
 
 _TWSE_T86 = "https://www.twse.com.tw/rwd/zh/fund/T86"
@@ -33,13 +35,6 @@ def _recent_dates(n: int = 7) -> list[str]:
             out.append(d.strftime("%Y%m%d"))
         d -= timedelta(days=1)
     return out
-
-
-def _parse_int(s: str) -> int:
-    try:
-        return int(str(s).replace(",", "").replace(" ", "").replace("--", "0"))
-    except (ValueError, AttributeError):
-        return 0
 
 
 def _fetch_t86_day(date_str: str) -> dict[str, int]:
@@ -65,9 +60,8 @@ def _fetch_t86_day(date_str: str) -> dict[str, int]:
     out: dict[str, int] = {}
     for row in payload["data"]:
         try:
-            code = str(row[0]).strip()
-            foreign_net = _parse_int(row[4]) // 1000
-            out[code] = foreign_net
+            parsed = parse_t86_row(row)
+            out[parsed.code] = shares_to_lots(parsed.foreign_net)
         except (IndexError, ValueError):
             continue
     return out
@@ -99,13 +93,9 @@ def _fetch_margin_day(date_str: str) -> dict[str, tuple[int, int]]:
     out: dict[str, tuple[int, int]] = {}
     for row in data_list:
         try:
-            code = str(row[0]).strip()
-            # row layout (TWSE MI_MARGN tables[1]): 0 代號, 1 名稱,
-            # 2 融資買, 3 融資賣, 4 融資現償, 5 融資前餘, 6 融資今餘,
-            # 7 融券賣, 8 融券買, 9 融券現償, 10 融券前餘, 11 融券今餘 ...
-            margin_balance = _parse_int(row[6]) if len(row) > 6 else 0
-            short_balance = _parse_int(row[11]) if len(row) > 11 else 0
-            out[code] = (margin_balance, short_balance)
+            # 欄位對應集中在 twse_parsers；舊版曾把融券「前日」餘額(row 11)誤當今日餘額。
+            parsed = parse_margn_row(row)
+            out[parsed.code] = (parsed.margin_balance, parsed.short_balance)
         except (IndexError, ValueError):
             continue
     return out
