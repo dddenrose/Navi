@@ -65,23 +65,28 @@ export default function FeatureGuard({
     return (
       <AccessPanel
         title="暫時無法確認權限"
-        message={state.message}
+        message="無法確認你的功能權限，請稍後重試。"
         actionLabel="回到總覽"
       />
     );
   }
 
   const allowedTiers = state.feature?.allowed_tiers.join(" / ") || "管理員設定";
-  const message =
-    state.feature?.enabled === false
-      ? `${featureName} 目前已被管理員停用。`
-      : `目前帳號 Tier：${state.tier}。此功能開放給 ${allowedTiers}。`;
+  const isDisabled = state.feature?.enabled === false;
+  const message = isDisabled
+    ? `${featureName} 目前已被管理員停用。`
+    : `目前帳號方案：${state.tier}。此功能開放給 ${allowedTiers} 方案。`;
 
   return (
     <AccessPanel
       title={`${featureName} 尚未開放`}
       message={message}
       actionLabel="回到總覽"
+      upgradeHint={
+        !isDisabled
+          ? "想使用此功能？升級方案即可解鎖進階分析工具（升級方式請洽管理員或關注公告）。"
+          : undefined
+      }
     />
   );
 }
@@ -90,10 +95,12 @@ function AccessPanel({
   title,
   message,
   actionLabel,
+  upgradeHint,
 }: {
   title: string;
   message: string;
   actionLabel: string;
+  upgradeHint?: string;
 }) {
   return (
     <div className="flex items-center justify-center h-full min-h-[60vh] px-4">
@@ -119,6 +126,17 @@ function AccessPanel({
         </div>
         <h2 className="text-base font-bold text-slate-100">{title}</h2>
         <p className="mt-2 text-sm leading-6 text-slate-500">{message}</p>
+        {upgradeHint && (
+          <p
+            className="mt-3 rounded-lg px-3 py-2 text-xs leading-5 text-indigo-300"
+            style={{
+              background: "rgba(99,102,241,0.08)",
+              border: "1px solid rgba(99,102,241,0.2)",
+            }}
+          >
+            {upgradeHint}
+          </p>
+        )}
         <Link
           to="/dashboard"
           className="mt-5 inline-flex items-center justify-center rounded-lg px-4 py-2 text-xs font-medium text-white"

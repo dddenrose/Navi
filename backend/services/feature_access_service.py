@@ -27,11 +27,13 @@ DEFAULT_FEATURE_ACCESS_CONFIGS: dict[str, dict[str, Any]] = {
         "allowed_tiers": ["free", "pro", "unlimited", "admin"],
         "enabled": True,
     },
+    # 成本/價值對齊：stock 是便宜的 deterministic 查詢，開放 free 當漏斗入口；
+    # 真正貴的是 chat（LLM）與 backtest/screener（運算+LLM），由額度與 tier 控制。
     "stock": {
         "feature_key": "stock",
         "display_name": "股票分析",
         "description": "個股報價、技術面與基本面查詢",
-        "allowed_tiers": ["pro", "unlimited", "admin"],
+        "allowed_tiers": ["free", "pro", "unlimited", "admin"],
         "enabled": True,
     },
     "portfolio": {

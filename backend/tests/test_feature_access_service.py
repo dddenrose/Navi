@@ -18,20 +18,21 @@ def test_default_screener_access_requires_paid_tier():
     assert cfg["allowed_tiers"] == ["pro", "unlimited", "admin"]
 
 
-def test_default_free_tier_features_are_chat_and_portfolio_only():
+def test_default_free_tier_features():
+    """成本/價值對齊：便宜的 stock 查詢開放 free 當漏斗；貴的 backtest/screener 收費."""
     free_features = {
         key
         for key, cfg in feature_access_service.DEFAULT_FEATURE_ACCESS_CONFIGS.items()
         if "free" in cfg["allowed_tiers"]
     }
-    assert free_features == {"chat", "portfolio"}
+    assert free_features == {"chat", "portfolio", "stock"}
 
 
-def test_default_stock_and_backtest_require_paid_tier():
-    assert feature_access_service.DEFAULT_FEATURE_ACCESS_CONFIGS["stock"][
+def test_default_backtest_and_screener_require_paid_tier():
+    assert feature_access_service.DEFAULT_FEATURE_ACCESS_CONFIGS["backtest"][
         "allowed_tiers"
     ] == ["pro", "unlimited", "admin"]
-    assert feature_access_service.DEFAULT_FEATURE_ACCESS_CONFIGS["backtest"][
+    assert feature_access_service.DEFAULT_FEATURE_ACCESS_CONFIGS["screener"][
         "allowed_tiers"
     ] == ["pro", "unlimited", "admin"]
 
