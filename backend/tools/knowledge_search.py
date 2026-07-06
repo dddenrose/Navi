@@ -17,7 +17,11 @@ def search_knowledge(query: str) -> str:
     results = search_similar(query, top_k=5)
 
     if not results:
-        return "知識庫中沒有找到與此問題相關的內容。"
+        # 明確告訴 LLM「不要引用知識庫」，避免硬引用不相干內容
+        return (
+            "知識庫中沒有與此問題足夠相關的內容。"
+            "請直接以工具數據回答，不要聲稱引用知識庫。"
+        )
 
     parts = ["📚 知識庫搜尋結果：", ""]
     for i, doc in enumerate(results, 1):
@@ -25,9 +29,10 @@ def search_knowledge(query: str) -> str:
         title = meta.get("title", "未知")
         category = meta.get("category", "")
         content = doc.get("content", "")
-        # Truncate overly long content
-        if len(content) > 600:
-            content = content[:600] + "…"
+        # 過長截斷：切在段落邊界，避免把「眉角」的後半段警語截掉
+        if len(content) > 1200:
+            cut = content.rfind("\n\n", 0, 1200)
+            content = content[: cut if cut > 400 else 1200] + "\n…（內容過長已截斷）"
         parts.append(f"[{i}] {title}（{category}）")
         parts.append(content)
         parts.append("")

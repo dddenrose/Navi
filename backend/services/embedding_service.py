@@ -77,15 +77,25 @@ def store_document(content: str, metadata: dict) -> str:
     return doc_ref.id
 
 
-def search_similar(query: str, top_k: int = 5) -> list[dict]:
+# COSINE distance 門檻：0=完全相同、2=相反。超過此值視為「不相關」不回傳。
+# 沒有門檻時 find_nearest 永遠回最近 top_k 筆，冷門問題會撈到不相干文件，
+# 而 prompt 又強制引用知識庫 → 產生「檢索性幻覺」。
+MAX_COSINE_DISTANCE = 0.45
+
+
+def search_similar(
+    query: str, top_k: int = 5, max_distance: float = MAX_COSINE_DISTANCE
+) -> list[dict]:
     """Search for similar documents using Firestore Vector Search.
 
     Args:
         query: The search query text.
         top_k: Number of results to return.
+        max_distance: COSINE distance 上限，超過視為不相關。
 
     Returns:
-        List of dicts with content, metadata, and score.
+        List of dicts with content, metadata, and distance（越小越相關），
+        已過濾掉超過 max_distance 的結果，可能為空 list。
     """
     db = get_db()
     query_vector = get_embedding(query, task_type="RETRIEVAL_QUERY")
@@ -97,15 +107,23 @@ def search_similar(query: str, top_k: int = 5) -> list[dict]:
         query_vector=Vector(query_vector),
         distance_measure=DistanceMeasure.COSINE,
         limit=top_k,
+        distance_result_field="vector_distance",
     ).get()
 
-    return [
-        {
-            "content": (doc.to_dict() or {}).get("content", ""),
-            "metadata": (doc.to_dict() or {}).get("metadata", {}),
-        }
-        for doc in results
-    ]
+    out: list[dict] = []
+    for doc in results:
+        data = doc.to_dict() or {}
+        distance = data.get("vector_distance")
+        if distance is not None and distance > max_distance:
+            continue
+        out.append(
+            {
+                "content": data.get("content", ""),
+                "metadata": data.get("metadata", {}),
+                "distance": distance,
+            }
+        )
+    return out
 
 
 def get_collection_stats() -> dict:
