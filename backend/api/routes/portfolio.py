@@ -9,9 +9,12 @@ from pydantic import BaseModel, Field
 from api.dependencies import verify_firebase_token
 from services.portfolio_service import (
     add_holding,
+    add_transaction,
     delete_holding,
+    estimate_costs,
     get_portfolio_summary,
     list_holdings,
+    list_transactions,
     update_holding,
 )
 
@@ -66,8 +69,38 @@ class PortfolioSummaryResponse(BaseModel):
     total_cost: float = 0.0
     total_pnl: float = 0.0
     total_pnl_percent: float = 0.0
+    realized_pnl: float = 0.0
     holdings_count: int = 0
     holdings: list[HoldingWithPriceResponse] = []
+
+
+class AddTransactionRequest(BaseModel):
+    ticker: str = Field(..., min_length=1, description="股票代碼，例如 2330.TW")
+    action: str = Field(..., pattern="^(buy|sell)$", description="buy / sell")
+    shares: float = Field(..., gt=0, description="股數")
+    price: float = Field(..., gt=0, description="成交價")
+    trade_date: str = Field("", description="交易日 YYYY-MM-DD（空 = 今天）")
+    name: str = Field("", description="股票名稱（選填）")
+    notes: str = Field("", description="備註（選填）")
+    fee: float | None = Field(
+        None, ge=0, description="手續費（不填以台股牌告費率估算，可含折讓）"
+    )
+
+
+class TransactionResponse(BaseModel):
+    id: str
+    ticker: str
+    name: str = ""
+    action: str
+    shares: float
+    price: float
+    fee: float = 0.0
+    tax: float = 0.0
+    amount: float = 0.0
+    realized_pnl: float = 0.0
+    trade_date: str = ""
+    notes: str = ""
+    created_at: str = ""
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
@@ -141,6 +174,59 @@ async def modify_holding(
     except Exception as e:
         logger.exception("Failed to update holding %s", holding_id)
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/transactions", response_model=TransactionResponse, status_code=201)
+async def create_transaction(
+    req: AddTransactionRequest,
+    user: dict = Depends(verify_firebase_token),
+):
+    """記錄一筆買/賣交易（自動計算台股手續費/證交稅並更新持股與已實現損益）."""
+    try:
+        tx = add_transaction(
+            user_id=_get_uid(user),
+            ticker=req.ticker,
+            action=req.action,
+            shares=req.shares,
+            price=req.price,
+            trade_date=req.trade_date,
+            name=req.name,
+            notes=req.notes,
+            fee=req.fee,
+        )
+        return TransactionResponse(**asdict(tx))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception:
+        logger.exception("Failed to add transaction")
+        raise HTTPException(status_code=500, detail="交易記錄失敗，請稍後再試")
+
+
+@router.get("/transactions", response_model=list[TransactionResponse])
+async def get_transactions(
+    limit: int = 100,
+    user: dict = Depends(verify_firebase_token),
+):
+    """列出交易紀錄（新→舊）."""
+    try:
+        txs = list_transactions(_get_uid(user), limit=limit)
+        return [TransactionResponse(**asdict(t)) for t in txs]
+    except Exception:
+        logger.exception("Failed to list transactions")
+        raise HTTPException(status_code=500, detail="無法取得交易紀錄，請稍後再試")
+
+
+@router.get("/transactions/estimate")
+async def estimate_transaction_costs(
+    ticker: str,
+    action: str,
+    shares: float,
+    price: float,
+    user: dict = Depends(verify_firebase_token),
+):
+    """估算一筆交易的手續費與證交稅（供前端輸入時即時顯示）."""
+    fee, tax = estimate_costs(ticker, action, shares, price)
+    return {"fee": fee, "tax": tax}
 
 
 @router.delete("/holdings/{holding_id}")

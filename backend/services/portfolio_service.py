@@ -15,6 +15,12 @@ logger = logging.getLogger(__name__)
 
 PORTFOLIOS_COL = "portfolios"  # portfolios/{user_id}
 HOLDINGS_SUB = "holdings"  # portfolios/{user_id}/holdings/{holding_id}
+TRANSACTIONS_SUB = "transactions"  # portfolios/{user_id}/transactions/{tx_id}
+
+# 台股交易成本（與回測引擎一致）
+TW_COMMISSION_RATE = 0.001425
+TW_MIN_COMMISSION = 20.0
+TW_SELL_TAX_RATE = 0.003
 
 
 # ── Data classes ─────────────────────────────────────────────────────────────
@@ -52,10 +58,30 @@ class PortfolioSummary:
 
     total_value: float = 0.0
     total_cost: float = 0.0
-    total_pnl: float = 0.0
+    total_pnl: float = 0.0  # 未實現損益
     total_pnl_percent: float = 0.0
+    realized_pnl: float = 0.0  # 已實現損益（來自賣出交易，含手續費與證交稅）
     holdings_count: int = 0
     holdings: list[HoldingWithPrice] = field(default_factory=list)
+
+
+@dataclass
+class Transaction:
+    """單筆買賣交易（帳本；不可修改，只能沖銷後重記）."""
+
+    id: str = ""
+    ticker: str = ""
+    name: str = ""
+    action: str = ""  # buy / sell
+    shares: float = 0.0
+    price: float = 0.0
+    fee: float = 0.0  # 手續費
+    tax: float = 0.0  # 證交稅（賣出）
+    amount: float = 0.0  # 成交金額（不含費稅）
+    realized_pnl: float = 0.0  # 賣出時實現損益（含費稅；買入為 0）
+    trade_date: str = ""  # YYYY-MM-DD
+    notes: str = ""
+    created_at: str = ""
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
@@ -153,14 +179,167 @@ def list_holdings(user_id: str) -> list[Holding]:
     return holdings
 
 
+# ── 交易紀錄（帳本制）────────────────────────────────────────────────────────
+
+
+def _transactions_ref(user_id: str):
+    db = get_db()
+    return db.collection(PORTFOLIOS_COL).document(user_id).collection(TRANSACTIONS_SUB)
+
+
+def _is_tw_ticker(ticker: str) -> bool:
+    return ticker.upper().endswith(".TW") or ticker.upper().endswith(".TWO")
+
+
+def estimate_costs(ticker: str, action: str, shares: float, price: float) -> tuple[float, float]:
+    """估算台股手續費與證交稅（美股回 0）。回傳 (fee, tax)."""
+    amount = shares * price
+    if not _is_tw_ticker(ticker) or amount <= 0:
+        return (0.0, 0.0)
+    fee = round(max(TW_MIN_COMMISSION, amount * TW_COMMISSION_RATE), 2)
+    tax = round(amount * TW_SELL_TAX_RATE, 2) if action == "sell" else 0.0
+    return (fee, tax)
+
+
+def add_transaction(
+    user_id: str,
+    ticker: str,
+    action: str,
+    shares: float,
+    price: float,
+    trade_date: str = "",
+    name: str = "",
+    notes: str = "",
+    fee: float | None = None,
+) -> Transaction:
+    """記錄一筆買/賣交易，並同步維護持股（平均成本法）.
+
+    - 買入：新平均成本 =（原成本基礎 + 成交金額 + 手續費）÷ 新總股數（成本內含費用）
+    - 賣出：已實現損益 = 賣出淨額（扣費稅）－ 股數 × 平均成本；平均成本不變，
+      股數歸零時刪除該持股
+    - fee 可自行覆寫（券商折讓），不填則以台股牌告費率估算
+    """
+    if action not in ("buy", "sell"):
+        raise ValueError("action 必須是 buy 或 sell")
+    if shares <= 0 or price <= 0:
+        raise ValueError("shares 與 price 必須為正數")
+
+    ticker = ticker.upper()
+    amount = round(shares * price, 2)
+    est_fee, tax = estimate_costs(ticker, action, shares, price)
+    if fee is None:
+        fee = est_fee
+    fee = round(fee, 2)
+
+    # 找到既有持股（同 ticker 只取第一筆；帳本制下每檔應只有一筆 holding）
+    holdings_ref = _holdings_ref(user_id)
+    existing = None
+    for doc in holdings_ref.stream():
+        d = doc.to_dict() or {}
+        if d.get("ticker", "").upper() == ticker:
+            existing = (doc.id, d)
+            break
+
+    now = _now_iso()
+    realized_pnl = 0.0
+
+    if action == "buy":
+        if existing:
+            hid, d = existing
+            old_shares = float(d.get("shares", 0))
+            old_cost_basis = old_shares * float(d.get("avg_cost", 0))
+            new_shares = old_shares + shares
+            new_avg = (old_cost_basis + amount + fee) / new_shares
+            holdings_ref.document(hid).update(
+                {"shares": new_shares, "avg_cost": round(new_avg, 4), "updated_at": now}
+            )
+        else:
+            holdings_ref.add(
+                {
+                    "ticker": ticker,
+                    "name": name,
+                    "shares": shares,
+                    "avg_cost": round((amount + fee) / shares, 4),
+                    "notes": "",
+                    "created_at": now,
+                    "updated_at": now,
+                }
+            )
+    else:  # sell
+        if not existing:
+            raise ValueError(f"未持有 {ticker}，無法賣出")
+        hid, d = existing
+        held = float(d.get("shares", 0))
+        if shares > held + 1e-9:
+            raise ValueError(f"賣出股數 {shares} 超過持有股數 {held}")
+        avg_cost = float(d.get("avg_cost", 0))
+        net_proceeds = amount - fee - tax
+        realized_pnl = round(net_proceeds - shares * avg_cost, 2)
+        remaining = held - shares
+        if remaining <= 1e-9:
+            holdings_ref.document(hid).delete()
+        else:
+            holdings_ref.document(hid).update(
+                {"shares": remaining, "updated_at": now}
+            )
+
+    tx_data = {
+        "ticker": ticker,
+        "name": name or (existing[1].get("name", "") if existing else ""),
+        "action": action,
+        "shares": shares,
+        "price": price,
+        "fee": fee,
+        "tax": tax,
+        "amount": amount,
+        "realized_pnl": realized_pnl,
+        "trade_date": trade_date or now[:10],
+        "notes": notes,
+        "created_at": now,
+    }
+    tx_ref = _transactions_ref(user_id).add(tx_data)[1]
+    return Transaction(id=tx_ref.id, **tx_data)
+
+
+def list_transactions(user_id: str, limit: int = 200) -> list[Transaction]:
+    """列出交易紀錄（新→舊）."""
+    docs = _transactions_ref(user_id).stream()
+    txs = []
+    for doc in docs:
+        d = doc.to_dict() or {}
+        txs.append(
+            Transaction(
+                id=doc.id,
+                **{
+                    k: d.get(k, Transaction.__dataclass_fields__[k].default)
+                    for k in Transaction.__dataclass_fields__
+                    if k != "id"
+                },
+            )
+        )
+    txs.sort(key=lambda t: (t.trade_date, t.created_at), reverse=True)
+    return txs[:limit]
+
+
+def get_realized_pnl(user_id: str) -> float:
+    """賣出交易的已實現損益總和（含手續費與證交稅）."""
+    return round(sum(t.realized_pnl for t in list_transactions(user_id, limit=10_000)), 2)
+
+
 # ── 即時市值計算 ─────────────────────────────────────────────────────────────
 
 
 def get_portfolio_summary(user_id: str) -> PortfolioSummary:
-    """取得投資組合摘要（含即時市值損益）."""
+    """取得投資組合摘要（含即時市值損益與已實現損益）."""
+    try:
+        realized = get_realized_pnl(user_id)
+    except Exception:
+        logger.warning("Failed to compute realized pnl for %s", user_id, exc_info=True)
+        realized = 0.0
+
     holdings = list_holdings(user_id)
     if not holdings:
-        return PortfolioSummary()
+        return PortfolioSummary(realized_pnl=realized)
 
     enriched: list[HoldingWithPrice] = []
     total_value = 0.0
@@ -211,6 +390,7 @@ def get_portfolio_summary(user_id: str) -> PortfolioSummary:
         total_cost=round(total_cost, 2),
         total_pnl=round(total_pnl, 2),
         total_pnl_percent=round(total_pnl_pct, 2),
+        realized_pnl=realized,
         holdings_count=len(enriched),
         holdings=enriched,
     )
