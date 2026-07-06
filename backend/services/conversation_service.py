@@ -35,8 +35,11 @@ def _dict_to_msg(d: dict) -> BaseMessage:
 # ── Firestore persistence ───────────────────────────────────────────────────
 
 
-def load_history(conversation_id: str) -> list[BaseMessage]:
-    """Load conversation history from Firestore.
+def load_history(conversation_id: str, user_id: str = "") -> list[BaseMessage]:
+    """Load conversation history from Firestore (with ownership check).
+
+    conversation_id 由前端傳入，未驗證擁有權時可被用來注入他人對話（IDOR）。
+    傳入 user_id 時，不屬於該使用者的對話一律視為不存在。
 
     Returns:
         List of LangChain message objects (HumanMessage / AIMessage).
@@ -49,6 +52,13 @@ def load_history(conversation_id: str) -> list[BaseMessage]:
         return []
 
     data = doc.to_dict() or {}
+    if user_id and data.get("user_id", "") != user_id:
+        logger.warning(
+            "Ownership mismatch loading conversation %s for user %s",
+            conversation_id,
+            user_id,
+        )
+        return []
     messages_data = data.get("messages", [])
     return [_dict_to_msg(m) for m in messages_data[-MAX_TURNS * 2 :]]
 
@@ -76,6 +86,13 @@ def save_history(
 
     if doc.exists:
         data = doc.to_dict() or {}
+        if user_id and data.get("user_id", "") != user_id:
+            logger.warning(
+                "Ownership mismatch saving conversation %s for user %s; skipped",
+                conversation_id,
+                user_id,
+            )
+            return
         messages = data.get("messages", [])
     else:
         messages = []
