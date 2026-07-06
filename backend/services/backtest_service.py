@@ -39,6 +39,7 @@ class Trade:
     shares: int
     value: float
     reason: str = ""
+    fee: float = 0.0  # 本筆交易成本（買=手續費；賣=手續費+證交稅）
 
 
 @dataclass
@@ -75,7 +76,16 @@ class BacktestResult:
     benchmark_return: float = 0.0  # % (buy & hold)
     trades: list[Trade] = field(default_factory=list)
     equity_curve: list[EquityPoint] = field(default_factory=list)
+    notes: list[str] = field(default_factory=list)  # 模型假設與警語（一律顯示給使用者）
     error: str = ""
+
+
+# 年化無風險利率（台灣一年期定存約 1.5%），用於夏普比率
+RISK_FREE_RATE = 0.015
+# 單邊滑價假設（10 bps）：開盤價成交的買賣價差與衝擊成本近似
+DEFAULT_SLIPPAGE_RATE = 0.001
+# 台股券商單筆最低手續費
+TW_MIN_COMMISSION = 20.0
 
 
 # ── Strategy Implementations ─────────────────────────────────────────────────
@@ -132,8 +142,9 @@ def _strategy_rsi(
     """
     close = df["Close"]
     delta = close.diff()
-    gain = delta.where(delta > 0, 0.0).rolling(period).mean()
-    loss = (-delta.where(delta < 0, 0.0)).rolling(period).mean()
+    # Wilder's smoothing（與券商看盤軟體一致），非簡單移動平均
+    gain = delta.where(delta > 0, 0.0).ewm(alpha=1 / period, adjust=False).mean()
+    loss = (-delta.where(delta < 0, 0.0)).ewm(alpha=1 / period, adjust=False).mean()
     rs = gain / loss
     rsi = 100 - (100 / (1 + rs))
 
@@ -215,10 +226,10 @@ def _strategy_custom(
     close = df["Close"]
 
     # Pre-compute indicators
-    # RSI
+    # RSI（Wilder's smoothing，與券商看盤軟體一致）
     delta = close.diff()
-    gain = delta.where(delta > 0, 0.0).rolling(14).mean()
-    loss = (-delta.where(delta < 0, 0.0)).rolling(14).mean()
+    gain = delta.where(delta > 0, 0.0).ewm(alpha=1 / 14, adjust=False).mean()
+    loss = (-delta.where(delta < 0, 0.0)).ewm(alpha=1 / 14, adjust=False).mean()
     rs = gain / loss
     rsi = 100 - (100 / (1 + rs))
 
@@ -370,65 +381,82 @@ def run_backtest(
         return result
 
     # ── Transaction cost parameters ──
-    # Taiwan stock market: broker commission 0.1425%, securities tax 0.3% (sell only)
-    # Discount brokers typically offer 5-6折 on commission
+    # Taiwan stock market: broker commission 0.1425% (min NT$20), securities tax 0.3% (sell only)
     is_tw = ticker.endswith(".TW") or ticker.endswith(".TWO")
     commission_rate = 0.001425 if is_tw else 0.0  # broker commission (both sides)
     sell_tax_rate = 0.003 if is_tw else 0.0  # securities transaction tax (sell only)
+    min_commission = TW_MIN_COMMISSION if is_tw else 0.0
+    slippage_rate = DEFAULT_SLIPPAGE_RATE
+
+    def _commission(amount: float) -> float:
+        if commission_rate <= 0 or amount <= 0:
+            return 0.0
+        return round(max(min_commission, amount * commission_rate), 2)
 
     # ── Simulate trades ──
+    # 成交模型：訊號以第 i 根 K 棒收盤計算，實務上收盤後才能知道訊號，
+    # 因此一律以「次一交易日開盤價 ± 滑價」成交，避免 look-ahead 高估績效。
     cash = initial_capital
     shares = 0
     trades: list[Trade] = []
     total_fees = 0.0
 
-    # Create a date→price lookup
-    price_map: dict[str, float] = {}
-    for idx in df.index:
-        price_map[idx.strftime("%Y-%m-%d")] = float(df.loc[idx, "Close"])
+    dates = [idx.strftime("%Y-%m-%d") for idx in df.index]
+    date_pos = {d: i for i, d in enumerate(dates)}
+    open_series = df["Open"]
+    close_series = df["Close"]
 
-    for date_str, action, reason in signals:
-        price = price_map.get(date_str)
-        if price is None or price <= 0:
+    for signal_date, action, reason in signals:
+        pos = date_pos.get(signal_date)
+        if pos is None or pos + 1 >= len(df):
+            continue  # 最後一根 K 棒的訊號沒有次日可成交
+        exec_idx = pos + 1
+        exec_date = dates[exec_idx]
+        raw_price = float(open_series.iloc[exec_idx])
+        if not raw_price or math.isnan(raw_price) or raw_price <= 0:
+            raw_price = float(close_series.iloc[exec_idx])
+        if raw_price <= 0:
             continue
 
         if action == TradeAction.BUY and shares == 0:
-            # Buy: use all cash (minus estimated commission)
-            affordable = cash / (1 + commission_rate)
+            price = raw_price * (1 + slippage_rate)
+            affordable = (cash - min_commission) / (1 + commission_rate)
             shares = int(affordable // price)
-            if shares == 0:
+            if shares <= 0:
                 continue
             cost = shares * price
-            buy_commission = round(cost * commission_rate, 2)
+            buy_commission = _commission(cost)
             cash -= cost + buy_commission
             total_fees += buy_commission
             trades.append(
                 Trade(
-                    date=date_str,
+                    date=exec_date,
                     action=TradeAction.BUY,
                     price=round(price, 2),
                     shares=shares,
                     value=round(cost, 2),
-                    reason=reason,
+                    reason=f"{reason}（{signal_date} 訊號，次日開盤成交）",
+                    fee=buy_commission,
                 )
             )
 
         elif action == TradeAction.SELL and shares > 0:
-            # Sell: liquidate all, deduct commission + tax
+            price = raw_price * (1 - slippage_rate)
             gross_proceeds = shares * price
-            sell_commission = round(gross_proceeds * commission_rate, 2)
+            sell_commission = _commission(gross_proceeds)
             sell_tax = round(gross_proceeds * sell_tax_rate, 2)
-            net_proceeds = gross_proceeds - sell_commission - sell_tax
-            total_fees += sell_commission + sell_tax
-            cash += net_proceeds
+            fee = sell_commission + sell_tax
+            total_fees += fee
+            cash += gross_proceeds - fee
             trades.append(
                 Trade(
-                    date=date_str,
+                    date=exec_date,
                     action=TradeAction.SELL,
                     price=round(price, 2),
                     shares=shares,
                     value=round(gross_proceeds, 2),
-                    reason=reason,
+                    reason=f"{reason}（{signal_date} 訊號，次日開盤成交）",
+                    fee=fee,
                 )
             )
             shares = 0
@@ -453,14 +481,9 @@ def run_backtest(
             t = trade_by_date[date_str]
             if t.action == TradeAction.BUY:
                 sim_shares = t.shares
-                buy_cost = t.value
-                buy_fee = round(buy_cost * commission_rate, 2)
-                sim_cash -= buy_cost + buy_fee
+                sim_cash -= t.value + t.fee
             elif t.action == TradeAction.SELL:
-                gross = t.value
-                sell_fee = round(gross * commission_rate, 2)
-                sell_tax_cost = round(gross * sell_tax_rate, 2)
-                sim_cash += gross - sell_fee - sell_tax_cost
+                sim_cash += t.value - t.fee
                 sim_shares = 0
 
         equity = sim_cash + sim_shares * price
@@ -489,6 +512,11 @@ def run_backtest(
         if final_equity > 0 and initial_capital > 0:
             result.annualized_return = round(
                 ((final_equity / initial_capital) ** (1 / years) - 1) * 100, 2
+            )
+        if days < 365:
+            result.notes.append(
+                f"回測期間僅 {days} 天，年化報酬是短期績效的數學外推，"
+                "容易被單一波段放大，參考價值低"
             )
 
     # Max drawdown
@@ -538,7 +566,10 @@ def run_backtest(
                 sum((r - avg_return) ** 2 for r in daily_returns) / len(daily_returns)
             ) ** 0.5
             if std_return > 0:
-                result.sharpe_ratio = round((avg_return / std_return) * (252**0.5), 2)
+                daily_rf = RISK_FREE_RATE / 252
+                result.sharpe_ratio = round(
+                    ((avg_return - daily_rf) / std_return) * (252**0.5), 2
+                )
 
     # Benchmark: buy & hold return
     first_price = float(df["Close"].iloc[0])
@@ -547,6 +578,20 @@ def run_backtest(
 
     result.trades = trades
     result.equity_curve = equity_curve
+
+    # 模型假設揭露（一律附在結果中，供前端與 Agent 呈現）
+    result.notes.append(
+        f"成交假設：訊號次一交易日開盤價成交，含單邊滑價 {slippage_rate:+.1%} 近似買賣價差與衝擊成本"
+    )
+    if is_tw:
+        result.notes.append(
+            "交易成本：手續費 0.1425%（單筆最低 NT$20，未含折讓）＋賣出證交稅 0.3%"
+        )
+    result.notes.append(
+        "歷史股價為還原權值（隱含股息再投入、未計股利稅）；"
+        f"夏普比率已扣除年化 {RISK_FREE_RATE:.1%} 無風險利率"
+    )
+    result.notes.append("回測為單一標的全額進出模型，未含分批與部位控管；過去績效不代表未來")
 
     return result
 
@@ -568,7 +613,7 @@ def format_backtest_result(result: BacktestResult) -> str:
         f"  • 最終淨值：${result.final_equity:,.0f}",
         (
             f"  • 總報酬率：{result.total_return:+.2f}%"
-            f"（同期大盤 Buy & Hold：{result.benchmark_return:+.2f}%）"
+            f"（同一標的 Buy & Hold：{result.benchmark_return:+.2f}%）"
         ),
         f"  • 年化報酬：{result.annualized_return:+.2f}%",
         f"  • 最大回撤：-{result.max_drawdown:.2f}%",
@@ -594,5 +639,11 @@ def format_backtest_result(result: BacktestResult) -> str:
                 f"  {emoji} {t.date} {t.action.value.upper()} "
                 f"@ ${t.price:,.2f} × {t.shares} 股 = ${t.value:,.0f}（{t.reason}）"
             )
+
+    if result.notes:
+        parts.append("")
+        parts.append("📎 模型假設與限制：")
+        for note in result.notes:
+            parts.append(f"  • {note}")
 
     return "\n".join(parts)
