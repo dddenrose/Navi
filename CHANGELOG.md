@@ -9,6 +9,36 @@
 
 ## [Unreleased]
 
+### Added（2026-07-07 產品審查修正批次）
+
+- **投資組合交易紀錄與已實現損益**：新增 `POST/GET /api/portfolio/transactions` 與 `/transactions/estimate`。買賣交易自動計算台股手續費（0.1425%、最低 NT$20）與賣出證交稅（0.3%），以平均成本法維護持股（買入費用計入成本、賣出實現損益含費稅），前端 Portfolio 頁新增「記錄交易」模態框、已實現損益卡與交易紀錄表。
+- **共用 TWSE 欄位解析層** `services/twse_parsers.py`：T86（19 欄新版 schema）與 MI_MARGN（16 欄）的唯一欄位對應來源，以 2026-07-02 真實 API 回應建立 fixture 回歸測試（`tests/test_twse_parsers.py`）。
+- **模型分層（成本控制）**：free 層 chat 改用 `gemini-2.5-flash`，pro/unlimited/admin 用 `gemini-2.5-pro`（`config.model_for_tier`）。
+- **回測/選股額度與限流**：`/api/backtest` 新增每日額度（free 5 / pro 50 次，`quota_service` feature-scoped 計數）與每分鐘限流（5/min，兼作 quota fail-open 時的硬上限）；screener 端點加 router 層限流。
+- **回測模型假設揭露**：`BacktestResult.notes` 回傳成交假設、費稅、還原股價與夏普比率口徑，前端與 Agent 工具一律顯示。
+- **測試**：新增 `test_backtest_service.py`（10 項，成交模型/費稅/指標完整性）、`test_portfolio_service.py`（13 項，平均成本/已實現損益帳務）、`test_conversation_ownership.py`（5 項，IDOR 防護）、`test_twse_parsers.py`（12 項）。
+
+### Fixed（2026-07-07 產品審查修正批次）
+
+- **【嚴重】T86 三大法人欄位錯位**：舊程式以 12 欄舊版 schema 解析現行 19 欄回應，導致「投信買賣超」實際顯示的是外資自營商、「自營商」實際是投信、合計淨額錯位。已以真實回應核對修正（外資=外陸資+外資自營商，與三大法人合計自洽）。
+- **【嚴重】MI_MARGN 融資融券欄位錯誤**：融券買進/賣出對調（row 8/9）、screener 誤用「前日」融券餘額（row 11）當今日餘額、資券互抵誤用融券限額欄（row 13）。三處消費端統一改走 `twse_parsers`。
+- **Chat SSE 中斷永久卡死**：`streamChat` 無 try/catch，行動網路斷線後輸入框永久鎖死。加 try/catch/finally 強制復位並顯示中文重試提示。
+- **對話歷史 IDOR**：`load_history`/`save_history` 未驗證擁有權，可用他人 conversation_id 注入/續寫歷史（含持股 PII）。已加 user_id 擁有權檢查。
+- **回測 look-ahead bias**：訊號當日收盤成交改為「次一交易日開盤 ± 0.1% 滑價」成交；補最低手續費 NT$20；夏普比率扣年化 1.5% 無風險利率；期間 <1 年時對年化報酬附外推警語。
+- **估值方法論失真**：歷史 PE 改以「未還原股價 ÷ 各年度 EPS（point-in-time，年報淨利/流通股數近似）」計算；移除「當前 PE ±30%」fallback（數學上恆等於「現價=合理價」，具誤導性），資料不足時不給價位帶。
+- **RSI 與券商不一致**：`stock_service` 與回測引擎的 RSI 從 SMA 改為 Wilder 平滑（ewm alpha=1/14），與看盤軟體一致；KD 對連續一字板（分母為 0）視為中性 50。
+- **RAG 檢索性幻覺**：`search_similar` 加 COSINE distance 門檻（0.45）並回傳分數，無相關內容時明確告知 LLM 不得引用知識庫；知識庫截斷改在段落邊界（600→1200 字）。
+- **錯誤訊息品質**：前端不再顯示後端原始 body/HTML（改中文可行動訊息）、Login 的 Firebase 錯誤碼在地化、Stock 分頁失敗顯示提示而非空白、SSE 錯誤事件不再洩漏內部例外字串。
+- **手機可用性**：Portfolio/Chat 的 hover-only 刪除鈕在觸控裝置改為常駐可見。
+
+### Changed（2026-07-07 產品審查修正批次）
+
+- **法遵三層一致化**：技術分析工具的「🛑 建議停損」改為「📉 趨勢警戒參考位」教育性描述並移除「風險報酬比」輸出；知識庫 persona 範例移除「停損設在 950/分批 30-30-40/設定目標價」等投顧式示範；agent prompt reasoning_process 同步修正；Screener「建議買進區」改「估值偏低參考區（非買進建議）」。
+- **免責聲明改由系統保證**：後端串流結束時自動補上免責聲明（不再依賴 LLM 自律）；Chat/Stock/Screener/Portfolio/技術分析頁加常駐免責與資料時效聲明。
+- **全站信任訊號**：Stock 頁顯示「盤中/收盤 · 截至日期 · 來源」；Citations 顯示資料取得時間；漲跌配色全站統一為台股慣例（紅漲綠跌），含權益曲線與價格圖。
+- **Tier 價值重新對齊**：`stock`（便宜的 deterministic 查詢）開放 free 層作為轉換漏斗；貴的 chat 由 Flash+額度控制、backtest/screener 維持付費層。FeatureGuard 與額度用盡處加升級引導文案。
+- **文件對齊現實**：PROPOSAL 費用預估改以 Gemini 2.5 分層模型重算；標注 Phase 6 快照/績效曲線未實作；MOMENTUM_BACKTEST_NOTES 加註腳本缺失與倖存者偏差警告。
+
 ### Added
 
 - **使用者額度與權限管理系統**：新增 4 個 tier（free/pro/unlimited/admin）的每日訊息額度與每分鐘速率限制，所有 chat 請求需通過 `quota_service.check_and_consume` 原子性扣額。
