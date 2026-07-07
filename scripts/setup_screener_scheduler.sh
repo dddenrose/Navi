@@ -98,11 +98,13 @@ echo ""
 # Job 定義表：name | schedule | profile | frequency | path
 #   - momentum: 週一/三/五 14:30 跑 (盤後)，隔日早上 07:00 寄信
 #   - value:    週日 20:00 跑，週一 07:00 寄信
+#   - track:    平日 16:30 盤後更新 picks 實績追蹤（T+5/20/60 報酬）
 JOBS=(
   "${JOB_PREFIX}-momentum|30 14 * * 1,3,5|momentum|daily|run"
   "${JOB_PREFIX}-weekly-value|0 20 * * 0|value|weekly|run"
   "${JOB_PREFIX}-notify-momentum|0 7 * * 2,4,6|momentum|daily|notify"
   "${JOB_PREFIX}-notify-weekly-value|0 7 * * 1|value|weekly|notify"
+  "${JOB_PREFIX}-track|30 16 * * 1-5|-|-|track"
 )
 
 # ── --pause / --resume / --delete ───────────────────────────────────────────
@@ -122,7 +124,11 @@ fi
 for entry in "${JOBS[@]}"; do
   IFS='|' read -r name schedule profile frequency path <<< "${entry}"
   path="${path:-run}"
-  body="{\"profile\":\"${profile}\",\"frequency\":\"${frequency}\"}"
+  if [[ "${path}" == "track" ]]; then
+    body="{}"
+  else
+    body="{\"profile\":\"${profile}\",\"frequency\":\"${frequency}\"}"
+  fi
   uri="${SERVICE_URL}/api/screener/${path}"
 
   echo "▶ ${name}  cron='${schedule}'  uri=${uri}  body=${body}"

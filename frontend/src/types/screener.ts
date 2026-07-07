@@ -91,6 +91,23 @@ export interface Interpretation {
   value_trap_reason: string;
 }
 
+export interface PickTracking {
+  entry_date?: string;
+  as_of?: string;
+  entry_close_adj?: number;
+  trading_days_elapsed?: number;
+  complete?: boolean;
+  return_current?: number;
+  max_return?: number;
+  max_drawdown?: number;
+  return_t5?: number;
+  return_t20?: number;
+  return_t60?: number;
+  excess_t5?: number;
+  excess_t20?: number;
+  excess_t60?: number;
+}
+
 export interface PickDoc {
   ticker: string;
   name: string;
@@ -103,6 +120,28 @@ export interface PickDoc {
   scoring_trace: ScoringTrace;
   valuation: Valuation;
   interpretation: Interpretation;
+  tracking?: PickTracking;
+}
+
+export interface TrackingHorizonStats {
+  n: number;
+  win_rate?: number;
+  avg_return?: number;
+  median_return?: number;
+  avg_excess?: number;
+  beat_benchmark_rate?: number;
+}
+
+export interface TrackingSummary {
+  profile: ScreenerProfile;
+  pick_events: number;
+  report_count: number;
+  first_report_id?: string | null;
+  last_report_id?: string | null;
+  updated_at?: string;
+  methodology?: string;
+  horizons: Record<string, TrackingHorizonStats>;
+  by_grade: Record<string, Record<string, TrackingHorizonStats>>;
 }
 
 export interface ReportDetail {

@@ -1,13 +1,16 @@
 """Screener API — 三階段選股報告觸發 / 查詢.
 
 - POST /api/screener/run        Scheduler 觸發（shared-secret 保護）
+- POST /api/screener/track      Scheduler 觸發 picks 實績追蹤更新
 - GET  /api/screener/reports             列表
 - GET  /api/screener/reports/latest      最新（依 profile/frequency 過濾）
 - GET  /api/screener/reports/{id}        詳情 + picks
+- GET  /api/screener/tracking/summary    picks 實績統計（T+5/20/60）
 """
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
 
@@ -16,6 +19,7 @@ from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, EmailStr, Field
 
 from api.dependencies import require_feature_access
+from api.rate_limit import api_limiter, rate_limited
 from config import settings
 from services.firestore_client import get_db
 from services.screener.email_sender import (
@@ -25,8 +29,12 @@ from services.screener.email_sender import (
     upsert_subscriber,
     verify_unsubscribe_token,
 )
-from api.rate_limit import api_limiter, rate_limited
 from services.screener.orchestrator import REPORTS_COLLECTION, run_screener_async
+from services.screener.picks_tracker import (
+    get_tracking_summary,
+    rebuild_tracking_summary,
+    update_all_tracking,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -110,6 +118,7 @@ class PickDoc(BaseModel):
     scoring_trace: dict[str, Any] = {}
     valuation: dict[str, Any] = {}
     interpretation: dict[str, Any] = {}
+    tracking: dict[str, Any] = {}
 
 
 class ReportDetail(BaseModel):
@@ -278,6 +287,56 @@ async def get_pick(
         raise HTTPException(status_code=404, detail="Pick not found")
     data = snap.to_dict() or {}
     return PickDoc(**{k: v for k, v in data.items() if k in PickDoc.model_fields})
+
+
+# ── Picks forward tracking（實績追蹤）────────────────────────────────────────
+
+
+class TrackRequest(BaseModel):
+    max_reports: int = Field(200, ge=1, le=1000)
+
+
+class TrackResponse(BaseModel):
+    reports_scanned: int
+    reports_completed: int
+    picks_updated: int
+    picks_skipped: int
+    pick_events_by_profile: dict[str, int]
+
+
+@router.post(
+    "/track",
+    response_model=TrackResponse,
+    dependencies=[Depends(verify_runner_token)],
+)
+async def track_picks(payload: TrackRequest | None = None) -> TrackResponse:
+    """更新歷史 picks 的 T+N 報酬並重算聚合統計（Scheduler 每日盤後觸發）."""
+    max_reports = payload.max_reports if payload else 200
+    stats = await asyncio.to_thread(update_all_tracking, max_reports=max_reports)
+    pick_events: dict[str, int] = {}
+    for profile in ("momentum", "value"):
+        summary = await asyncio.to_thread(rebuild_tracking_summary, profile)
+        pick_events[profile] = summary.get("pick_events", 0)
+    logger.info("Tracking run: %s, pick_events=%s", stats, pick_events)
+    return TrackResponse(
+        reports_scanned=stats.reports_scanned,
+        reports_completed=stats.reports_completed,
+        picks_updated=stats.picks_updated,
+        picks_skipped=stats.picks_skipped,
+        pick_events_by_profile=pick_events,
+    )
+
+
+@router.get("/tracking/summary")
+async def tracking_summary(
+    profile: str = Query("momentum", pattern="^(value|momentum)$"),
+    _: dict = Depends(require_screener_access),
+) -> dict[str, Any]:
+    """picks 實績統計 — 勝率 / 平均報酬 / 相對大盤超額（依 T+5/20/60）."""
+    summary = get_tracking_summary(profile)
+    if summary is None:
+        raise HTTPException(status_code=404, detail="尚無追蹤統計（需累積報告後由排程產生）")
+    return summary
 
 
 # ── Email subscription ──────────────────────────────────────────────────────

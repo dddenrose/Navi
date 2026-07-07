@@ -6,6 +6,7 @@ import type {
   ScreenerProfile,
   ScreenerFrequency,
   EmailSubscription,
+  TrackingSummary,
 } from "@/types/screener";
 
 const BASE_URL =
@@ -44,6 +45,19 @@ export async function getLatestReport(
 
 export async function getReport(reportId: string): Promise<ReportDetail> {
   return authedFetch<ReportDetail>(`/api/screener/reports/${reportId}`);
+}
+
+export async function getTrackingSummary(
+  profile: ScreenerProfile,
+): Promise<TrackingSummary | null> {
+  // 尚未累積統計時後端回 404 — 面板隱藏即可，不當錯誤處理
+  try {
+    return await authedFetch<TrackingSummary>(
+      `/api/screener/tracking/summary?profile=${profile}`,
+    );
+  } catch {
+    return null;
+  }
 }
 
 export async function getSubscription(): Promise<EmailSubscription> {

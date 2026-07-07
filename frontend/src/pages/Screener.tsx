@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import {
   getReport,
   getSubscription,
+  getTrackingSummary,
   listReports,
   updateSubscription,
 } from "@/lib/api/screener";
@@ -14,6 +15,7 @@ import type {
   RuleCheck,
   ScreenerFrequency,
   ScreenerProfile,
+  TrackingSummary,
   ValueTrapCheck,
 } from "@/types/screener";
 
@@ -35,6 +37,15 @@ function fmtSigned(v: number | null | undefined, digits = 1): string {
 function fmtRule(v: string | number | null): string {
   if (v == null) return "—";
   return String(v);
+}
+function fmtSignedPct(v: number | null | undefined, digits = 1): string {
+  if (v == null || Number.isNaN(v)) return "—";
+  const sign = v >= 0 ? "+" : "";
+  return `${sign}${(v * 100).toFixed(digits)}%`;
+}
+function pnlColor(v: number | null | undefined): string {
+  if (v == null || Number.isNaN(v)) return "text-slate-500";
+  return v >= 0 ? "text-emerald-400" : "text-red-400";
 }
 
 function reportTimestamp(value: ReportSummary["generated_at"]): Date | null {
@@ -329,6 +340,90 @@ function PickCard({ pick, onClick }: { pick: PickDoc; onClick: () => void }) {
         </div>
       )}
     </button>
+  );
+}
+
+// ── TrackingPanel（推薦實績追蹤）───────────────────────────────────────────
+
+const TRACKING_HORIZONS: { key: string; label: string }[] = [
+  { key: "t5", label: "T+5" },
+  { key: "t20", label: "T+20" },
+  { key: "t60", label: "T+60" },
+];
+
+function TrackingPanel({ profile }: { profile: ScreenerProfile }) {
+  const [summary, setSummary] = useState<TrackingSummary | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    setSummary(null);
+    getTrackingSummary(profile).then((s) => active && setSummary(s));
+    return () => {
+      active = false;
+    };
+  }, [profile]);
+
+  if (!summary || !summary.pick_events) return null;
+
+  return (
+    <div
+      className="rounded-2xl p-4 md:p-5 mb-6"
+      style={{ background: "var(--card-bg)", border: "1px solid var(--border)" }}
+    >
+      <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
+        <h3 className="text-sm font-medium text-slate-200">📈 推薦實績追蹤</h3>
+        <span className="text-[11px] text-slate-500">
+          {summary.pick_events} 次推薦事件 · {summary.report_count} 份報告
+        </span>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        {TRACKING_HORIZONS.map(({ key, label }) => {
+          const h = summary.horizons?.[key];
+          if (!h || h.n === 0) {
+            return (
+              <div
+                key={key}
+                className="rounded-xl p-3"
+                style={{ background: "var(--overlay-bg)" }}
+              >
+                <p className="text-[11px] text-slate-500 mb-1">{label} 交易日</p>
+                <p className="text-sm text-slate-600">樣本累積中…</p>
+              </div>
+            );
+          }
+          return (
+            <div
+              key={key}
+              className="rounded-xl p-3"
+              style={{ background: "var(--overlay-bg)" }}
+            >
+              <p className="text-[11px] text-slate-500 mb-1">
+                {label} 交易日 · n={h.n}
+              </p>
+              <p className={`text-lg font-semibold ${pnlColor(h.avg_return)}`}>
+                {fmtSignedPct(h.avg_return)}
+              </p>
+              <p className="text-[11px] text-slate-500 mt-1">
+                勝率 {fmtPct(h.win_rate, 0)}
+                {h.avg_excess != null && (
+                  <>
+                    {" "}· 超額大盤{" "}
+                    <span className={pnlColor(h.avg_excess)}>
+                      {fmtSignedPct(h.avg_excess)}
+                    </span>
+                  </>
+                )}
+              </p>
+            </div>
+          );
+        })}
+      </div>
+      {summary.methodology && (
+        <p className="text-[11px] text-slate-600 mt-3 leading-relaxed">
+          {summary.methodology}
+        </p>
+      )}
+    </div>
   );
 }
 
@@ -647,6 +742,48 @@ function PickDetailDrawer({
             <p className="text-slate-500 mt-1">{interp.value_trap_reason}</p>
           )}
         </section>
+
+        {/* Forward tracking（發布後實績）*/}
+        {pick.tracking?.entry_date && (
+          <section
+            className="mb-6 rounded-xl p-3 text-xs"
+            style={{
+              background: "var(--card-bg)",
+              border: "1px solid var(--border)",
+            }}
+          >
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-slate-400">
+                發布後實績（{pick.tracking.entry_date} 起）
+              </span>
+              <span className="text-slate-500">
+                經過 {pick.tracking.trading_days_elapsed ?? 0} 交易日
+              </span>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+              {[
+                { label: "目前", v: pick.tracking.return_current },
+                { label: "T+5", v: pick.tracking.return_t5 },
+                { label: "T+20", v: pick.tracking.return_t20 },
+                { label: "T+60", v: pick.tracking.return_t60 },
+              ].map(({ label, v }) => (
+                <div key={label}>
+                  <p className="text-slate-600">{label}</p>
+                  <p className={`font-semibold ${pnlColor(v)}`}>
+                    {v == null ? "—" : fmtSignedPct(v)}
+                  </p>
+                </div>
+              ))}
+            </div>
+            {(pick.tracking.max_return != null ||
+              pick.tracking.max_drawdown != null) && (
+              <p className="text-slate-500 mt-2">
+                期間最高 {fmtSignedPct(pick.tracking.max_return)} · 最低{" "}
+                {fmtSignedPct(pick.tracking.max_drawdown)}
+              </p>
+            )}
+          </section>
+        )}
 
         {/* Valuation */}
         <section className="mb-6">
@@ -1087,6 +1224,8 @@ export default function Screener() {
         />
         <EmailSubscribeToggle />
       </div>
+
+      <TrackingPanel profile={profile} />
 
       <ReportHistory
         reports={reports}
