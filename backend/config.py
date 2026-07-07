@@ -39,6 +39,9 @@ class Settings(BaseSettings):
 
     # Screener — shared-secret token for Cloud Scheduler /api/screener/run
     screener_runner_token: str = ""
+    # Screener Stage 3 LLM — 解讀層是「翻譯」而非深度推理，用 Flash 即可。
+    # 實測 Pro 每檔約 US$0.03（76% 是 thinking tokens），Flash 約 US$0.008。
+    screener_llm_model: str = "gemini-2.5-flash"
     # Screener email (optional)
     sendgrid_api_key: str = ""
     email_from_address: str = "notify@navi-stock.app"

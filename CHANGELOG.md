@@ -9,6 +9,18 @@
 
 ## [Unreleased]
 
+### Added（2026-07-07 可驗證性批次：回測重建 + 實績追蹤）
+
+- **Momentum 回測腳本重建**：`backend/scripts/backtest_momentum.py` 補回 repo（原腳本遺失）。指標口徑對齊線上 screener（Wilder RSI、SMA60/120、120 交易日相對強度），月底訊號→次一交易日開盤成交（無 look-ahead）、30bps 單邊成本，支援 `--rebalance/--top/--start/--end/--cost-bps/--limit/--exec`，輸出 equity curve CSV 與 yfinance 快取。
+  - **重跑結論：舊宣稱數字不可重現**。忠實重建版 2018-03~2026-07 為 +214%（CAGR +14.7%，全期落後 ^TWII -4.5%/年），遠低於筆記舊宣稱 +668%；`--exec signal_close`（look-ahead 對照）亦僅 +313%。交易級統計（勝率/賺賠比）兩版高度吻合 → 規則邏輯一致、差異在組合層執行假設。MOMENTUM_BACKTEST_NOTES 已將舊數字標記失效並新增第八章重建結果。
+- **Screener picks 實績追蹤（forward tracking）**：`services/screener/picks_tracker.py` 以報告日還原收盤為基準，追蹤每個 pick 的 T+5/T+20/T+60 交易日報酬、相對 ^TWII 超額、期間最高/最低，寫回 pick doc `tracking` 欄位；聚合統計（勝率/平均報酬/超額/依 final_grade 分層）寫入 `screener_tracking/{profile}`。無倖存者偏差與 look-ahead，為策略有效性的乾淨證據來源。
+  - **API**：`POST /api/screener/track`（Scheduler token 保護，每日盤後觸發）、`GET /api/screener/tracking/summary?profile=`。
+  - **排程**：`setup_screener_scheduler.sh` 新增 `screener-track` job（平日 16:30 Asia/Taipei）。
+  - **前端**：Screener 頁新增「推薦實績追蹤」面板（T+5/20/60 樣本數、勝率、平均報酬、超額大盤）；pick drawer 新增「發布後實績」區塊。
+  - **測試**：`tests/test_screener_tracking.py`（15 項，純計算，無網路/Firestore）。
+  - 已對既有 21 份報告回填完成（425 個推薦事件）。
+- **Screener Stage 3 降級為 gemini-2.5-flash**：新增 `settings.screener_llm_model`（預設 `gemini-2.5-flash`，可用環境變數 `SCREENER_LLM_MODEL` 覆寫），Stage 3 解讀層改讀此設定，不再共用 chat 的 `gemini_model_name`。實測 Pro 每檔約 US$0.030（76% 為 thinking tokens），Flash 每檔約 US$0.0054 → 排程 LLM 成本降約 5.5 倍（月估 US$8-9 → 約 US$2）。解讀品質經真實 picks 煙霧測試驗證（structured output、敘事數字約束均正常）。
+
 ### Added（2026-07-07 產品審查修正批次）
 
 - **投資組合交易紀錄與已實現損益**：新增 `POST/GET /api/portfolio/transactions` 與 `/transactions/estimate`。買賣交易自動計算台股手續費（0.1425%、最低 NT$20）與賣出證交稅（0.3%），以平均成本法維護持股（買入費用計入成本、賣出實現損益含費稅），前端 Portfolio 頁新增「記錄交易」模態框、已實現損益卡與交易紀錄表。

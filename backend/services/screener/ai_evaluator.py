@@ -55,7 +55,7 @@ class InterpretedPick:
 def _build_llm(model_name: str | None = None) -> ChatVertexAI:
     vertexai.init(project=settings.google_cloud_project)
     return ChatVertexAI(
-        model_name=model_name or settings.gemini_model_name,
+        model_name=model_name or settings.screener_llm_model,
         temperature=0.2,
         project=settings.google_cloud_project,
     )
@@ -369,6 +369,6 @@ async def interpret_picks(
     logger.info(
         "Stage 3 [%s]: %d picks → %d interpreted (%d fallback) (model=%s)",
         profile, len(picks), len(results), fallbacks,
-        model_name or settings.gemini_model_name,
+        model_name or settings.screener_llm_model,
     )
     return results
