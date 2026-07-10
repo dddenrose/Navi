@@ -27,16 +27,16 @@ _INFO_CACHE_TTL = 300  # 5 minutes
 
 
 def _normalize_yield(val: float | None) -> float | None:
-    """yfinance `dividendYield` 在 0.2.40 前後格式不同（小數 vs 百分比）。
+    """yfinance `dividendYield` 一律為百分比形式（2.5 表 2.5%）。
 
-    統一回傳「小數」形式（0.025 表 2.5%）：
-      - 若 val > 1，視為百分比（2.5）→ 除以 100
-      - 否則保留原值（0.025）
-    台股殖利率極少超過 100%，此判斷對正常數據安全。
+    pyproject 已鎖 yfinance>=0.2.40，該版本起固定回傳百分比，無條件除以 100
+    轉為「小數」形式（0.025 表 2.5%）。
+    不可用 `val > 1` 之類的啟發式判斷格式：殖利率 <1% 的股票（回傳 0.8 表
+    0.8%）會被誤判為小數形式而放大 100 倍（顯示成 80%）。
     """
     if val is None:
         return None
-    return val / 100 if val > 1 else val
+    return val / 100
 
 
 def _get_ticker_info(ticker: str) -> dict:

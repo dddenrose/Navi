@@ -6,7 +6,7 @@ export type ScreenerFrequency = "daily" | "weekly";
 export type FinalGrade = "Strong Pick" | "Pick" | "Watch" | "Reject" | string;
 export type Verdict = "qualified" | "rejected" | string;
 export type RuleSeverity = "critical" | "warning" | "info" | string;
-export type ValueTrapCheck = "no_concern" | "watch" | "concern" | string;
+export type ValueTrapCheck = "no_concern" | "watch" | "warning" | string;
 
 export interface ReportSummary {
   report_id: string;

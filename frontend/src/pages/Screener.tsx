@@ -118,16 +118,19 @@ function gradeStyle(grade: FinalGrade): {
   }
 }
 
-function valueTrapStyle(c: ValueTrapCheck): { text: string; label: string } {
+function valueTrapStyle(c: ValueTrapCheck | undefined): { text: string; label: string } {
   switch (c) {
     case "no_concern":
       return { text: "text-emerald-400", label: "無重大疑慮" };
     case "watch":
       return { text: "text-amber-400", label: "觀察" };
-    case "concern":
+    case "warning":
       return { text: "text-red-400", label: "疑似價值陷阱" };
     default:
-      return { text: "text-slate-400", label: String(c || "—") };
+      // 未知列舉值以警示色呈現（寧可誤警不可漏警）；無值維持中性
+      return c
+        ? { text: "text-red-400", label: String(c) }
+        : { text: "text-slate-400", label: "—" };
   }
 }
 

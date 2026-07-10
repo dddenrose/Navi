@@ -123,8 +123,10 @@ def _build_stock_data(
     pe = info.get("trailingPE") or info.get("forwardPE")
     pb = info.get("priceToBook")
     dy = info.get("dividendYield")
-    if dy is not None and dy > 1:
-        dy = dy / 100  # yfinance 部分版本回傳 % 形式
+    if dy is not None:
+        # yfinance>=0.2.40（pyproject 鎖定）固定回傳百分比形式（0.8 表 0.8%）。
+        # 勿用 `>1` 啟發式判斷格式——殖利率 <1% 的股票會被放大 100 倍。
+        dy = dy / 100
     eps_ttm = info.get("trailingEps")
 
     # Sanity 過濾異常 PE/PB

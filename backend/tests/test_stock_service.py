@@ -12,12 +12,33 @@ from services.stock_service import (
     FundamentalData,
     StockOverviewData,
     TechnicalIndicators,
+    _normalize_yield,
     format_stock_data_for_prompt,
     get_fundamental_data,
     get_stock_overview,
     get_technical_indicators,
     normalize_ticker,
 )
+
+# ── _normalize_yield ─────────────────────────────────────────────────────────
+
+
+class TestNormalizeYield:
+    """yfinance>=0.2.40 的 dividendYield 一律為百分比形式，統一轉小數。"""
+
+    def test_percent_form(self):
+        assert _normalize_yield(2.5) == pytest.approx(0.025)
+
+    def test_sub_one_percent_not_inflated(self):
+        # 迴歸：舊 `>1` 啟發式把 0.8%（yfinance 回傳 0.8）誤判為小數形式 → 80%
+        assert _normalize_yield(0.8) == pytest.approx(0.008)
+
+    def test_high_yield(self):
+        assert _normalize_yield(12.0) == pytest.approx(0.12)
+
+    def test_none(self):
+        assert _normalize_yield(None) is None
+
 
 # ── normalize_ticker ─────────────────────────────────────────────────────────
 
