@@ -42,7 +42,7 @@ logger = logging.getLogger(__name__)
 
 # Retry / hallucination 控制
 _MAX_RETRIES = 2  # 總嘗試次數 = _MAX_RETRIES + 1
-_MAX_NARRATIVE_VIOLATIONS = 1  # 容許數字 token 違規上限（>= 此值即視為幻覺）
+_MAX_NARRATIVE_VIOLATIONS = 0  # 數字 token 違規零容忍：任何未授權數字即重試
 _RETRY_BASE_DELAY = 0.6
 
 
@@ -315,9 +315,15 @@ async def _interpret_one(
             continue
 
         if violations:
+            # 重試耗盡仍有未授權數字 → 改用規則生成的保守版，
+            # 確保未經核對的數字永遠不會出現在使用者看到的報告裡
             logger.warning(
-                "Narrative hallucination remained for %s after retries: %s",
+                "Narrative hallucination remained for %s after retries: %s"
+                " — using fallback",
                 es.data.ticker, violations[:5],
+            )
+            return InterpretedPick(
+                evaluated=es, interpretation=_fallback_interpretation(es),
             )
 
         logger.info(

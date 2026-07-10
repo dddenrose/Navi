@@ -5,8 +5,10 @@
   - **System prompt 動態組裝**：依 profile 注入不同 horizon / value-trap playbook。
   - **數字 white-list**：user prompt 顯式列出允許引用的數字，搭配 `validate_narrative`
     後處理偵測幻覺。
+  - **質性接地（grounding）**：具名業務事實（客戶、市占、產品線、事件）只能來自
+    輸入資料，禁止模型以訓練記憶補充——記憶會過時、會編造，且無法被數字白名單攔截。
   - **narrative vs key_context 角色明確化**：
-      narrative = WHY NOW（投資論述）；key_context = WHAT BUSINESS（背景脈絡）。
+      narrative = WHY NOW（投資論述）；key_context = 輸入資料內的補充脈絡。
 
 公開 API：
   - StockInterpretation                              — Pydantic schema
@@ -40,8 +42,8 @@ class StockInterpretation(BaseModel):
     key_context: list[str] = Field(
         default_factory=list,
         description=(
-            "業務背景脈絡（background）。條列產品線、客戶結構、產業地位、"
-            "近期事件等 narrative 沒展開的事實。"
+            "補充脈絡（background）。條列輸入資料（snapshot / 規則明細 / 產業分類）"
+            "中存在、但 narrative 沒展開的事實。"
         ),
     )
     warnings: list[str] = Field(
@@ -78,20 +80,30 @@ _BEHAVIOR_RULES = """\
    所有 PE、PB、ROE、殖利率、營收成長、報酬率等量化數字 **只能引用**
    <allowed_numbers> 中列出的值（可換算單位但不可變動數量級）。
    未列出的數字一律不要寫。若需描述趨勢，用文字而非編造數字。
-4. 不確定性語氣：用「在 X 假設下」「若 Y 不惡化」「目前訊號顯示」等條件式語氣，
+4. 質性事實接地：具名業務事實——特定客戶名稱、供應鏈關係、市占率、產品線、
+   訂單、擴產、併購或其他公司事件——**只能來自輸入資料**（snapshot、規則明細、
+   產業分類）。輸入資料沒有的一律不要寫：你的訓練知識可能已過時或有誤，
+   寫出來會被使用者當成已查證的事實。允許產業層級的一般常識框架
+   （如「半導體具循環性」），但不得指涉具體公司事實。
+5. 不確定性語氣：用「在 X 假設下」「若 Y 不惡化」「目前訊號顯示」等條件式語氣，
    禁止「保證」「必漲」「零風險」「肯定」等絕對化用詞。
-5. 語言：繁體中文。
+6. 語言：繁體中文。
 </behavior_rules>
 """
 
 _FIELD_GUIDE = """\
 <field_guide>
 - narrative（約 200-300 中文字）：**WHY NOW**。組織通過的必要條件 + 加分條件，
-  論證「為何此刻是合理的進場觀察點」。一篇連貫論述，不條列規則。
-- key_context（3-5 條）：**WHAT BUSINESS**。公司業務、客戶、產業定位、近期事件等
-  narrative 沒展開、屬於「背景知識」的事實。**不得**與 narrative 重複論點。
-- warnings（2-4 條）：規則沒抓到的潛在風險（產業循環、客戶集中、地緣、訴訟、
-  庫存高、毛利下滑跡象等）。每條 ≤ 30 字。
+  論證「為何此刻是合理的進場觀察點」。一篇連貫論述，不條列規則；
+  不得引入輸入資料以外的公司業務事實。
+- key_context（0-5 條）：**輸入資料內的補充脈絡**。條列 snapshot、規則明細、
+  產業分類中存在、但 narrative 沒展開的事實（如產業位階、估值相對位置、
+  籌碼訊號）。輸入資料不足時寧可少列或留空，禁止以訓練知識補充客戶、
+  市占、產品線或近期事件。**不得**與 narrative 重複論點。
+- warnings（1-4 條）：規則沒抓到的潛在風險，僅限兩類：(a) 由輸入資料推得的
+  隱憂（如配息率偏高、動能過熱）；(b) 產業層級的一般性風險（循環性、匯率、
+  地緣），用條件式語氣。禁止具名的公司事件宣稱（特定訴訟、特定客戶流失等）。
+  每條 ≤ 30 字。
 - value_trap_check / value_trap_reason：見下方 value-trap 區段（若存在）。
 </field_guide>
 """
@@ -105,7 +117,7 @@ _VALUE_HORIZON = """\
 
 _MOMENTUM_HORIZON = """\
 <horizon>
-投資視野：1-3 個月波段。論述焦點應放在動能延續性、籌碼面、產業催化事件，
+投資視野：1-3 個月波段。論述焦點應放在動能延續性與籌碼面訊號，
 而非長期估值。
 </horizon>
 """
@@ -193,7 +205,8 @@ def build_interpreter_user_prompt(
 
 <reminder>
 - 只能引用 <allowed_numbers> 列出的數字；其他數字一律改用文字描述趨勢。
-- narrative 約 200-300 中文字，論證 WHY NOW；key_context 條列 WHAT BUSINESS。
+- 業務事實（客戶、市占、產品線、事件）只能來自上方輸入資料；輸入沒有的不要寫。
+- narrative 約 200-300 中文字，論證 WHY NOW；key_context 只條列輸入資料內的補充脈絡。
 - 不寫目標價、停損、買賣建議；用條件式語氣表達不確定性。
 </reminder>
 """

@@ -307,9 +307,10 @@ function PickCard({ pick, onClick }: { pick: PickDoc; onClick: () => void }) {
         <GradeBadge grade={pick.final_grade} />
       </div>
 
-      <p className="text-xs text-slate-400 line-clamp-3 mb-3 leading-relaxed">
+      <p className="text-xs text-slate-400 line-clamp-3 mb-1 leading-relaxed">
         {pick.interpretation?.narrative || "—"}
       </p>
+      <p className="text-[10px] text-slate-600 mb-3">AI 生成，業務敘述未經查證</p>
 
       <div className="grid grid-cols-3 gap-2 text-xs tabular-nums">
         <div>
@@ -711,6 +712,9 @@ function PickDetailDrawer({
               ))}
             </ul>
           )}
+          <p className="mt-3 text-[10px] text-slate-500">
+            AI 生成內容，業務敘述未經查證，不構成投資建議
+          </p>
         </section>
 
         {/* Warnings */}

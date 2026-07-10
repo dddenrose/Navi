@@ -117,3 +117,18 @@ def test_validate_narrative_price_relative_tolerance():
     text2 = "目標價 130.0 元。"
     violations = validate_narrative(text2, allowed)
     assert any("130" in v for v in violations)
+
+
+# ── Grounding（質性接地）────────────────────────────────────────────────────
+
+
+def test_system_prompt_forbids_ungrounded_business_facts():
+    for profile in ("value", "momentum"):
+        sp = build_interpreter_system_prompt(profile)
+        assert "質性事實接地" in sp
+        assert "只能來自輸入資料" in sp
+
+
+def test_user_prompt_reminds_grounding():
+    up = build_interpreter_user_prompt("value", "<stock/>", "<allowed_numbers/>")
+    assert "輸入沒有的不要寫" in up
