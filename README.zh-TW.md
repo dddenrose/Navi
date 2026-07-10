@@ -55,7 +55,7 @@
                     ▼                ▼            ▼            ▼
             ┌──────────────┐ ┌──────────┐ ┌────────────┐ ┌──────────┐
             │  Firestore   │ │ Gemini   │ │ yfinance   │ │ TWSE/TPEx│
-            │  Vector      │ │ 2.5 Pro  │ │            │ │ Open API │
+            │  Vector      │ │ 2.5 Flash│ │            │ │ Open API │
             │  Search      │ └──────────┘ └────────────┘ ├──────────┤
             │  + Auth      │                              │Google    │
             │  + 對話歷史   │                              │News RSS  │
@@ -94,7 +94,7 @@
 | 語言      | Python 3.12                               |
 | Web 框架  | FastAPI 0.115+                            |
 | AI 框架   | LangChain 1.x + LangGraph（ReAct Agent） |
-| LLM       | Gemini 2.5 Pro（透過 Vertex AI）          |
+| LLM       | Gemini 2.5 Flash / Flash-Lite（透過 Vertex AI） |
 | Embedding | text-embedding-004（768 維向量）          |
 | Vector DB | Firestore Vector Search                   |
 | 資料來源  | yfinance · TWSE/OTC API · Google News RSS |
@@ -212,7 +212,7 @@ uv run pytest tests/test_stock_service.py -v  # 執行特定測試檔案
 | -------------------------------- | --------------------------- | -------------------- |
 | `GOOGLE_CLOUD_PROJECT`           | Google Cloud 專案 ID        | —                    |
 | `GOOGLE_APPLICATION_CREDENTIALS` | Service Account JSON 路徑   | —                    |
-| `GEMINI_MODEL_NAME`              | LLM 模型名稱                | `gemini-2.5-pro`     |
+| `GEMINI_MODEL_NAME`              | LLM 模型名稱                | `gemini-2.5-flash`   |
 | `EMBEDDING_MODEL_NAME`           | Embedding 模型              | `text-embedding-004` |
 | `AUTH_REQUIRED`                  | 是否啟用 JWT 驗證           | `true`               |
 | `CORS_ORIGINS`                   | 允許的跨域來源（逗號分隔）  | —                    |

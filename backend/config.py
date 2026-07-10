@@ -17,10 +17,11 @@ class Settings(BaseSettings):
     google_application_credentials: str = ""
 
     # Gemini LLM — 依 tier 分層控制成本：
-    # free 用 Flash（單價低一個數量級），付費層才用 Pro。
-    # 免費層跑 Pro 時每則對話約 US$0.02-0.15，免費額度 10 則/日在規模化後不可持續。
-    gemini_model_name: str = "gemini-2.5-pro"  # pro/unlimited/admin 層
-    gemini_model_name_free: str = "gemini-2.5-flash"  # free 層
+    # 付費層用 Flash（US$0.30/$2.50 每 1M tokens），免費層用最便宜的 Flash-Lite
+    # （US$0.10/$0.40）。意圖分類沿用同一 tier 模型。
+    # 註：Gemini 3 家族目前本專案無存取權（preview 需 allowlist），待開放後再升級付費層。
+    gemini_model_name: str = "gemini-2.5-flash"  # pro/unlimited/admin 層
+    gemini_model_name_free: str = "gemini-2.5-flash-lite"  # free 層
 
     # Embedding
     embedding_model_name: str = "text-embedding-004"
@@ -39,9 +40,9 @@ class Settings(BaseSettings):
 
     # Screener — shared-secret token for Cloud Scheduler /api/screener/run
     screener_runner_token: str = ""
-    # Screener Stage 3 LLM — 解讀層是「翻譯」而非深度推理，用 Flash 即可。
-    # 實測 Pro 每檔約 US$0.03（76% 是 thinking tokens），Flash 約 US$0.008。
-    screener_llm_model: str = "gemini-2.5-flash"
+    # Screener Stage 3 LLM — 解讀層是「翻譯」而非深度推理，用最便宜的 Flash-Lite 即可。
+    # 實測 Pro 每檔約 US$0.03（76% 是 thinking tokens），Flash-Lite US$0.10/$0.40 每 1M tokens。
+    screener_llm_model: str = "gemini-2.5-flash-lite"
     # Screener email (optional)
     sendgrid_api_key: str = ""
     email_from_address: str = "notify@navi-stock.app"

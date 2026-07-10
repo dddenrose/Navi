@@ -56,7 +56,7 @@
                     ▼                ▼            ▼            ▼
             ┌──────────────┐ ┌──────────┐ ┌────────────┐ ┌──────────┐
             │  Firestore   │ │ Gemini   │ │ yfinance   │ │ TWSE/TPEx│
-            │  Vector      │ │ 2.5 Pro  │ │            │ │ Open API │
+            │  Vector      │ │ 2.5 Flash│ │            │ │ Open API │
             │  Search      │ └──────────┘ └────────────┘ ├──────────┤
             │  + Auth      │                              │Google    │
             │  + History   │                              │News RSS  │
@@ -95,7 +95,7 @@ The **Hybrid Intent Classifier** (rule-based fast path + LLM fallback) analyzes 
 | Language      | Python 3.12                               |
 | Web Framework | FastAPI 0.115+                            |
 | AI Framework  | LangChain 1.x + LangGraph (ReAct Agent)   |
-| LLM           | Gemini 2.5 Pro (via Vertex AI)            |
+| LLM           | Gemini 2.5 Flash / Flash-Lite (via Vertex AI) |
 | Embedding     | text-embedding-004 (768 dimensions)       |
 | Vector DB     | Firestore Vector Search                   |
 | Data Sources  | yfinance · TWSE/OTC API · Google News RSS |
@@ -213,7 +213,7 @@ uv run pytest tests/test_stock_service.py -v  # Run a specific test file
 | -------------------------------- | -------------------------------------- | -------------------- |
 | `GOOGLE_CLOUD_PROJECT`           | Google Cloud project ID                | —                    |
 | `GOOGLE_APPLICATION_CREDENTIALS` | Path to Service Account JSON           | —                    |
-| `GEMINI_MODEL_NAME`              | LLM model name                         | `gemini-2.5-pro`     |
+| `GEMINI_MODEL_NAME`              | LLM model name                         | `gemini-2.5-flash`   |
 | `EMBEDDING_MODEL_NAME`           | Embedding model                        | `text-embedding-004` |
 | `AUTH_REQUIRED`                  | Enable JWT authentication              | `true`               |
 | `CORS_ORIGINS`                   | Allowed CORS origins (comma-separated) | —                    |
