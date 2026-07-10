@@ -357,7 +357,7 @@ export default function Stock() {
 
           {/* Tabs */}
           <div
-            className="flex gap-1 mb-7 p-1.5 w-fit rounded-2xl"
+            className="stock-tabs-wrap flex gap-1 mb-7 p-1.5 w-fit max-w-full rounded-2xl"
             style={{
               background: "var(--overlay-bg)",
               border: "1px solid var(--border)",
@@ -368,7 +368,7 @@ export default function Stock() {
                 <button
                   key={tab}
                   onClick={() => setActiveTab(tab)}
-                  className="px-6 py-2.5 rounded-xl text-xs font-semibold tracking-wide transition-colors"
+                  className="shrink-0 whitespace-nowrap px-6 py-2.5 rounded-xl text-xs font-semibold tracking-wide transition-colors"
                   style={
                     activeTab === tab
                       ? {
