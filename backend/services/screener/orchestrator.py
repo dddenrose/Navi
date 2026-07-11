@@ -262,11 +262,12 @@ async def run_screener_async(
         universe_kwargs["min_turnover"] = min_turnover
     if min_market_cap is not None:
         universe_kwargs["min_market_cap"] = min_market_cap
-    universe = load_universe(tickers=tickers, **universe_kwargs)
+    universe = await asyncio.to_thread(load_universe, tickers=tickers, **universe_kwargs)
     stage1_passed = len(universe)
 
     # Stage 2
-    evaluated = evaluate_universe(
+    evaluated = await asyncio.to_thread(
+        evaluate_universe,
         universe,
         profile=profile,
         enable_chips=enable_chips,
