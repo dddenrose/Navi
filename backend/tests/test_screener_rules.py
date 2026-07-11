@@ -173,3 +173,93 @@ def test_get_rule_set_returns_correct_profile(profile):
     rs = get_rule_set(profile)
     assert rs.profile == profile
     assert rs.must_pass and rs.bonus and rs.disqualifier
+
+
+# ── pe_raw 剔除規則（消毒繞過漏洞的迴歸）────────────────────────────────────
+
+
+def test_vd4_uses_pe_raw_when_pe_sanitized_away():
+    """PE 300 被消毒成 None 後，仍須被 VD4（PE > 50）剔除，不得視為資料不足."""
+    d = _value_stock_strong()
+    d.pe = None  # 消毒後
+    d.pe_raw = 300.0  # 原始值
+    trace = evaluate_rules(d, get_rule_set("value"))
+    assert "VD4" in trace.disqualifier_triggered
+    assert trace.verdict == "rejected"
+
+
+def test_md1_uses_pe_raw_when_pe_sanitized_away():
+    """動能組同理：極端高 PE 不得以「資料不足」逃過估值過熱剔除."""
+    d = _momentum_stock_strong()
+    d.pe = None
+    d.pe_raw = 250.0
+    d.industry_pe_median = 25.0
+    trace = evaluate_rules(d, get_rule_set("momentum"))
+    assert "MD1" in trace.disqualifier_triggered
+    assert trace.verdict == "rejected"
+
+
+def test_md1_negative_pe_raw_not_treated_as_overheated():
+    """負 PE（虧損）不屬「過熱」，交由 M5 品質規則處理."""
+    d = _momentum_stock_strong()
+    d.pe = None
+    d.pe_raw = -12.0
+    d.industry_pe_median = 25.0
+    trace = evaluate_rules(d, get_rule_set("momentum"))
+    assert "MD1" not in trace.disqualifier_triggered
+
+
+# ── MD2/MD4 軟警示（不剔除）────────────────────────────────────────────────
+
+
+def test_md2_divergence_warns_but_does_not_disqualify():
+    d = _momentum_stock_strong()
+    d.price = 120
+    d.high_60d = 120
+    d.rsi_14 = 60
+    d.rsi_14_high = 70  # 價創高但 RSI 落後 > 5 → 背離
+    trace = evaluate_rules(d, get_rule_set("momentum"))
+    md2 = next(c for c in trace.disqualifier if c.rule_id == "MD2")
+    assert md2.passed is False
+    assert md2.severity == "warning"
+    assert "MD2" not in trace.disqualifier_triggered  # 軟警示不觸發剔除
+    assert trace.verdict == "qualified"
+
+
+# ── 結構化 missing 欄位（複合規則漏算的迴歸）────────────────────────────────
+
+
+def test_composite_rule_missing_counted():
+    """V4（複合欄位）缺資料時必須計入 missing_data_count.
+
+    舊版以「資料不足」字串前綴偵測，V4 的 actual 是
+    「負債比 資料不足 / 流動比 資料不足」→ 永遠漏算。
+    """
+    d = _value_stock_strong()
+    d.debt_ratio = None
+    d.current_ratio = None
+    trace = evaluate_rules(d, get_rule_set("value"))
+    assert "V4" in trace.missing_data_rule_ids
+
+
+# ── MB2 月營收優先 ──────────────────────────────────────────────────────────
+
+
+def test_mb2_prefers_monthly_revenue():
+    d = _momentum_stock_strong()
+    d.revenue_yoy_latest = 0.02  # 季營收不達標
+    d.revenue_monthly_yoy = 0.25  # 月營收達標 → 優先採用
+    d.revenue_monthly_label = "115年6月"
+    trace = evaluate_rules(d, get_rule_set("momentum"))
+    mb2 = next(c for c in trace.bonus if c.rule_id == "MB2")
+    assert mb2.passed is True
+    assert "月營收" in mb2.actual
+
+
+def test_mb2_falls_back_to_quarterly():
+    d = _momentum_stock_strong()
+    d.revenue_yoy_latest = 0.15
+    d.revenue_monthly_yoy = None
+    trace = evaluate_rules(d, get_rule_set("momentum"))
+    mb2 = next(c for c in trace.bonus if c.rule_id == "MB2")
+    assert mb2.passed is True

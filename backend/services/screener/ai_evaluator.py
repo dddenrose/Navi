@@ -142,6 +142,7 @@ def _build_snapshot_xml(es: EvaluatedStock, profile: str) -> str:
     <roe_3y_avg>{_fmt(d.roe_3y_avg, pct=True)}</roe_3y_avg>
     <revenue_cagr_3y>{_fmt(d.revenue_cagr_3y, pct=True)}</revenue_cagr_3y>
     <revenue_yoy_latest>{_fmt(d.revenue_yoy_latest, pct=True)}</revenue_yoy_latest>
+    <revenue_monthly_yoy period="{_x(d.revenue_monthly_label or 'N/A')}">{_fmt(d.revenue_monthly_yoy, pct=True)}</revenue_monthly_yoy>
     <fcf_positive_years>{d.fcf_positive_years if d.fcf_positive_years is not None else 'N/A'}</fcf_positive_years>
     <eps_positive_quarters>{d.eps_positive_quarters if d.eps_positive_quarters is not None else 'N/A'}</eps_positive_quarters>
     <debt_ratio>{_fmt(d.debt_ratio, pct=True)}</debt_ratio>
@@ -188,6 +189,7 @@ def _build_allowed_numbers(es: EvaluatedStock) -> tuple[dict[str, str], dict[str
         "roe_3y_avg": d.roe_3y_avg,
         "revenue_cagr_3y": d.revenue_cagr_3y,
         "revenue_yoy_latest": d.revenue_yoy_latest,
+        "revenue_monthly_yoy": d.revenue_monthly_yoy,
         "debt_ratio": d.debt_ratio,
         "current_ratio": d.current_ratio,
         "gross_margin_std_4q": d.gross_margin_std_4q,
@@ -213,6 +215,7 @@ def _build_allowed_numbers(es: EvaluatedStock) -> tuple[dict[str, str], dict[str
 
     pct_fields = {
         "dividend_yield", "roe_3y_avg", "revenue_cagr_3y", "revenue_yoy_latest",
+        "revenue_monthly_yoy",
         "debt_ratio", "gross_margin_std_4q",
         "return_3m", "return_6m", "rel_strength_6m",
         "payout_ratio_est", "pe_vs_industry_median", "implied_upside_mid_pct",
@@ -238,7 +241,10 @@ def _build_allowed_numbers(es: EvaluatedStock) -> tuple[dict[str, str], dict[str
 
 
 def _fallback_interpretation(es: EvaluatedStock) -> StockInterpretation:
-    """LLM 終局失敗時的 placeholder，避免該檔在報告中消失。"""
+    """LLM 終局失敗時的 placeholder，避免該檔在報告中消失。
+
+    value_trap_check 用 not_applicable —— 檢查沒有執行，不能冒充「已檢查無虞」。
+    """
     return StockInterpretation(
         narrative=(
             f"{es.data.name}（{es.data.ticker}）已通過量化規則的資格化篩選，"
@@ -246,7 +252,7 @@ def _fallback_interpretation(es: EvaluatedStock) -> StockInterpretation:
         ),
         key_context=[],
         warnings=["本檔自動解讀失敗，建議人工複核 scoring_trace。"],
-        value_trap_check="no_concern",
+        value_trap_check="not_applicable",
         value_trap_reason="",
     )
 
@@ -297,9 +303,10 @@ async def _interpret_one(
             await asyncio.sleep(_RETRY_BASE_DELAY * (2 ** attempt))
             continue
 
-        # Momentum profile：強制覆蓋 value_trap 欄位（與 prompt 對齊的雙重保險）
+        # Momentum profile 不做價值陷阱檢查：強制 not_applicable
+        # （不能冒充 no_concern —— 那代表「已檢查無虞」）
         if profile == "momentum":
-            result.value_trap_check = "no_concern"
+            result.value_trap_check = "not_applicable"
             result.value_trap_reason = ""
 
         # 數字幻覺檢查

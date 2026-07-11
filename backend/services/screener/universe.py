@@ -108,12 +108,14 @@ def _fetch_excluded_tickers() -> set[str]:
         # 注意股
         "https://www.twse.com.tw/announcement/notice?response=json",
     ]
+    ok_count = 0
     for url in endpoints:
         try:
             r = requests.get(url, timeout=8)
             if r.status_code != 200:
                 continue
             data = r.json()
+            ok_count += 1
             rows = data.get("data") or data.get("aaData") or []
             for row in rows:
                 if not row:
@@ -125,6 +127,11 @@ def _fetch_excluded_tickers() -> set[str]:
                         break
         except Exception as e:
             logger.debug("Fetch excluded list from %s failed: %s", url, e)
+    if ok_count == 0:
+        # fail-open 設計（不阻塞選股），但至少要在 log 留下明確痕跡
+        logger.warning(
+            "TWSE 注意/處置清單全數抓取失敗 — 本期未執行異常股排除（fail-open）"
+        )
     return excluded
 
 

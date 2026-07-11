@@ -27,21 +27,32 @@ def _stock(after: list[float]) -> pd.Series:
 
 class TestComputeTracking:
     def test_full_horizons(self):
-        # 70 個交易日，每日 +1 → T+5 收 105、T+20 收 120、T+60 收 160
-        stock = _stock([100.0 + i for i in range(1, 71)])
-        bench = _series("2026-01-05", [1000.0] * 71)  # 大盤持平
+        # 130 個交易日，每日 +1 → T+5 收 105、T+60 收 160、T+120 收 220
+        stock = _stock([100.0 + i for i in range(1, 131)])
+        bench = _series("2026-01-05", [1000.0] * 131)  # 大盤持平
         t = compute_tracking(ENTRY, stock, bench)
         assert t is not None
         assert t["entry_close_adj"] == 100.0
-        assert t["trading_days_elapsed"] == 70
+        assert t["trading_days_elapsed"] == 130
         assert t["complete"] is True
         assert t["return_t5"] == pytest.approx(0.05)
         assert t["return_t20"] == pytest.approx(0.20)
         assert t["return_t60"] == pytest.approx(0.60)
+        assert t["return_t120"] == pytest.approx(1.20)
         # 大盤持平 → 超額 = 絕對報酬
         assert t["excess_t20"] == pytest.approx(0.20)
-        assert t["max_return"] == pytest.approx(0.70)
-        assert t["return_current"] == pytest.approx(0.70)
+        assert t["max_return"] == pytest.approx(1.30)
+        assert t["return_current"] == pytest.approx(1.30)
+
+    def test_t60_done_but_not_complete_until_t120(self):
+        # 70 個交易日：t60 有值，但 complete 要等 T+120（主要成功指標）
+        stock = _stock([100.0 + i for i in range(1, 71)])
+        bench = _series("2026-01-05", [1000.0] * 71)
+        t = compute_tracking(ENTRY, stock, bench)
+        assert t is not None
+        assert t["return_t60"] == pytest.approx(0.60)
+        assert "return_t120" not in t
+        assert t["complete"] is False
 
     def test_partial_horizons_not_complete(self):
         # 只有 10 個交易日 → 只有 t5 有值，complete=False
@@ -139,3 +150,31 @@ class TestAggregateTracking:
         s2 = aggregate_tracking([self._pick("Pick", 0.10)])
         assert s2["pick_events"] == 1
         assert s2["horizons"]["t60"]["n"] == 0
+
+    def test_upside_validation_insufficient_sample(self):
+        # 樣本 < 10 → 只回 n，不給相關係數（避免小樣本下結論）
+        picks = [
+            {
+                "final_grade": "Pick",
+                "valuation": {"implied_upside_mid_pct": 20.0},
+                "tracking": {"return_t60": 0.1},
+            }
+        ]
+        s = aggregate_tracking(picks)
+        assert s["upside_validation"]["t60"] == {"n": 1}
+
+    def test_upside_validation_correlation(self):
+        # 構造完全正相關：upside 越高、t60 報酬越高
+        picks = [
+            {
+                "final_grade": "Pick",
+                "valuation": {"implied_upside_mid_pct": float(u)},
+                "tracking": {"return_t60": u / 100},
+            }
+            for u in range(1, 13)
+        ]
+        s = aggregate_tracking(picks)
+        v = s["upside_validation"]["t60"]
+        assert v["n"] == 12
+        assert v["pearson_r"] == pytest.approx(1.0)
+        assert v["high_upside_avg_return"] > v["low_upside_avg_return"]

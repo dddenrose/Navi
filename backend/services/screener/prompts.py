@@ -50,11 +50,12 @@ class StockInterpretation(BaseModel):
         default_factory=list,
         description="投資前需注意的風險或量化規則未捕捉到的隱憂。",
     )
-    value_trap_check: Literal["no_concern", "watch", "warning"] = Field(
-        default="no_concern",
+    value_trap_check: Literal["no_concern", "watch", "warning", "not_applicable"] = Field(
+        default="not_applicable",
         description=(
-            "Value Trap 判讀。no_concern = 無虞 / watch = 需觀察 / "
-            "warning = 疑似價值陷阱。"
+            "Value Trap 判讀。no_concern = 已檢查無虞 / watch = 需觀察 / "
+            "warning = 疑似價值陷阱 / not_applicable = 本策略不做此檢查。"
+            "「沒有檢查」不得填 no_concern。"
         ),
     )
     value_trap_reason: str = Field(
@@ -150,8 +151,8 @@ Value Trap = 「數字漂亮但業務正在衰退」的標的。請逐一檢查�
 
 _MOMENTUM_VALUE_TRAP_NOTE = """\
 <value_trap_note>
-本檔為 Momentum profile，value_trap_check 一律填 "no_concern"，
-value_trap_reason 留空。
+本檔為 Momentum profile，不做價值陷阱檢查：value_trap_check 一律填
+"not_applicable"，value_trap_reason 留空。
 </value_trap_note>
 """
 

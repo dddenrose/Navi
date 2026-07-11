@@ -10,8 +10,8 @@ Usage examples:
   uv run python scripts/run_screener_local.py --skip-stage3 \
       --min-turnover 10000000 --min-market-cap 0
 
-  # Stage 3 小量驗證：限制 top 1/產業 + Flash model + 不寫 Firestore
-  uv run python scripts/run_screener_local.py --top 1 \
+  # Stage 3 小量驗證：全市場取 3 檔 + Flash model + 不寫 Firestore
+  uv run python scripts/run_screener_local.py --total 3 \
       --model gemini-2.5-flash --no-persist --tickers 2330.TW,2317.TW,2454.TW
 """
 
@@ -30,8 +30,9 @@ from services.screener.orchestrator import run_screener  # noqa: E402
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run Navi screener locally for validation")
     parser.add_argument("--profile", choices=["value", "momentum"], default="momentum")
-    parser.add_argument("--frequency", choices=["daily", "weekly"], default="daily")
-    parser.add_argument("--top", type=int, default=3, help="每產業前 N 檔送 Stage 3")
+    parser.add_argument("--frequency", choices=["daily", "weekly"], default="weekly")
+    parser.add_argument("--total", type=int, default=10, help="全市場取前 N 檔送 Stage 3")
+    parser.add_argument("--max-per-industry", type=int, default=2, help="單一產業上限")
     parser.add_argument("--model", default=None, help="覆寫 LLM model 名稱（如 gemini-2.5-flash）")
     parser.add_argument("--skip-stage3", action="store_true", help="只跑 Stage 1+2 (零 LLM 成本)")
     parser.add_argument("--no-chips", action="store_true", help="關閉 Stage 2 chips 因子（TWSE bulk fetch）")
@@ -59,7 +60,8 @@ def main() -> None:
         profile=args.profile,
         frequency=args.frequency,
         tickers=tickers,
-        top_per_industry=args.top,
+        total_picks=args.total,
+        max_per_industry=args.max_per_industry,
         model_name=args.model,
         persist=not args.no_persist,
         skip_stage3=args.skip_stage3,
@@ -78,23 +80,18 @@ def main() -> None:
     print(f"Duration: {result['duration_seconds']}s | Industries: {result['industries_covered']}")
     print("=" * 70)
 
-    # Stage 2 候選 (每產業 top)
-    print("\n📊 Stage 2 candidates (每產業 top):")
-    by_industry: dict[str, list] = {}
+    # Stage 2 候選（全市場排名 + 產業上限）
+    print("\n📊 Stage 2 candidates (全市場排名):")
     for es in result["candidates"]:
-        by_industry.setdefault(es.data.industry, []).append(es)
-    for industry, group in by_industry.items():
-        print(f"\n  [{industry}]")
-        for es in group:
-            d = es.data
-            t = es.trace
-            print(
-                f"    #{es.industry_rank} {d.ticker} {d.name:<8} "
-                f"grade={t.final_grade:<12} "
-                f"must={t.must_pass_count}/{t.must_pass_total} "
-                f"bonus={t.bonus_passed}/{len(t.bonus)} "
-                f"DQ={'Y' if t.disqualifier_triggered else 'N'}"
-            )
+        d = es.data
+        t = es.trace
+        print(
+            f"    #{es.rank_overall:>2} {d.ticker} {d.name:<8} [{d.industry}] "
+            f"grade={t.final_grade:<12} "
+            f"must={t.must_pass_count}/{t.must_pass_total} "
+            f"bonus={t.bonus_passed}/{len(t.bonus)} "
+            f"DQ={'Y' if t.disqualifier_triggered else 'N'}"
+        )
 
     # 全量診斷（含被剔除的）—— 用 --verbose 看
     if args.verbose:

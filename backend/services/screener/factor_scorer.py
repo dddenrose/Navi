@@ -38,6 +38,9 @@ from services.screener.valuation import (
 
 logger = logging.getLogger(__name__)
 
+# 細分類 PE 樣本至少要幾檔才用細分類當估值錨（否則 fallback Navi-11 大類）
+MIN_FINE_PE_SAMPLE = 5
+
 
 # ── Output ──────────────────────────────────────────────────────────────────
 
@@ -48,7 +51,8 @@ class EvaluatedStock:
     trace: ScoringTrace
     valuation: Valuation | None = None
     industry_rank: int = 0
-    industry_size: int = 0  # 同產業共多少檔（顯示用）
+    industry_size: int = 0  # 本期評估的同產業檔數（顯示用）
+    rank_overall: int = 0  # 全市場排名（select_top_picks 填入；0 = 未入選）
 
     # Stage 1 checks（流動性 / 市值 / 排除）— 由 orchestrator 預先附加
     stage1_checks: list[RuleCheck] = field(default_factory=list)
@@ -120,17 +124,30 @@ def _build_stock_data(
     high_60d = float(close.tail(60).max()) if len(close) >= 60 else None
 
     # info-based
-    pe = info.get("trailingPE") or info.get("forwardPE")
+    # 只用 trailingPE —— 不 fallback forwardPE：兩者口徑不同，混用會污染
+    # 產業中位數統計與估值錨（部分股用歷史盈餘、部分用分析師預估）。
+    pe = info.get("trailingPE")
     pb = info.get("priceToBook")
     dy = info.get("dividendYield")
     if dy is not None:
-        # yfinance>=0.2.40（pyproject 鎖定）固定回傳百分比形式（0.8 表 0.8%）。
+        # yfinance>=0.2.40 起固定回傳百分比形式（0.8 表 0.8%）。
         # 勿用 `>1` 啟發式判斷格式——殖利率 <1% 的股票會被放大 100 倍。
         dy = dy / 100
+        # Runtime sanity：pyproject 只鎖版本下限，若 yfinance 未來改回小數
+        # 形式，除以 100 會讓殖利率縮小 100 倍（難察覺）；反向改動則會
+        # 出現 >15% 的異常值（台股正常範圍極少超過）。兩側都防：
+        if dy > 0.15:
+            logger.warning(
+                "Suspicious dividend_yield %.4f for %s — treating as missing "
+                "(yfinance semantics may have changed)", dy, rec.ticker,
+            )
+            dy = None
     eps_ttm = info.get("trailingEps")
 
-    # Sanity 過濾異常 PE/PB
-    pe_f = float(pe) if pe and isinstance(pe, int | float) else None
+    # Sanity 過濾異常 PE/PB；原始 PE 另存 pe_raw 供 disqualifier 使用
+    # （否則 PE 300 會被洗成「資料不足」而逃過 MD1/VD4 剔除）
+    pe_raw = float(pe) if pe is not None and isinstance(pe, int | float) else None
+    pe_f = pe_raw
     if pe_f is not None and (pe_f <= 0 or pe_f > 200):
         pe_f = None
     pb_f = float(pb) if pb and isinstance(pb, int | float) else None
@@ -143,6 +160,7 @@ def _build_stock_data(
         industry=rec.industry,
         price=rec.price,
         pe=pe_f,
+        pe_raw=pe_raw,
         pb=pb_f,
         market_cap=rec.market_cap,
         dividend_yield=float(dy) if dy is not None else None,
@@ -177,7 +195,7 @@ def _benchmark_return_6m() -> float | None:
 
 
 def _attach_chips(data_list: list[StockData], days: int = 20) -> None:
-    """從 chips_data bulk fetch 並把 5d/20d 資料填回 StockData."""
+    """從 chips_data bulk fetch（單次、多視窗）把 5d/20d 資料填回 StockData."""
     try:
         from services.screener import chips_data
     except ImportError:
@@ -185,24 +203,38 @@ def _attach_chips(data_list: list[StockData], days: int = 20) -> None:
 
     tickers = [d.ticker for d in data_list]
     try:
-        # 抓 5d 用既有 helper；20d 另抓一次（同樣 endpoint 但 days 拉長）
-        chips5 = chips_data.fetch_chips_bulk(tickers, days=5)
-        chips20 = chips_data.fetch_chips_bulk(tickers, days=days)
+        chips = chips_data.fetch_chips_bulk(tickers, windows=(5, days))
     except Exception as e:
         logger.warning("Chips bulk fetch failed: %s", e)
         return
 
     for d in data_list:
-        row5 = chips5.get(d.ticker, {})
-        row20 = chips20.get(d.ticker, {})
-        if "foreign_net_5d" in row5:
-            d.foreign_net_5d = row5["foreign_net_5d"]
-        if "foreign_consecutive_days" in row5:
-            d.foreign_consecutive_days = row5["foreign_consecutive_days"]
-        if "foreign_net_5d" in row20:
-            # chips_data 的鍵名固定 "foreign_net_5d"，但呼叫時 days=20
-            # 該值代表 20 日累積 → 對應 StockData.foreign_net_20d
-            d.foreign_net_20d = row20["foreign_net_5d"]
+        row = chips.get(d.ticker, {})
+        if "foreign_net_5d" in row:
+            d.foreign_net_5d = row["foreign_net_5d"]
+        if "foreign_consecutive_days" in row:
+            d.foreign_consecutive_days = row["foreign_consecutive_days"]
+        if f"foreign_net_{days}d" in row:
+            d.foreign_net_20d = row[f"foreign_net_{days}d"]
+
+
+def _attach_monthly_revenue(data_list: list[StockData]) -> None:
+    """把 TWSE 月營收 YoY 填回 StockData（MB2 優先消費，缺才 fallback 季營收）."""
+    try:
+        from services.screener.monthly_revenue import fetch_monthly_revenue_bulk
+
+        rev_map = fetch_monthly_revenue_bulk()
+    except Exception as e:
+        logger.warning("Monthly revenue attach skipped: %s", e)
+        return
+    if not rev_map:
+        return
+    for d in data_list:
+        bare = d.ticker.split(".")[0]
+        rec = rev_map.get(bare)
+        if rec and rec.yoy is not None:
+            d.revenue_monthly_yoy = rec.yoy
+            d.revenue_monthly_label = rec.label
 
 
 # ── Main entry ──────────────────────────────────────────────────────────────
@@ -246,18 +278,45 @@ def evaluate_universe(
     if enable_chips and profile == "momentum":
         _attach_chips(data_list)
 
-    # 4. 算每產業 PE/PB 分布
-    industry_stats_map = compute_industry_stats(
+    # 3.5 月營收 YoY（TWSE OpenAPI，一次呼叫全市場；失敗不阻塞）
+    if enable_fundamentals:
+        _attach_monthly_revenue(data_list)
+
+    # 4. 算產業 PE/PB 分布 — 兩層錨：
+    #    TWSE 細分類（32 類，同業可比性高）優先；
+    #    細分類 PE 樣本 < MIN_FINE_PE_SAMPLE 檔時 fallback Navi-11 大類。
+    #    「公用其他」大類是異質 fallback 桶，其中位數無估值意義 → 不做估值。
+    from services.screener.industry_mapper import get_fine_industry
+
+    fine_stats_map = compute_industry_stats(
+        [(get_fine_industry(d.ticker) or d.industry, d.pe, d.pb) for d in data_list]
+    )
+    coarse_stats_map = compute_industry_stats(
         [(d.industry, d.pe, d.pb) for d in data_list]
     )
+    # 顯示用產業規模 = 本期評估的同業檔數（舊版用「有 PE 的檔數」，
+    # 與排名分母語意不一致）
+    evaluated_per_industry: dict[str, int] = {}
     for d in data_list:
-        st = industry_stats_map.get(d.industry)
+        evaluated_per_industry[d.industry] = evaluated_per_industry.get(d.industry, 0) + 1
+
+    anchor_stats: dict[str, "IndustryStats | None"] = {}
+    for d in data_list:
+        fine_name = get_fine_industry(d.ticker)
+        fine_st = fine_stats_map.get(fine_name) if fine_name else None
+        coarse_st = coarse_stats_map.get(d.industry)
+        if fine_st and fine_st.pe_count >= MIN_FINE_PE_SAMPLE:
+            st, anchor = fine_st, f"{fine_name}（TWSE 細分類）"
+        else:
+            st, anchor = coarse_st, f"{d.industry}（Navi 大類）"
+        anchor_stats[d.ticker] = st
         if st:
             d.industry_pe_median = st.pe_median
             d.industry_pb_median = st.pb_median
             d.industry_pe_low = st.pe_p25
             d.industry_pe_high = st.pe_p75
-            d.industry_size = st.pe_count
+            d.industry_anchor = anchor
+        d.industry_size = evaluated_per_industry.get(d.industry, 0)
 
     # 5. 跑規則
     ruleset = get_rule_set(profile)
@@ -266,11 +325,22 @@ def evaluate_universe(
         trace = evaluate_rules(d, ruleset)
         valuation: Valuation | None = None
         if trace.is_qualified():
-            valuation = compute_valuation(
-                price=d.price,
-                eps_ttm=d.eps_ttm,
-                industry_stats=industry_stats_map.get(d.industry),
-            )
+            if d.industry == "公用其他" and (
+                d.industry_anchor or ""
+            ).startswith("公用其他"):
+                valuation = Valuation(
+                    method="unavailable (異質產業桶)",
+                    notes=[
+                        "「公用其他」為混合 fallback 分類，同業 PE 中位數"
+                        "無可比性，不提供估值區間"
+                    ],
+                )
+            else:
+                valuation = compute_valuation(
+                    price=d.price,
+                    eps_ttm=d.eps_ttm,
+                    industry_stats=anchor_stats.get(d.ticker),
+                )
         results.append(
             EvaluatedStock(
                 data=d, trace=trace, valuation=valuation,
@@ -314,7 +384,11 @@ def _rank_within_industry(results: list[EvaluatedStock], profile: Profile) -> No
 def top_n_per_industry(
     results: list[EvaluatedStock], n: int = 3,
 ) -> list[EvaluatedStock]:
-    """每產業取資格化的前 N 名（rejected 一律不取）."""
+    """每產業取資格化的前 N 名（rejected 一律不取）.
+
+    Deprecated：產業配額會讓弱勢產業也保送 N 檔，選不出「全市場最棒」。
+    線上管線已改用 select_top_picks；此函式保留給比較實驗用。
+    """
     by_ind: dict[str, list[EvaluatedStock]] = {}
     for r in results:
         if not r.trace.is_qualified():
@@ -325,3 +399,54 @@ def top_n_per_industry(
         group.sort(key=lambda x: x.industry_rank)
         out.extend(group[:n])
     return out
+
+
+def select_top_picks(
+    results: list[EvaluatedStock],
+    profile: Profile,
+    *,
+    total: int = 10,
+    max_per_industry: int = 2,
+) -> list[EvaluatedStock]:
+    """全市場排名 + 單一產業上限 — 取代每產業 top-N 的產業配額制.
+
+    排序鍵（與產業內排名一致的邏輯，跨產業可比版本）：
+      - momentum：bonus 通過數 → 6 個月相對大盤強度
+      - value：bonus 通過數 → PE 相對產業中位的折價（跨產業用相對值，
+        避免拿半導體的 PE 跟鋼鐵的 PE 直接比）→ 市值大者優先
+
+    回傳依全市場排名排序；同時把 rank_overall 寫回 EvaluatedStock。
+    """
+    qualified = [r for r in results if r.trace.is_qualified()]
+
+    def momentum_key(r: EvaluatedStock):
+        strength = (
+            r.data.rel_strength_6m
+            if r.data.rel_strength_6m is not None
+            else (r.data.return_6m if r.data.return_6m is not None else -9.0)
+        )
+        return (-r.trace.bonus_passed, -strength)
+
+    def value_key(r: EvaluatedStock):
+        if r.data.pe is not None and r.data.industry_pe_median:
+            pe_rel = r.data.pe / r.data.industry_pe_median
+        else:
+            pe_rel = float("inf")
+        return (-r.trace.bonus_passed, pe_rel, -(r.data.market_cap or 0))
+
+    qualified.sort(key=value_key if profile == "value" else momentum_key)
+
+    selected: list[EvaluatedStock] = []
+    per_ind: dict[str, int] = {}
+    for r in qualified:
+        ind = r.data.industry
+        if per_ind.get(ind, 0) >= max_per_industry:
+            continue
+        selected.append(r)
+        per_ind[ind] = per_ind.get(ind, 0) + 1
+        if len(selected) >= total:
+            break
+
+    for rank, r in enumerate(selected, 1):
+        r.rank_overall = rank
+    return selected

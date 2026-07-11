@@ -37,7 +37,9 @@ class StockData:
     price: float
 
     # Snapshot
-    pe: float | None = None
+    pe: float | None = None  # 消毒後（0 < pe <= 200），供估值/產業統計用
+    pe_raw: float | None = None  # 未消毒原始值 — disqualifier 專用，避免
+    # 「PE 300 被消毒成 None → 視為資料不足 → 逃過估值過熱剔除」的漏洞
     pb: float | None = None
     market_cap: float | None = None
     dividend_yield: float | None = None  # 小數，例如 0.025 = 2.5%
@@ -52,6 +54,10 @@ class StockData:
     gross_margin_std_4q: float | None = None
     revenue_yoy_latest: float | None = None
     eps_ttm: float | None = None
+
+    # 月營收（TWSE OpenAPI，台股每月 10 日公布 — 比季報即時）
+    revenue_monthly_yoy: float | None = None
+    revenue_monthly_label: str | None = None  # 資料年月，如 "115年6月"
 
     # 動能 / 技術
     return_3m: float | None = None
@@ -70,11 +76,13 @@ class StockData:
     foreign_consecutive_days: int | None = None
 
     # 產業參考（factor_scorer 計算後填入）
+    # 錨優先用 TWSE 細分類（同業可比性高），樣本 < 5 檔才 fallback Navi-11 大類
     industry_pe_median: float | None = None
     industry_pb_median: float | None = None
     industry_pe_low: float | None = None
     industry_pe_high: float | None = None
     industry_size: int = 0
+    industry_anchor: str | None = None  # 實際使用的估值錨（透明化）
 
     # 排除清單
     is_disposed: bool = False
@@ -95,6 +103,7 @@ class RuleCheck:
     reference: str  # 參考值/門檻，例如 "產業中位 28，門檻 33.6"
     passed: bool
     severity: Severity = "info"
+    missing: bool = False  # 結構化缺資料標記 — 取代脆弱的「資料不足」字串前綴偵測
 
 
 RuleFn = Callable[[StockData], RuleCheck]
@@ -119,10 +128,10 @@ def _fmt(v: float | None, *, pct: bool = False, digits: int = 2) -> str:
     return f"{v:.{digits}f}"
 
 
-def _check(rule_id: str, name: str, rule: str, actual: str, reference: str, passed: bool, *, severity: Severity = "info") -> RuleCheck:
+def _check(rule_id: str, name: str, rule: str, actual: str, reference: str, passed: bool, *, severity: Severity = "info", missing: bool = False) -> RuleCheck:
     return RuleCheck(
         rule_id=rule_id, name=name, rule=rule, actual=actual,
-        reference=reference, passed=passed, severity=severity,
+        reference=reference, passed=passed, severity=severity, missing=missing,
     )
 
 
@@ -165,20 +174,26 @@ def _v1_valuation_reasonable(d: StockData) -> RuleCheck:
         ref_parts.append(f"產業 PE 中位 {d.industry_pe_median:.1f}（門檻 {d.industry_pe_median * 1.2:.1f}）")
     if d.industry_pb_median is not None:
         ref_parts.append(f"產業 PB 中位 {d.industry_pb_median:.2f}（門檻 {d.industry_pb_median * 1.2:.2f}）")
-    return _check("V1", "估值不貴", rule, actual, "; ".join(ref_parts) or "產業參考缺", passed)
+    # 兩個分支（PE、PB）都因缺資料而無法評估時，才視為缺資料
+    pe_evaluable = d.pe is not None and d.industry_pe_median is not None
+    pb_evaluable = d.pb is not None and d.industry_pb_median is not None
+    return _check(
+        "V1", "估值不貴", rule, actual, "; ".join(ref_parts) or "產業參考缺",
+        passed, missing=not (pe_evaluable or pb_evaluable),
+    )
 
 
 def _v2_roe(d: StockData) -> RuleCheck:
     rule = "近 3 年平均 ROE >= 12%"
     passed = d.roe_3y_avg is not None and d.roe_3y_avg >= 0.12
-    return _check("V2", "獲利能力", rule, _fmt(d.roe_3y_avg, pct=True), "門檻 12%", passed)
+    return _check("V2", "獲利能力", rule, _fmt(d.roe_3y_avg, pct=True), "門檻 12%", passed, missing=d.roe_3y_avg is None)
 
 
 def _v3_fcf(d: StockData) -> RuleCheck:
     rule = "近 3 年自由現金流至少 2 年為正"
     passed = d.fcf_positive_years is not None and d.fcf_positive_years >= 2
     actual = "資料不足" if d.fcf_positive_years is None else f"近 3 年 {d.fcf_positive_years} 年正值"
-    return _check("V3", "現金流真實", rule, actual, "門檻 2 年", passed)
+    return _check("V3", "現金流真實", rule, actual, "門檻 2 年", passed, missing=d.fcf_positive_years is None)
 
 
 def _v4_solvency(d: StockData) -> RuleCheck:
@@ -187,40 +202,43 @@ def _v4_solvency(d: StockData) -> RuleCheck:
     cur_ok = d.current_ratio is not None and d.current_ratio > 1.0
     passed = debt_ok and cur_ok
     actual = f"負債比 {_fmt(d.debt_ratio, pct=True)} / 流動比 {_fmt(d.current_ratio)}"
-    return _check("V4", "財務安全", rule, actual, "負債比 < 60%, 流動比 > 1.0", passed)
+    return _check(
+        "V4", "財務安全", rule, actual, "負債比 < 60%, 流動比 > 1.0", passed,
+        missing=d.debt_ratio is None or d.current_ratio is None,
+    )
 
 
 def _v5_eps_positive(d: StockData) -> RuleCheck:
     rule = "近 4 季 EPS 至少 3 季為正"
     passed = d.eps_positive_quarters is not None and d.eps_positive_quarters >= 3
     actual = "資料不足" if d.eps_positive_quarters is None else f"近 4 季 {d.eps_positive_quarters} 季為正"
-    return _check("V5", "不在虧損循環", rule, actual, "門檻 3 季", passed)
+    return _check("V5", "不在虧損循環", rule, actual, "門檻 3 季", passed, missing=d.eps_positive_quarters is None)
 
 
 def _vb1_growth(d: StockData) -> RuleCheck:
     rule = "營收 3 年 CAGR >= 8%"
     passed = d.revenue_cagr_3y is not None and d.revenue_cagr_3y >= 0.08
-    return _check("VB1", "成長性", rule, _fmt(d.revenue_cagr_3y, pct=True), "門檻 8%", passed)
+    return _check("VB1", "成長性", rule, _fmt(d.revenue_cagr_3y, pct=True), "門檻 8%", passed, missing=d.revenue_cagr_3y is None)
 
 
 def _vb2_margin_stable(d: StockData) -> RuleCheck:
     rule = "近 4 季毛利率標準差 < 2%"
     passed = d.gross_margin_std_4q is not None and d.gross_margin_std_4q < 0.02
-    return _check("VB2", "毛利穩定", rule, _fmt(d.gross_margin_std_4q, pct=True), "門檻 < 2%", passed)
+    return _check("VB2", "毛利穩定", rule, _fmt(d.gross_margin_std_4q, pct=True), "門檻 < 2%", passed, missing=d.gross_margin_std_4q is None)
 
 
 def _vb3_volume_expand(d: StockData) -> RuleCheck:
     """以量能擴增近似『法人認同』(機構資金流入訊號)."""
     rule = "5 日均量 / 20 日均量 >= 1.0"
     passed = d.volume_ratio_5_20 is not None and d.volume_ratio_5_20 >= 1.0
-    return _check("VB3", "資金關注度", rule, _fmt(d.volume_ratio_5_20), "門檻 1.0", passed)
+    return _check("VB3", "資金關注度", rule, _fmt(d.volume_ratio_5_20), "門檻 1.0", passed, missing=d.volume_ratio_5_20 is None)
 
 
 def _vb4_yield(d: StockData) -> RuleCheck:
     """殖利率作為下檔保護 (你不重視現金流，但 > 2.5% 代表跌破有息接著)."""
     rule = "現金殖利率 > 2.5%"
     passed = d.dividend_yield is not None and d.dividend_yield > 0.025
-    return _check("VB4", "下檔保護", rule, _fmt(d.dividend_yield, pct=True), "門檻 2.5%", passed)
+    return _check("VB4", "下檔保護", rule, _fmt(d.dividend_yield, pct=True), "門檻 2.5%", passed, missing=d.dividend_yield is None)
 
 
 # Value disqualifiers ───────────────────────────────────────────────────────
@@ -235,6 +253,7 @@ def _vd1_consecutive_loss(d: StockData) -> RuleCheck:
         "門檻：>= 3 季為正",
         passed=not triggered,
         severity="critical" if triggered else "info",
+        missing=d.eps_positive_quarters is None,
     )
 
 
@@ -251,12 +270,14 @@ def _vd2_disposed(d: StockData) -> RuleCheck:
 
 
 def _vd4_pe_extreme(d: StockData) -> RuleCheck:
+    """用未消毒的 pe_raw 判斷 — PE 300 不能因被消毒成 None 而逃過剔除."""
     rule = "PE 在合理區間（> 0 且 < 50）"
-    if d.pe is None:
-        return _check("VD4", "排除-估值異常", rule, "資料不足", "0 < PE < 50", passed=True)
-    triggered = d.pe < 0 or d.pe > 50
+    pe = d.pe if d.pe is not None else d.pe_raw
+    if pe is None:
+        return _check("VD4", "排除-估值異常", rule, "資料不足", "0 < PE < 50", passed=True, missing=True)
+    triggered = pe < 0 or pe > 50
     return _check(
-        "VD4", "排除-估值異常", rule, _fmt(d.pe), "0 < PE < 50",
+        "VD4", "排除-估值異常", rule, _fmt(pe), "0 < PE < 50",
         passed=not triggered,
         severity="critical" if triggered else "info",
     )
@@ -268,7 +289,7 @@ def _vd4_pe_extreme(d: StockData) -> RuleCheck:
 def _m1_uptrend(d: StockData) -> RuleCheck:
     rule = "收盤價 > 60 日均線 > 120 日均線"
     if d.price is None or d.sma_60 is None or d.sma_120 is None:
-        return _check("M1", "中期趨勢確立", rule, "資料不足", "多頭排列", passed=False)
+        return _check("M1", "中期趨勢確立", rule, "資料不足", "多頭排列", passed=False, missing=True)
     passed = d.price > d.sma_60 > d.sma_120
     actual = f"價 {d.price:.2f} / SMA60 {d.sma_60:.2f} / SMA120 {d.sma_120:.2f}"
     return _check("M1", "中期趨勢確立", rule, actual, "多頭排列", passed)
@@ -280,20 +301,21 @@ def _m2_relative_strength(d: StockData) -> RuleCheck:
     return _check(
         "M2", "相對大盤強勢", rule,
         _fmt(d.rel_strength_6m, pct=True), "門檻 +5%", passed,
+        missing=d.rel_strength_6m is None,
     )
 
 
 def _m3_volume(d: StockData) -> RuleCheck:
     rule = "5 日均量 / 20 日均量 >= 1.0"
     passed = d.volume_ratio_5_20 is not None and d.volume_ratio_5_20 >= 1.0
-    return _check("M3", "量能配合", rule, _fmt(d.volume_ratio_5_20), "門檻 1.0", passed)
+    return _check("M3", "量能配合", rule, _fmt(d.volume_ratio_5_20), "門檻 1.0", passed, missing=d.volume_ratio_5_20 is None)
 
 
 def _m4_foreign_buy(d: StockData) -> RuleCheck:
     rule = "外資近 20 日累積買超為正"
     passed = d.foreign_net_20d is not None and d.foreign_net_20d > 0
     actual = "資料不足" if d.foreign_net_20d is None else f"外資 20 日 {d.foreign_net_20d:+.0f} 張"
-    return _check("M4", "籌碼面正向", rule, actual, "> 0", passed)
+    return _check("M4", "籌碼面正向", rule, actual, "> 0", passed, missing=d.foreign_net_20d is None)
 
 
 def _m5_quality(d: StockData) -> RuleCheck:
@@ -305,7 +327,10 @@ def _m5_quality(d: StockData) -> RuleCheck:
         f"EPS 正季數 {d.eps_positive_quarters if d.eps_positive_quarters is not None else 'N/A'}"
         f" / ROE {_fmt(d.roe_3y_avg, pct=True)}"
     )
-    return _check("M5", "基本面不爛", rule, actual, "EPS >=3 正 / ROE > 8%", passed)
+    return _check(
+        "M5", "基本面不爛", rule, actual, "EPS >=3 正 / ROE > 8%", passed,
+        missing=d.eps_positive_quarters is None or d.roe_3y_avg is None,
+    )
 
 
 def _mb1_consecutive_buy(d: StockData) -> RuleCheck:
@@ -315,19 +340,29 @@ def _mb1_consecutive_buy(d: StockData) -> RuleCheck:
         "MB1", "法人持續買進", rule,
         "資料不足" if d.foreign_consecutive_days is None else f"連續 {d.foreign_consecutive_days} 日",
         "門檻 5 日", passed,
+        missing=d.foreign_consecutive_days is None,
     )
 
 
 def _mb2_revenue_yoy(d: StockData) -> RuleCheck:
-    rule = "最近一季營收 YoY > 10%"
+    """優先用月營收 YoY（台股每月 10 日公布，最即時），缺才用季營收."""
+    if d.revenue_monthly_yoy is not None:
+        rule = "最新月營收 YoY > 10%"
+        passed = d.revenue_monthly_yoy > 0.10
+        label = f"月營收（{d.revenue_monthly_label}）" if d.revenue_monthly_label else "月營收"
+        return _check(
+            "MB2", "業績配合", rule,
+            f"{label} {_fmt(d.revenue_monthly_yoy, pct=True)}", "門檻 10%", passed,
+        )
+    rule = "最近一季營收 YoY > 10%（月營收缺）"
     passed = d.revenue_yoy_latest is not None and d.revenue_yoy_latest > 0.10
-    return _check("MB2", "業績配合", rule, _fmt(d.revenue_yoy_latest, pct=True), "門檻 10%", passed)
+    return _check("MB2", "業績配合", rule, _fmt(d.revenue_yoy_latest, pct=True), "門檻 10%", passed, missing=d.revenue_yoy_latest is None)
 
 
 def _mb3_breakout(d: StockData) -> RuleCheck:
     rule = "近 60 日創新高（價格 >= 近 60 日最高 × 0.98）"
     if d.price is None or d.high_60d is None:
-        return _check("MB3", "突破訊號", rule, "資料不足", "近高", passed=False)
+        return _check("MB3", "突破訊號", rule, "資料不足", "近高", passed=False, missing=True)
     passed = d.price >= d.high_60d * 0.98
     return _check(
         "MB3", "突破訊號", rule,
@@ -339,7 +374,7 @@ def _mb3_breakout(d: StockData) -> RuleCheck:
 def _mb4_rsi_healthy(d: StockData) -> RuleCheck:
     rule = "14 日 RSI 在 50-75 區間"
     if d.rsi_14 is None:
-        return _check("MB4", "RSI 健康", rule, "資料不足", "50-75", passed=False)
+        return _check("MB4", "RSI 健康", rule, "資料不足", "50-75", passed=False, missing=True)
     passed = 50 <= d.rsi_14 <= 75
     return _check("MB4", "RSI 健康", rule, f"RSI {d.rsi_14:.1f}", "50-75（不過熱）", passed)
 
@@ -348,13 +383,16 @@ def _mb4_rsi_healthy(d: StockData) -> RuleCheck:
 
 
 def _md1_overheated(d: StockData) -> RuleCheck:
+    """用未消毒的 pe_raw 判斷 — 極端高 PE 是最需要此規則攔截的對象."""
     rule = "PE < 產業中位 × 2.0（避免過熱）"
-    if d.pe is None or d.industry_pe_median is None:
-        return _check("MD1", "排除-估值過熱", rule, "資料不足", "產業中位 × 2.0", passed=True)
+    pe = d.pe if d.pe is not None else d.pe_raw
+    if pe is None or pe <= 0 or d.industry_pe_median is None:
+        # 負 PE（虧損）不屬「過熱」範疇，交由 M5 品質規則處理
+        return _check("MD1", "排除-估值過熱", rule, "資料不足", "產業中位 × 2.0", passed=True, missing=True)
     threshold = d.industry_pe_median * 2.0
-    triggered = d.pe > threshold
+    triggered = pe > threshold
     return _check(
-        "MD1", "排除-估值過熱", rule, f"PE {d.pe:.1f}",
+        "MD1", "排除-估值過熱", rule, f"PE {pe:.1f}",
         f"產業中位 {d.industry_pe_median:.1f} × 2.0 = {threshold:.1f}",
         passed=not triggered,
         severity="critical" if triggered else "info",
@@ -362,16 +400,17 @@ def _md1_overheated(d: StockData) -> RuleCheck:
 
 
 def _md2_volume_price_div(d: StockData) -> RuleCheck:
+    """軟警示：severity=warning 不會剔除（僅 critical 會），供使用者評估風險."""
     rule = "價格創高同時 RSI 也接近高點（無背離）"
     if d.price is None or d.high_60d is None or d.rsi_14 is None or d.rsi_14_high is None:
-        return _check("MD2", "排除-量價背離", rule, "資料不足", "RSI 同步創高", passed=True)
+        return _check("MD2", "警示-量價背離", rule, "資料不足", "RSI 同步創高", passed=True, missing=True)
     making_high = d.price >= d.high_60d * 0.98
     rsi_lagging = d.rsi_14 < d.rsi_14_high - 5  # 背離認定：RSI 比近期 RSI 高點低 5 以上
     triggered = making_high and rsi_lagging
     return _check(
-        "MD2", "排除-量價背離", rule,
+        "MD2", "警示-量價背離", rule,
         f"價接近高 / RSI {d.rsi_14:.1f} vs 近高 {d.rsi_14_high:.1f}",
-        "若價創高但 RSI 落後 > 5 → 背離",
+        "若價創高但 RSI 落後 > 5 → 背離（警示，不剔除）",
         passed=not triggered,
         severity="warning" if triggered else "info",
     )
@@ -390,14 +429,15 @@ def _md3_disposed(d: StockData) -> RuleCheck:
 
 
 def _md4_chip_div(d: StockData) -> RuleCheck:
+    """軟警示：severity=warning 不會剔除（僅 critical 會），供使用者評估風險."""
     rule = "20 日累積買超為正但 5 日轉賣超 → 籌碼背離"
     if d.foreign_net_5d is None or d.foreign_net_20d is None:
-        return _check("MD4", "排除-籌碼背離", rule, "資料不足", "5d/20d 同向", passed=True)
+        return _check("MD4", "警示-籌碼背離", rule, "資料不足", "5d/20d 同向", passed=True, missing=True)
     triggered = d.foreign_net_20d > 0 and d.foreign_net_5d < 0
     return _check(
-        "MD4", "排除-籌碼背離", rule,
+        "MD4", "警示-籌碼背離", rule,
         f"5d {d.foreign_net_5d:+.0f} / 20d {d.foreign_net_20d:+.0f}",
-        "5d 與 20d 應同向",
+        "5d 與 20d 應同向（警示，不剔除）",
         passed=not triggered,
         severity="warning" if triggered else "info",
     )
@@ -444,9 +484,9 @@ MOMENTUM_BONUS: list[Rule] = [
 
 MOMENTUM_DISQUALIFIER: list[Rule] = [
     Rule("MD1", "估值過熱", "PE > 產業中位 × 2.0", _md1_overheated),
-    Rule("MD2", "量價背離", "價創高但 RSI 落後", _md2_volume_price_div),
+    Rule("MD2", "量價背離", "價創高但 RSI 落後（軟警示，不剔除）", _md2_volume_price_div),
     Rule("MD3", "處置股 / 全額交割", "TWSE 公布清單", _md3_disposed),
-    Rule("MD4", "籌碼背離", "20d 買 5d 賣", _md4_chip_div),
+    Rule("MD4", "籌碼背離", "20d 買 5d 賣（軟警示，不剔除）", _md4_chip_div),
 ]
 
 
@@ -536,9 +576,10 @@ def evaluate_rules(data: StockData, ruleset: RuleSet) -> ScoringTrace:
         if not c.passed and c.severity == "critical":
             trace.disqualifier_triggered.append(c.rule_id)
 
-    # 資料完整性盤點：actual 開頭為「資料不足」者視為缺資料
+    # 資料完整性盤點：使用結構化 missing 欄位（複合欄位規則如 V1/V4/M5
+    # 的 actual 不以「資料不足」開頭，舊的字串前綴偵測會漏算）
     for c in trace.must_pass + trace.bonus:
-        if str(c.actual).startswith("資料不足"):
+        if c.missing:
             trace.missing_data_count += 1
             trace.missing_data_rule_ids.append(c.rule_id)
 

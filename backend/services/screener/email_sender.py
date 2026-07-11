@@ -210,9 +210,23 @@ def render_email_html(
             str(len(report.get("industries_covered", []) or picks_by_industry)),
         )
         .replace("{{PICKS_TABLE}}", "\n".join(rows_html))
+        .replace("{{EVIDENCE_LINE}}", escape(_evidence_line(report, profile)))
         .replace("{{UNSUBSCRIBE_URL}}", escape(unsub_url, quote=True))
         .replace("{{WEB_URL}}", escape(web_url, quote=True))
     )
+
+
+def _evidence_line(report: dict, profile: str) -> str:
+    """Evidence gate 的一行揭露（詳細數字與警語在 web 端）."""
+    ev = report.get("evidence")
+    if not ev:
+        from services.screener.evidence import get_evidence
+
+        ev = get_evidence(profile)
+    headline = ev.get("headline", "")
+    if ev.get("status") == "backtested":
+        return f"{headline}（回測 {ev.get('backtest_period', '')}，詳見網頁版揭露）"
+    return f"{headline}（詳見網頁版揭露）"
 
 
 # ── Send ────────────────────────────────────────────────────────────────────

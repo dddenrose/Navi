@@ -21,11 +21,13 @@ from google.cloud import firestore as firestore_module
 
 from services.firestore_client import get_db
 from services.screener.ai_evaluator import InterpretedPick, interpret_picks
+from services.screener.evidence import get_evidence
 from services.screener.factor_scorer import (
     EvaluatedStock,
     evaluate_universe,
-    top_n_per_industry,
+    select_top_picks,
 )
+from services.screener.industry_mapper import all_tickers
 from services.screener.rules import Profile, RuleCheck
 from services.screener.universe import load_universe
 
@@ -48,6 +50,7 @@ def _check_to_dict(c: RuleCheck) -> dict[str, Any]:
         "reference": c.reference,
         "passed": c.passed,
         "severity": c.severity,
+        "missing": c.missing,
     }
 
 
@@ -104,6 +107,8 @@ def _snapshot_to_dict(es: EvaluatedStock) -> dict[str, Any]:
         "roe_3y_avg": d.roe_3y_avg,
         "revenue_cagr_3y": d.revenue_cagr_3y,
         "revenue_yoy_latest": d.revenue_yoy_latest,
+        "revenue_monthly_yoy": d.revenue_monthly_yoy,
+        "revenue_monthly_label": d.revenue_monthly_label,
         "fcf_positive_years": d.fcf_positive_years,
         "eps_positive_quarters": d.eps_positive_quarters,
         "debt_ratio": d.debt_ratio,
@@ -124,6 +129,7 @@ def _snapshot_to_dict(es: EvaluatedStock) -> dict[str, Any]:
         "industry_pe_median": d.industry_pe_median,
         "industry_pb_median": d.industry_pb_median,
         "industry_size": d.industry_size,
+        "industry_anchor": d.industry_anchor,
     }
 
 
@@ -136,6 +142,7 @@ def _pick_to_doc(p: InterpretedPick) -> dict[str, Any]:
         "name": d.name,
         "industry": d.industry,
         "rank_in_industry": es.industry_rank,
+        "rank_overall": es.rank_overall,
         "industry_size": es.industry_size,
         "final_grade": es.trace.final_grade,
         "verdict": es.trace.verdict,
@@ -160,6 +167,7 @@ def _qualified_to_doc(es: EvaluatedStock) -> dict[str, Any]:
         "name": d.name,
         "industry": d.industry,
         "rank_in_industry": es.industry_rank,
+        "rank_overall": es.rank_overall,
         "industry_size": es.industry_size,
         "final_grade": es.trace.final_grade,
         "verdict": es.trace.verdict,
@@ -170,7 +178,8 @@ def _qualified_to_doc(es: EvaluatedStock) -> dict[str, Any]:
             "narrative": "",
             "key_context": [],
             "warnings": [],
-            "value_trap_check": "no_concern",
+            # skip_stage3 = 沒跑 AI 檢查，不能冒充「已檢查無虞」
+            "value_trap_check": "not_applicable",
             "value_trap_reason": "",
         },
     }
@@ -190,6 +199,18 @@ def _persist_report(
 ) -> None:
     db = get_db()
     doc_ref = db.collection(REPORTS_COLLECTION).document(report_id)
+    # 同日重跑會沿用同一 report_id：set() 不會清子集合，必須先刪舊 picks，
+    # 否則上一輪的殘留檔會混進新報告（final_count 與實際 picks 數不一致）
+    new_tickers = {doc["ticker"] for doc in pick_docs}
+    stale = [
+        snap.reference
+        for snap in doc_ref.collection("picks").stream()
+        if snap.id not in new_tickers
+    ]
+    for ref in stale:
+        ref.delete()
+    if stale:
+        logger.info("Removed %d stale picks from %s", len(stale), report_id)
     doc_ref.set(
         {
             "report_id": report_id,
@@ -204,6 +225,9 @@ def _persist_report(
             "industries_covered": industries_covered,
             "duration_seconds": round(duration_seconds, 1),
             "status": "completed",
+            # Evidence gate：策略證據揭露（回測依據或 experimental 標記），
+            # 前端常駐顯示 — 名單再漂亮，沒有證據就要說沒有證據
+            "evidence": get_evidence(profile),
         }
     )
     picks_coll = doc_ref.collection("picks")
@@ -217,7 +241,8 @@ async def run_screener_async(
     profile: Profile = "value",
     frequency: str = "weekly",
     tickers: list[str] | None = None,
-    top_per_industry: int = 3,
+    total_picks: int = 10,
+    max_per_industry: int = 2,
     model_name: str | None = None,
     persist: bool = True,
     skip_stage3: bool = False,
@@ -248,7 +273,10 @@ async def run_screener_async(
         enable_fundamentals=enable_fundamentals,
     )
     qualified = [es for es in evaluated if es.trace.is_qualified()]
-    candidates = top_n_per_industry(evaluated, n=top_per_industry)
+    # 全市場排名 + 產業上限（取代每產業 top-N 配額 —— 弱勢產業不再保送）
+    candidates = select_top_picks(
+        evaluated, profile, total=total_picks, max_per_industry=max_per_industry,
+    )
     industries_covered = sorted({es.data.industry for es in candidates})
 
     # Stage 3 (optional)
@@ -269,7 +297,8 @@ async def run_screener_async(
                 report_id,
                 profile=profile,
                 frequency=frequency,
-                universe_size=len(tickers) if tickers else stage1_passed,
+                # 漏斗第一層 = 候選股票池大小（修正舊版恆等於 stage1_passed 的失真）
+                universe_size=len(tickers) if tickers else len(all_tickers()),
                 stage1_passed=stage1_passed,
                 stage2_qualified=len(qualified),
                 pick_docs=pick_docs,

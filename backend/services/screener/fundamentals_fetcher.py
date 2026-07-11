@@ -88,7 +88,11 @@ def _compute_fcf_positive_years(cashflow_df) -> int | None:
 
 
 def _compute_roe_3y_avg(financials_df, balance_df) -> float | None:
-    """近 3 年 ROE 平均 = 平均（淨利 / 平均股東權益）."""
+    """近 3 年 ROE 平均 = 平均（淨利 / 年末股東權益）.
+
+    註：分母用年末權益而非期初期末平均（yfinance 年度資料對齊成本考量），
+    增資頻繁的公司 ROE 會被略為低估。
+    """
     ni_row = _safe_get(financials_df, "Net Income")
     if ni_row is None:
         ni_row = _safe_get(financials_df, "Net Income Common Stockholders")

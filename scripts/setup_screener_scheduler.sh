@@ -96,14 +96,20 @@ echo "   Timezone   : ${TIMEZONE}"
 echo ""
 
 # Job 定義表：name | schedule | profile | frequency | path
-#   - momentum: 週一/三/五 14:30 跑 (盤後)，隔日早上 07:00 寄信
-#   - value:    週日 20:00 跑，週一 07:00 寄信
-#   - track:    平日 16:30 盤後更新 picks 實績追蹤（T+5/20/60 報酬）
+#   - 兩個 profile 都是週頻：週日晚間跑、週一 07:00 寄信。
+#     （對齊使用者「週選、持有 3-6 個月」的用法；日頻對此持有期只是噪音，
+#      且會讓 tracking 的推薦事件被同一檔重複灌水）
+#   - track: 平日 16:30 盤後更新 picks 實績追蹤（T+5/20/60/120 報酬）
+#
+# ⚠️ 舊版曾有 ${JOB_PREFIX}-momentum（週一三五日頻）與 notify-momentum，
+#    更名後不在此清單，需手動刪除：
+#    gcloud scheduler jobs delete ${JOB_PREFIX}-momentum --location=$REGION
+#    gcloud scheduler jobs delete ${JOB_PREFIX}-notify-momentum --location=$REGION
 JOBS=(
-  "${JOB_PREFIX}-momentum|30 14 * * 1,3,5|momentum|daily|run"
-  "${JOB_PREFIX}-weekly-value|0 20 * * 0|value|weekly|run"
-  "${JOB_PREFIX}-notify-momentum|0 7 * * 2,4,6|momentum|daily|notify"
-  "${JOB_PREFIX}-notify-weekly-value|0 7 * * 1|value|weekly|notify"
+  "${JOB_PREFIX}-weekly-momentum|0 20 * * 0|momentum|weekly|run"
+  "${JOB_PREFIX}-weekly-value|30 20 * * 0|value|weekly|run"
+  "${JOB_PREFIX}-notify-weekly-momentum|0 7 * * 1|momentum|weekly|notify"
+  "${JOB_PREFIX}-notify-weekly-value|10 7 * * 1|value|weekly|notify"
   "${JOB_PREFIX}-track|30 16 * * 1-5|-|-|track"
 )
 
@@ -170,5 +176,5 @@ echo ""
 echo "  gcloud scheduler jobs list --location=${REGION} --project=${PROJECT_ID}"
 echo ""
 echo "立即手動觸發（測試）："
-echo "  gcloud scheduler jobs run ${JOB_PREFIX}-momentum --location=${REGION}"
+echo "  gcloud scheduler jobs run ${JOB_PREFIX}-weekly-momentum --location=${REGION}"
 echo "  gcloud scheduler jobs run ${JOB_PREFIX}-weekly-value --location=${REGION}"

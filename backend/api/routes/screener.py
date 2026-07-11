@@ -29,6 +29,7 @@ from services.screener.email_sender import (
     upsert_subscriber,
     verify_unsubscribe_token,
 )
+from services.screener.evidence import get_evidence
 from services.screener.orchestrator import REPORTS_COLLECTION, run_screener_async
 from services.screener.picks_tracker import (
     get_tracking_summary,
@@ -75,8 +76,9 @@ async def verify_runner_token(
 
 class RunRequest(BaseModel):
     profile: str = Field("momentum", pattern="^(value|momentum)$")
-    frequency: str = Field("daily", pattern="^(daily|weekly)$")
-    top_per_industry: int = Field(3, ge=1, le=10)
+    frequency: str = Field("weekly", pattern="^(daily|weekly)$")
+    total_picks: int = Field(10, ge=1, le=50)
+    max_per_industry: int = Field(2, ge=1, le=10)
     model_name: str | None = None
     skip_stage3: bool = False
     enable_chips: bool = True
@@ -104,6 +106,7 @@ class ReportSummary(BaseModel):
     duration_seconds: float | None = None
     status: str = ""
     generated_at: Any | None = None
+    evidence: dict[str, Any] | None = None  # 策略證據揭露（evidence gate）
 
 
 class PickDoc(BaseModel):
@@ -111,6 +114,7 @@ class PickDoc(BaseModel):
     name: str = ""
     industry: str = ""
     rank_in_industry: int = 0
+    rank_overall: int = 0
     industry_size: int = 0
     final_grade: str = ""
     verdict: str = ""
@@ -139,6 +143,9 @@ def _doc_to_summary(doc: dict) -> ReportSummary:
         duration_seconds=doc.get("duration_seconds"),
         status=doc.get("status", ""),
         generated_at=doc.get("generated_at"),
+        # 舊報告沒有 evidence 欄位 → 以「當前」證據狀態補上，
+        # 確保揭露 banner 對歷史報告也存在
+        evidence=doc.get("evidence") or get_evidence(doc.get("profile", "")),
     )
 
 
@@ -170,7 +177,8 @@ async def run_screener_endpoint(payload: RunRequest) -> RunResponse:
     result = await run_screener_async(
         profile=payload.profile,  # type: ignore[arg-type]
         frequency=payload.frequency,
-        top_per_industry=payload.top_per_industry,
+        total_picks=payload.total_picks,
+        max_per_industry=payload.max_per_industry,
         model_name=payload.model_name,
         skip_stage3=payload.skip_stage3,
         enable_chips=payload.enable_chips,

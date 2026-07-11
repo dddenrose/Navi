@@ -55,10 +55,16 @@ def test_format_allowed_numbers_empty():
 
 def test_stock_interpretation_defaults():
     si = StockInterpretation(narrative="x")
-    assert si.value_trap_check == "no_concern"
+    # 預設 not_applicable：「沒有檢查」不得冒充「已檢查無虞」(no_concern)
+    assert si.value_trap_check == "not_applicable"
     assert si.value_trap_reason == ""
     assert si.key_context == []
     assert si.warnings == []
+
+
+def test_stock_interpretation_accepts_not_applicable():
+    si = StockInterpretation(narrative="x", value_trap_check="not_applicable")
+    assert si.value_trap_check == "not_applicable"
 
 
 # ── validate_narrative ──────────────────────────────────────────────────────

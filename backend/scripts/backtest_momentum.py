@@ -1,4 +1,4 @@
-"""Momentum Rider 簡化版歷史回測 — 重現 MOMENTUM_BACKTEST_NOTES.md 的回測方法.
+"""Momentum Rider 簡化版歷史回測 — 對齊線上 screener 的口徑與使用情境.
 
 規則（Pure Technical Momentum Rider，與 services/screener/rules.py 的口徑對齊）:
   Must（全過）:
@@ -8,28 +8,35 @@
   Bonus（至少 1 條）:
     MB3 突破訊號        收盤 >= 近 60 日收盤高 × 0.98
     MB4 RSI 健康        Wilder RSI14 在 50-75
-  Disqualifier:
-    MD2 量價背離        價接近 60 日高但 RSI 落後近 14 日 RSI 高點 5 以上
+  MD2 量價背離為線上系統的「軟警示」（不剔除）→ 預設不過濾，
+  --md2-filter 可切回舊版硬剔除口徑（與 NOTES 第八章對照用）。
   略過 M4/M5/MB1/MB2/MD1/MD3/MD4 — yfinance 只有最新財報與籌碼，
   回溯使用會引入 look-ahead bias。
 
-交易模型:
-  - 月底（或季底）收盤跑規則 → 次一交易日開盤等權換倉
-  - 單邊交易成本 cost_bps（預設 30bps），買賣各收一次
-  - 每產業取 bonus 通過數多、120 日報酬強者前 N 檔（與 factor_scorer 排名邏輯一致）
+兩種交易模型:
+  1. 換倉模式（--rebalance ME/QE，legacy）：期底收盤訊號 → 次日開盤全數換倉。
+  2. 持有期模式（--hold-weeks 13/26）：**每週**收盤訊號 → 次日開盤建立一個
+     tranche、持有 N 週後出場（Jegadeesh-Titman 重疊組合）。資金拆成 N 等份
+     輪動，某週無合格標的時該份資金留現金。這是對齊「週選、持 3-6 個月」
+     實際用法的口徑。
+
+選股模式（皆對齊 factor_scorer 的排序鍵）:
+  - --select industry：每產業取 bonus 多、120 日報酬強者前 N 檔（legacy）
+  - --select global  ：全市場排名（bonus → 6M 報酬）+ 單一產業上限（新版線上邏輯）
 
 ⚠️ 已知限制（結果解讀前必讀）:
   1. Universe 為 industry_data.json「今日仍存在」的股票回溯歷史 →
-     含倖存者偏差，動能策略會因此高估報酬。
+     含倖存者偏差，動能策略會因此高估報酬。結果是樂觀上界。
   2. 使用 yfinance 還原股價（auto_adjust）計算報酬；PE/財報/籌碼規則全數跳過。
   3. 停牌/下市造成的價格缺漏以「最後可得價格出場」近似處理。
+  4. 持有期模式的成本與 tranche 權重為等權近似（每週約 2/N 的部位周轉）。
 
 Usage:
   cd backend
-  uv run python scripts/backtest_momentum.py                      # 2018 ~ 今天
-  uv run python scripts/backtest_momentum.py --rebalance QE --top 5
+  uv run python scripts/backtest_momentum.py                      # legacy 月頻換倉
+  uv run python scripts/backtest_momentum.py --hold-weeks 13 --select global --total 10 --max-per-industry 2
+  uv run python scripts/backtest_momentum.py --hold-weeks 26 --select global --total 10 --max-per-industry 2
   uv run python scripts/backtest_momentum.py --start 2022-01-01 --end 2025-12-31
-  uv run python scripts/backtest_momentum.py --cost-bps 50
   uv run python scripts/backtest_momentum.py --limit 60           # 縮小 universe 快速驗證
 """
 
@@ -154,14 +161,19 @@ def wilder_rsi(close: pd.DataFrame, period: int = 14) -> pd.DataFrame:
 class SignalPanels:
     """全期間、全 universe 的規則判定結果（bool/float 寬表）."""
 
-    eligible: pd.DataFrame       # M1 & M2 & M3 & (MB3|MB4) & ~MD2
+    eligible: pd.DataFrame       # M1 & M2 & M3 & (MB3|MB4)（可選 & ~MD2）
     bonus_count: pd.DataFrame    # MB3 + MB4 通過數（排名用）
     return_6m: pd.DataFrame      # 120 交易日報酬（排名用）
 
 
 def compute_signals(
-    close: pd.DataFrame, volume: pd.DataFrame, bench_close: pd.Series,
+    close: pd.DataFrame,
+    volume: pd.DataFrame,
+    bench_close: pd.Series,
+    *,
+    md2_filter: bool = False,
 ) -> SignalPanels:
+    """md2_filter=False 對齊線上系統（MD2 為軟警示不剔除）；True 為舊版口徑."""
     sma60 = close.rolling(60).mean()
     sma120 = close.rolling(120).mean()
     ret_6m = close / close.shift(120) - 1
@@ -178,10 +190,11 @@ def compute_signals(
     rsi = wilder_rsi(close)
     mb4 = (rsi >= 50) & (rsi <= 75)
 
-    rsi_high_14 = rsi.rolling(14).max()
-    md2 = mb3 & (rsi < rsi_high_14 - 5)
-
-    eligible = m1 & m2 & m3 & (mb3 | mb4) & ~md2
+    eligible = m1 & m2 & m3 & (mb3 | mb4)
+    if md2_filter:
+        rsi_high_14 = rsi.rolling(14).max()
+        md2 = mb3 & (rsi < rsi_high_14 - 5)
+        eligible &= ~md2
     bonus_count = mb3.astype(int) + mb4.astype(int)
     return SignalPanels(
         eligible=eligible.fillna(False),
@@ -221,7 +234,7 @@ def select_portfolio(
     signal_date: pd.Timestamp,
     top_per_industry: int,
 ) -> list[str]:
-    """signal_date 收盤跑規則 → 每產業取 bonus 多、6M 報酬強的前 N 檔."""
+    """signal_date 收盤跑規則 → 每產業取 bonus 多、6M 報酬強的前 N 檔（legacy）."""
     elig_row = signals.eligible.loc[signal_date]
     candidates = [t for t in elig_row.index[elig_row] if t in ticker_industry]
     by_industry: dict[str, list[str]] = {}
@@ -237,6 +250,38 @@ def select_portfolio(
     return sorted(selected)
 
 
+def select_portfolio_global(
+    signals: SignalPanels,
+    ticker_industry: dict[str, str],
+    signal_date: pd.Timestamp,
+    *,
+    total: int,
+    max_per_industry: int,
+) -> list[str]:
+    """全市場排名（bonus → 6M 報酬）+ 單一產業上限 — 對齊新版線上選股邏輯.
+
+    註：線上排序鍵是 rel_strength_6m；同一訊號日全體減同一個大盤報酬，
+    排序等價於 return_6m，故此處直接用 return_6m。
+    """
+    elig_row = signals.eligible.loc[signal_date]
+    candidates = [t for t in elig_row.index[elig_row] if t in ticker_industry]
+    bonus_row = signals.bonus_count.loc[signal_date]
+    ret_row = signals.return_6m.loc[signal_date]
+    candidates.sort(key=lambda t: (-bonus_row.get(t, 0), -(ret_row.get(t) or -1.0)))
+
+    selected: list[str] = []
+    per_ind: dict[str, int] = {}
+    for t in candidates:
+        ind = ticker_industry[t]
+        if per_ind.get(ind, 0) >= max_per_industry:
+            continue
+        selected.append(t)
+        per_ind[ind] = per_ind.get(ind, 0) + 1
+        if len(selected) >= total:
+            break
+    return sorted(selected)
+
+
 def run_backtest(
     data: dict[str, pd.DataFrame],
     ticker_industry: dict[str, str],
@@ -247,13 +292,14 @@ def run_backtest(
     top_per_industry: int = 3,
     cost_bps: float = 30.0,
     exec_mode: str = "next_open",
+    md2_filter: bool = True,  # legacy 換倉模式維持舊口徑（NOTES 第八章可重現）
 ) -> BacktestResult:
     close = data["close"].drop(columns=[BENCHMARK], errors="ignore")
     open_ = data["open"].drop(columns=[BENCHMARK], errors="ignore")
     volume = data["volume"].drop(columns=[BENCHMARK], errors="ignore")
     bench_close = data["close"][BENCHMARK].dropna()
 
-    signals = compute_signals(close, volume, bench_close)
+    signals = compute_signals(close, volume, bench_close, md2_filter=md2_filter)
     cost = cost_bps / 10_000
 
     trading_days = close.index
@@ -362,6 +408,147 @@ def run_backtest(
     return result
 
 
+def run_backtest_hold(
+    data: dict[str, pd.DataFrame],
+    ticker_industry: dict[str, str],
+    *,
+    start: str,
+    end: str,
+    hold_weeks: int = 13,
+    cost_bps: float = 30.0,
+    select_mode: str = "global",
+    total: int = 10,
+    max_per_industry: int = 2,
+    top_per_industry: int = 3,
+    md2_filter: bool = False,
+) -> BacktestResult:
+    """持有期模式：每週訊號 → 次日開盤建 tranche、持 hold_weeks 週後出場.
+
+    Jegadeesh-Titman 重疊組合：資金拆成 hold_weeks 等份輪動。某週無合格
+    標的時該 tranche 為現金（報酬 0），忠實反映空手期的現金拖累。
+    Tranche 內等權買進持有（不再平衡）；跨 tranche 每日等權（近似）。
+    """
+    close = data["close"].drop(columns=[BENCHMARK], errors="ignore")
+    open_ = data["open"].drop(columns=[BENCHMARK], errors="ignore")
+    volume = data["volume"].drop(columns=[BENCHMARK], errors="ignore")
+    bench_close = data["close"][BENCHMARK].dropna()
+
+    signals = compute_signals(close, volume, bench_close, md2_filter=md2_filter)
+    cost = cost_bps / 10_000
+
+    trading_days = close.index
+    in_range = trading_days[(trading_days >= start) & (trading_days <= end)]
+    if len(in_range) == 0:
+        return BacktestResult()
+
+    # 每週最後一個交易日 = 訊號日；次一交易日開盤執行
+    weekly = pd.Series(in_range, index=in_range).resample("W-FRI").last().dropna()
+    sig_exec: list[tuple[pd.Timestamp, pd.Timestamp]] = []
+    for d in weekly:
+        after = trading_days[trading_days > d]
+        if len(after) == 0:
+            break
+        sig_exec.append((d, after[0]))
+
+    result = BacktestResult()
+    last_day = in_range[-1]
+
+    def price_at_or_before(ticker: str, date: pd.Timestamp) -> float | None:
+        s = close[ticker].loc[:date].dropna()
+        return float(s.iloc[-1]) if len(s) else None
+
+    # ── 建立所有 tranches ───────────────────────────────────────────────
+    # tranche i：sig_exec[i] 進場、sig_exec[i+H] 開盤出場；尾端未滿 H 週者
+    # 持有到期末（equity 曲線如實反映，交易統計以期末收盤近似結清）。
+    exec_dates = [ex for _, ex in sig_exec]
+    rel_cols: dict[int, pd.Series] = {}
+    cost_events: dict[pd.Timestamp, int] = {}  # 執行日 → 當日進出場的非現金 tranche 數
+
+    for i, (sig, ex) in enumerate(sig_exec):
+        if select_mode == "global":
+            target = select_portfolio_global(
+                signals, ticker_industry, sig,
+                total=total, max_per_industry=max_per_industry,
+            )
+        else:
+            target = select_portfolio(signals, ticker_industry, sig, top_per_industry)
+        target = [t for t in target if not math.isnan(open_.at[ex, t])]
+
+        exit_ex = exec_dates[i + hold_weeks] if i + hold_weeks < len(exec_dates) else None
+        window_end = exit_ex if exit_ex is not None else last_day
+
+        if target:
+            entry_px = open_.loc[ex, target].astype(float)
+            window = close.loc[ex:window_end, target].ffill()
+            rel = window.div(entry_px, axis=1).mean(axis=1)
+            if exit_ex is not None:
+                # 出場日以開盤結清；開盤缺漏者以最後可得收盤近似
+                exit_vals = []
+                for t in target:
+                    px = open_.at[exit_ex, t]
+                    if math.isnan(px):
+                        px = price_at_or_before(t, exit_ex) or float(entry_px[t])
+                        result.forced_exits += 1
+                    exit_vals.append(px / float(entry_px[t]))
+                rel.loc[exit_ex] = float(np.mean(exit_vals))
+                for t, v in zip(target, exit_vals):
+                    result.trades.append(Trade(
+                        ticker=t, entry_date=ex, exit_date=exit_ex,
+                        entry_price=float(entry_px[t]),
+                        exit_price=float(entry_px[t]) * v,
+                    ))
+            else:
+                # 尾端 tranche：期末收盤近似結清（僅交易統計用）
+                for t in target:
+                    px = price_at_or_before(t, last_day)
+                    if px:
+                        result.trades.append(Trade(
+                            ticker=t, entry_date=ex, exit_date=last_day,
+                            entry_price=float(entry_px[t]), exit_price=px,
+                        ))
+            cost_events[ex] = cost_events.get(ex, 0) + 1
+            if exit_ex is not None:
+                cost_events[exit_ex] = cost_events.get(exit_ex, 0) + 1
+        else:
+            # 現金 tranche：rel 恆為 1（占一份資金、報酬 0）
+            idx = trading_days[(trading_days >= ex) & (trading_days <= window_end)]
+            rel = pd.Series(1.0, index=idx)
+
+        # baseline：進場執行日前一交易日 rel=1，使首日報酬 = close/open - 1
+        before = trading_days[trading_days < ex]
+        if len(before):
+            rel = pd.concat([pd.Series([1.0], index=[before[-1]]), rel])
+        rel_cols[i] = rel
+
+    if not rel_cols:
+        return BacktestResult()
+
+    # ── 每日組合報酬：跨 active tranches 等權平均 ───────────────────────
+    rels = pd.DataFrame(rel_cols).reindex(trading_days)
+    factors = rels / rels.shift(1)  # baseline 日本身為 NaN → 不計入
+    daily_ret = (factors - 1).mean(axis=1, skipna=True).fillna(0.0)
+
+    first_exec = exec_dates[0]
+    days = trading_days[(trading_days >= first_exec) & (trading_days <= last_day)]
+    equity = 1.0
+    equity_points: list[tuple[pd.Timestamp, float]] = []
+    for d in days:
+        equity *= 1 + float(daily_ret.loc[d])
+        n_active = int(rels.loc[d].notna().sum())
+        n_events = cost_events.get(d, 0)
+        if n_events and n_active:
+            # 每個進/出場事件對應約 1/n_active 的部位單邊成本
+            equity *= (1 - cost / n_active) ** n_events
+        equity_points.append((d, equity))
+
+    eq = pd.Series(dict(equity_points)).sort_index()
+    result.equity = eq
+    bench = bench_close.reindex(eq.index).ffill()
+    result.bench_equity = bench / bench.iloc[0]
+    result.monthly_returns = eq.resample("ME").last().pct_change().dropna()
+    return result
+
+
 # ── Reporting ───────────────────────────────────────────────────────────────
 
 
@@ -369,7 +556,7 @@ def max_drawdown(equity: pd.Series) -> float:
     return float((equity / equity.cummax() - 1).min())
 
 
-def print_report(result: BacktestResult, *, cost_bps: float, args) -> None:
+def print_report(result: BacktestResult, *, cost_bps: float, mode_desc: str) -> None:
     eq, bench = result.equity, result.bench_equity
     if eq.empty:
         print("❌ 沒有任何回測資料點（期間內無合格標的或資料不足）")
@@ -402,10 +589,7 @@ def print_report(result: BacktestResult, *, cost_bps: float, args) -> None:
     print("📊 Momentum Rider 簡化版回測結果")
     print("=" * 64)
     print(f"期間          {eq.index[0]:%Y-%m-%d} ~ {eq.index[-1]:%Y-%m-%d}（{years:.2f} 年）")
-    print(
-        f"Rebalance     {args.rebalance}  |  每產業 Top {args.top}"
-        f"  |  成本 {cost_bps:.0f}bps 單邊  |  exec={args.exec_mode}"
-    )
+    print(f"模式          {mode_desc}  |  成本 {cost_bps:.0f}bps 單邊")
     print("-" * 64)
     print(f"{'指標':<14}{'策略':>12}{'^TWII':>12}{'超額':>12}")
     total_excess = total_ret - bench_total
@@ -445,13 +629,28 @@ def main() -> None:
     parser.add_argument("--start", default="2018-02-01")
     parser.add_argument("--end", default=pd.Timestamp.today().strftime("%Y-%m-%d"))
     parser.add_argument("--rebalance", choices=["ME", "QE"], default="ME",
-                        help="ME=月底 / QE=季底")
-    parser.add_argument("--top", type=int, default=3, help="每產業取前 N 檔")
+                        help="換倉模式（legacy）：ME=月底 / QE=季底")
+    parser.add_argument(
+        "--hold-weeks", type=int, default=0,
+        help="持有期模式：每週訊號、持有 N 週（如 13/26）。0=使用換倉模式",
+    )
+    parser.add_argument(
+        "--select", choices=["industry", "global"], default="industry",
+        help="選股：industry=每產業 top N（legacy）/ global=全市場排名+產業上限",
+    )
+    parser.add_argument("--top", type=int, default=3, help="每產業取前 N 檔（industry 模式）")
+    parser.add_argument("--total", type=int, default=10, help="全市場取前 N 檔（global 模式）")
+    parser.add_argument("--max-per-industry", type=int, default=2,
+                        help="單一產業上限（global 模式）")
     parser.add_argument("--cost-bps", type=float, default=30.0, help="單邊交易成本（bps）")
+    parser.add_argument(
+        "--md2-filter", action="store_true",
+        help="以 MD2 量價背離硬剔除（舊版口徑；線上系統為軟警示不剔除）",
+    )
     parser.add_argument(
         "--exec", dest="exec_mode", choices=["next_open", "signal_close"],
         default="next_open",
-        help="成交時點：next_open=次日開盤（預設，無 look-ahead）；"
+        help="成交時點（換倉模式）：next_open=次日開盤（預設，無 look-ahead）；"
              "signal_close=訊號日收盤（含 look-ahead，僅供與舊數字對照診斷）",
     )
     parser.add_argument("--limit", type=int, default=None, help="只取前 N 檔 universe（快速驗證）")
@@ -476,15 +675,40 @@ def main() -> None:
         print("❌ 價格資料下載失敗（含 ^TWII），請稍後重試或加 --refresh")
         sys.exit(1)
 
-    result = run_backtest(
-        data, ticker_industry,
-        start=args.start, end=args.end,
-        rebalance=args.rebalance,
-        top_per_industry=args.top,
-        cost_bps=args.cost_bps,
-        exec_mode=args.exec_mode,
-    )
-    print_report(result, cost_bps=args.cost_bps, args=args)
+    if args.hold_weeks > 0:
+        result = run_backtest_hold(
+            data, ticker_industry,
+            start=args.start, end=args.end,
+            hold_weeks=args.hold_weeks,
+            cost_bps=args.cost_bps,
+            select_mode=args.select,
+            total=args.total,
+            max_per_industry=args.max_per_industry,
+            top_per_industry=args.top,
+            md2_filter=args.md2_filter,
+        )
+        sel_desc = (
+            f"global top{args.total}/產業≤{args.max_per_industry}"
+            if args.select == "global" else f"每產業 top{args.top}"
+        )
+        mode_desc = (
+            f"週訊號+持有 {args.hold_weeks} 週（重疊分批）｜{sel_desc}"
+            f"｜MD2 {'硬剔除' if args.md2_filter else '軟警示'}"
+        )
+    else:
+        result = run_backtest(
+            data, ticker_industry,
+            start=args.start, end=args.end,
+            rebalance=args.rebalance,
+            top_per_industry=args.top,
+            cost_bps=args.cost_bps,
+            exec_mode=args.exec_mode,
+            md2_filter=True,
+        )
+        mode_desc = (
+            f"Rebalance {args.rebalance}｜每產業 Top {args.top}｜exec={args.exec_mode}"
+        )
+    print_report(result, cost_bps=args.cost_bps, mode_desc=mode_desc)
 
     out = cache_dir / "equity_curve.csv"
     pd.DataFrame({

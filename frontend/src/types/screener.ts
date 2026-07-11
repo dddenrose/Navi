@@ -6,7 +6,32 @@ export type ScreenerFrequency = "daily" | "weekly";
 export type FinalGrade = "Strong Pick" | "Pick" | "Watch" | "Reject" | string;
 export type Verdict = "qualified" | "rejected" | string;
 export type RuleSeverity = "critical" | "warning" | "info" | string;
-export type ValueTrapCheck = "no_concern" | "watch" | "warning" | string;
+export type ValueTrapCheck =
+  | "no_concern"
+  | "watch"
+  | "warning"
+  | "not_applicable"
+  | string;
+
+export interface EvidenceMetrics {
+  strategy_cagr?: number;
+  benchmark_cagr?: number;
+  excess_cagr?: number;
+  max_drawdown?: number;
+  sharpe_monthly?: number;
+}
+
+/** 策略證據揭露（evidence gate）— 回測依據或 experimental 標記 */
+export interface StrategyEvidence {
+  profile: ScreenerProfile | string;
+  status: "backtested" | "experimental" | string;
+  headline: string;
+  backtest_period?: string | null;
+  method?: string | null;
+  metrics: Record<string, EvidenceMetrics>;
+  benchmark?: string;
+  caveats: string[];
+}
 
 export interface ReportSummary {
   report_id: string;
@@ -17,6 +42,7 @@ export interface ReportSummary {
   duration_seconds?: number | null;
   status?: string;
   generated_at?: { _seconds?: number; seconds?: number } | string | null;
+  evidence?: StrategyEvidence | null;
 }
 
 export interface PickSnapshot {
@@ -45,9 +71,12 @@ export interface PickSnapshot {
   foreign_net_5d?: number | null;
   foreign_net_20d?: number | null;
   foreign_consecutive_days?: number | null;
+  revenue_monthly_yoy?: number | null;
+  revenue_monthly_label?: string | null;
   industry_pe_median?: number | null;
   industry_pb_median?: number | null;
   industry_size?: number | null;
+  industry_anchor?: string | null;
 }
 
 export interface RuleCheck {
@@ -58,6 +87,7 @@ export interface RuleCheck {
   reference: string | number | null;
   passed: boolean;
   severity: RuleSeverity;
+  missing?: boolean;
 }
 
 export interface ScoringTrace {
@@ -80,7 +110,7 @@ export interface Valuation {
   buy_zone_upper?: number | null;
   implied_upside_mid_pct?: number | null;
   data_used?: Record<string, unknown>;
-  notes?: string;
+  notes?: string[] | string;
 }
 
 export interface Interpretation {
@@ -103,9 +133,11 @@ export interface PickTracking {
   return_t5?: number;
   return_t20?: number;
   return_t60?: number;
+  return_t120?: number;
   excess_t5?: number;
   excess_t20?: number;
   excess_t60?: number;
+  excess_t120?: number;
 }
 
 export interface PickDoc {
@@ -113,6 +145,7 @@ export interface PickDoc {
   name: string;
   industry: string;
   rank_in_industry: number;
+  rank_overall?: number;
   industry_size: number;
   final_grade: FinalGrade;
   verdict: Verdict;
@@ -132,6 +165,13 @@ export interface TrackingHorizonStats {
   beat_benchmark_rate?: number;
 }
 
+export interface UpsideValidation {
+  n: number;
+  pearson_r?: number | null;
+  high_upside_avg_return?: number | null;
+  low_upside_avg_return?: number | null;
+}
+
 export interface TrackingSummary {
   profile: ScreenerProfile;
   pick_events: number;
@@ -142,6 +182,7 @@ export interface TrackingSummary {
   methodology?: string;
   horizons: Record<string, TrackingHorizonStats>;
   by_grade: Record<string, Record<string, TrackingHorizonStats>>;
+  upside_validation?: Record<string, UpsideValidation>;
 }
 
 export interface ReportDetail {

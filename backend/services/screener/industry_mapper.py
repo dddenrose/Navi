@@ -42,6 +42,27 @@ def _ticker_to_name() -> dict[str, str]:
     return out
 
 
+@lru_cache(maxsize=1)
+def _ticker_to_fine_industry() -> dict[str, str]:
+    """ticker → TWSE 原始產業別（32 類，較 Navi-11 細）。"""
+    data = _load_data()
+    out: dict[str, str] = {}
+    for items in data["industries"].values():
+        for item in items:
+            cat = item.get("twse_category")
+            if cat:
+                out[item["ticker"]] = cat
+    return out
+
+
+def get_fine_industry(ticker: str) -> str | None:
+    """回傳 TWSE 細產業別（如「半導體業」）；資料缺失回 None。
+
+    估值錨優先用細分類（同業可比性高），樣本不足才 fallback 到 Navi-11 大類。
+    """
+    return _ticker_to_fine_industry().get(ticker)
+
+
 def get_industry(ticker: str) -> str:
     """回傳該 ticker 的自建產業類別；找不到時 fallback 至『公用其他』。"""
     return _ticker_to_industry().get(ticker, FALLBACK_INDUSTRY)

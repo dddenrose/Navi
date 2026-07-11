@@ -25,7 +25,7 @@ flowchart TD
   F --> F1[EPS TTM x 產業 PE 區間]
   F --> F2[合理價低 / 中 / 高、買進區、上行空間]
 
-  F --> G[每產業取 Top N 候選]
+  F --> G[全市場排名 + 產業上限取 Top N]
   G --> H{是否 skip_stage3?}
   H -->|否| I[Stage 3: Gemini AI 解讀]
   H -->|是| J[保留規則結果，略過 AI 解讀]
@@ -69,13 +69,14 @@ flowchart LR
 `POST /api/screener/run` 使用 `X-Scheduler-Token` shared-secret 保護，預期由 Cloud Scheduler 呼叫。Request body 會指定：
 
 - `profile`：`momentum` 或 `value`。
-- `frequency`：`daily` 或 `weekly`。
-- `top_per_industry`：每個產業最後保留幾檔。
+- `frequency`：`daily` 或 `weekly`（排程上兩個 profile 都是週頻）。
+- `total_picks`：全市場最終保留幾檔（預設 10）。
+- `max_per_industry`：單一產業上限（預設 2）。
 - `skip_stage3`：是否跳過 LLM 解讀，通常用於本機驗證或省成本測試。
 - `enable_chips`：是否啟用籌碼資料。
 - `tickers`：可選，限制本次只跑特定股票池。
 
-排程腳本位於 `scripts/setup_screener_scheduler.sh`，目前設計會建立 run 與 notify 類型的 Cloud Scheduler jobs。
+排程腳本位於 `scripts/setup_screener_scheduler.sh`：兩個 profile 均為**週頻**（週日晚間 run、週一 07:00 notify），另有平日盤後的 track job 更新實績追蹤。設計理由：使用者的個股持有期為 3-6 個月，日頻報告對此持有期只是雜訊，且會讓追蹤統計的「推薦事件」被同一檔股票重複灌水。
 
 ## 3. Stage 1: Universe Filter
 
@@ -169,6 +170,7 @@ flowchart TD
 - 流動比
 - 近 4 季毛利率標準差
 - 最新一季營收 YoY
+- 最新月營收 YoY（TWSE OpenAPI，每月 10 日更新 — 比季報即時）
 - EPS TTM
 
 籌碼資料目前主要用在 Momentum profile：
@@ -227,18 +229,22 @@ Bonus：
 | --- | ------------ | ------------------------ |
 | M4  | 籌碼面正向   | 外資近 20 日累積買超為正 |
 | MB1 | 法人持續買進 | 外資連續買超 5 日以上    |
-| MB2 | 業績配合     | 最近一季營收 YoY > 10%   |
+| MB2 | 業績配合     | 最新月營收 YoY > 10%（月營收缺才用季營收） |
 | MB3 | 突破訊號     | 價格接近近 60 日高點     |
 | MB4 | RSI 健康     | RSI 14 在 50-75 區間     |
 
 Disqualifier：
 
-| ID  | 名稱              | 條件                       |
-| --- | ----------------- | -------------------------- |
-| MD1 | 估值過熱          | PE > 產業中位數 x 2.0      |
-| MD2 | 量價背離          | 價格創高但 RSI 明顯落後    |
-| MD3 | 處置股 / 全額交割 | TWSE 公布清單              |
-| MD4 | 籌碼背離          | 20 日買超，但近 5 日轉賣超 |
+| ID  | 名稱              | 條件                       | 效果                     |
+| --- | ----------------- | -------------------------- | ------------------------ |
+| MD1 | 估值過熱          | PE > 產業中位數 x 2.0      | **硬剔除**（critical）   |
+| MD2 | 量價背離          | 價格創高但 RSI 明顯落後    | **軟警示**（不影響入選） |
+| MD3 | 處置股 / 全額交割 | TWSE 公布清單              | **硬剔除**（critical）   |
+| MD4 | 籌碼背離          | 20 日買超，但近 5 日轉賣超 | **軟警示**（不影響入選） |
+
+只有 severity=critical 的規則會真正剔除；MD2/MD4 觸發時顯示為風險警示，股票仍會入選。前端在「剔除條件與風險警示」區塊以「警示・不影響入選」徽章區分兩者。
+
+MD1/VD4 使用**未消毒的原始 PE**（`pe_raw`）判斷：估值欄位的 sanity 消毒（PE > 200 → None）只作用於估值與產業統計，不能讓極端高估股以「資料不足」逃過剔除。
 
 ### 4.4 ScoringTrace
 
@@ -260,6 +266,7 @@ Disqualifier：
 - bonus 缺資料：不給加分。
 - disqualifier 缺資料：不觸發剔除。
 - 若 must pass + bonus 中資料不足規則超過 2 條，即使其他條件看起來不錯，也會強制 reject，避免靠資料缺失取得推薦資格。
+- 缺資料判定使用 `RuleCheck.missing` 結構化欄位（舊版以「資料不足」字串前綴偵測，V1/V4/M5 這類複合欄位規則會漏算）。
 
 ## 5. Stage 2.5: Valuation
 
@@ -282,6 +289,12 @@ flowchart LR
 fair_value = EPS TTM x 產業 PE 區間
 ```
 
+產業錨採**兩層設計**：優先用 TWSE 細分類（32 類，如「半導體業」，同業可比性高）；細分類內有效 PE 樣本 < 5 檔時 fallback 到 Navi-11 大類。實際使用的錨記錄在 `snapshot.industry_anchor`，前端估值帶會揭露。「公用其他」大類是異質 fallback 桶，其中位數無估值意義 → 錨落在該桶的股票一律回 unavailable。
+
+PE 只取 `trailingPE`，不 fallback `forwardPE`（兩者口徑不同，混用會污染產業中位數統計）。
+
+**呈現原則**：`implied_upside_mid_pct` 在 UI 一律稱「同業估值差」而非「上行空間」——它與入選規則（V1 估值不貴）共用同一把尺，是選擇效應下的相對估值差距，不是預期報酬。其預測力由 tracking 的 `upside_validation`（與實際 T+60/T+120 報酬的相關性）持續檢驗，若證明無預測力應下架該欄位。
+
 輸出欄位：
 
 - `fair_value_low`
@@ -294,16 +307,16 @@ fair_value = EPS TTM x 產業 PE 區間
 
 如果 EPS TTM 缺失、EPS 為負，或產業 PE 樣本不足，會回傳 unavailable 狀態，而不是產生不可靠估值。
 
-## 6. 產業內排名與候選名單
+## 6. 全市場排名與候選名單
 
 Stage 2 會回傳所有 evaluated stocks，包含 qualified 與 rejected。真正送進下一階段的是 qualified stocks。
 
-排名邏輯在 `factor_scorer._rank_within_industry()`：
+最終選股邏輯在 `factor_scorer.select_top_picks()`：**全市場排名 + 單一產業上限**（預設 top 10、單一產業 ≤ 2）。
 
-- Value profile：優先 bonus 通過數多，其次 PE 較低，再其次市值較大。
-- Momentum profile：優先 bonus 通過數多，其次 6 個月報酬較強。
+- Momentum：bonus 通過數 → 6 個月相對大盤強度。
+- Value：bonus 通過數 → PE 相對產業中位的折價（跨產業用相對值，避免拿半導體的 PE 直接跟鋼鐵比）→ 市值大者優先。
 
-最後由 `top_n_per_industry()` 每個產業取前 N 檔，避免推薦名單被少數熱門產業壟斷。
+舊版 `top_n_per_industry()`（每產業配額制）已棄用：產業配額會讓弱勢產業也保送 N 檔，選不出「全市場最棒」。產業集中風險改由 `max_per_industry` 上限控制。`_rank_within_industry()` 仍保留計算產業內排名供顯示。
 
 ## 7. Stage 3: AI 解讀層
 
@@ -333,7 +346,7 @@ AI 會輸出 `StockInterpretation`：
 - `narrative`：200-300 字投資邏輯解讀。
 - `key_context`：3-5 條質性脈絡。
 - `warnings`：2-4 條風險提醒。
-- `value_trap_check`：`no_concern`、`watch` 或 `warning`。
+- `value_trap_check`：`no_concern`（已檢查無虞）、`watch`、`warning` 或 `not_applicable`（本策略未做此檢查）。
 - `value_trap_reason`：若有價值陷阱疑慮，說明原因。
 
 AI 明確不做：
@@ -344,7 +357,7 @@ AI 明確不做：
 - 不寫信心分數。
 - 不編造 trace 裡沒有的數字。
 
-Momentum profile 會強制將 `value_trap_check` 設為 `no_concern`。
+**語意紀律**：「沒有檢查」不得冒充「已檢查無虞」。Momentum profile、skip_stage3 模式、LLM 解讀失敗的 fallback 一律填 `not_applicable`，前端以中性樣式顯示「不適用」，不給綠色。
 
 ## 8. Firestore 資料模型
 
@@ -392,13 +405,17 @@ screener_reports/{report_id}/picks/{ticker}
 - `name`
 - `industry`
 - `rank_in_industry`
-- `industry_size`
+- `rank_overall`（全市場排名）
+- `industry_size`（本期評估的同產業檔數）
 - `final_grade`
 - `verdict`
-- `snapshot`
+- `snapshot`（含 `industry_anchor`、`revenue_monthly_yoy` 等）
 - `scoring_trace`
 - `valuation`
 - `interpretation`
+- `tracking`（發布後由 track job 回填 T+5/20/60/120 實績）
+
+報告主文件另含 `evidence` 欄位（見第 12 節 Evidence Gate）。
 
 ## 9. 前端呈現
 
@@ -498,15 +515,28 @@ uv run python scripts/run_screener_local.py --top 1 \
   --tickers 2330.TW,2317.TW,2454.TW
 ```
 
-## 12. 設計重點
+## 12. Evidence Gate 與實績追蹤
 
-這個功能的核心設計是「可解釋的主動推薦」。
+**Evidence gate**（`services/screener/evidence.py`）：每個 profile 的回測證據狀態會蓋章進 report doc 的 `evidence` 欄位，前端以常駐 banner 揭露，Email 也帶一行摘要。原則：
+
+- 沒有「對口」回測（訊號頻率、持有期與實際用法一致）→ 標 `experimental`，並說明為什麼無法回測。
+- 有回測 → 不論數字好壞一律揭露：CAGR vs 大盤、最大回撤、以及倖存者偏差等警語。
+- 規則變更後必須重跑回測並同步 evidence 常數（流程見 `MOMENTUM_BACKTEST_NOTES.md` 第九章），否則寧可降回 experimental。
+
+目前狀態：Momentum 有回測（週頻 + 持有 13/26 週重疊分批，超額 +5.6pp/+2.9pp，**含倖存者偏差的樂觀上界**，2024-2026 連續落後大盤）；Value 為 experimental（規則以財報為主，缺歷史時點財報，誠實回測不可行）。
+
+**實績追蹤**（`picks_tracker.py`）：發布後 forward tracking 是統計上最乾淨的證據（事前決定、零倖存者偏差）。追蹤 T+5/20/60/**120**，其中 T+120（約 6 個月）是主要成功指標，對齊使用者持有期。聚合統計含 `upside_validation`：檢驗「同業估值差」與實際報酬的相關性。前端在樣本 n < 30 時明示「勿據此下結論」。
+
+## 13. 設計重點
+
+這個功能的核心設計是「可解釋、可驗證的主動推薦」。
 
 1. 先用便宜、可控、可測試的規則縮小股票池。
 2. 將推薦原因寫成 `ScoringTrace`，讓前端能展示每條規則的實際值與門檻。
-3. 估值由系統公式計算，避免 LLM 編造目標價。
-4. AI 只做質性解讀與風險整理，不負責決定推薦名單。
-5. 每產業取 Top N，避免推薦結果集中在單一產業。
-6. 前端把規則結果、估值、AI narrative 放在同一個 detail drawer 裡，讓使用者能快速理解「為什麼這檔被選出來」。
+3. 估值由系統公式計算，避免 LLM 編造目標價；估值差一律用相對語言（「同業估值差」），不用報酬語言（「上行空間」）。
+4. AI 只做質性解讀與風險整理，不負責決定推薦名單；「沒檢查」不冒充「檢查過沒問題」。
+5. 全市場排名選出最強標的，產業集中風險用 `max_per_industry` 上限控制。
+6. 策略證據（回測或 experimental 標記）常駐揭露；發布後實績持續追蹤並回頭檢驗估值欄位的預測力。
+7. 前端把規則結果、估值、AI narrative、實績放在同一個 detail drawer 裡，讓使用者能快速理解「為什麼這檔被選出來、選出來之後表現如何」。
 
-一句話總結：Navi Screener 是一條「排程掃市場 → 規則引擎篩選 → 系統估值 → AI 解讀 → Firestore 儲存 → 前端與 Email 呈現」的主動式選股管線。
+一句話總結：Navi Screener 是一條「排程掃市場 → 規則引擎篩選 → 系統估值 → AI 解讀 → Firestore 儲存 → 前端與 Email 呈現 → 實績回饋驗證」的主動式選股管線。

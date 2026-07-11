@@ -15,6 +15,7 @@ import type {
   RuleCheck,
   ScreenerFrequency,
   ScreenerProfile,
+  StrategyEvidence,
   TrackingSummary,
   ValueTrapCheck,
 } from "@/types/screener";
@@ -121,11 +122,14 @@ function gradeStyle(grade: FinalGrade): {
 function valueTrapStyle(c: ValueTrapCheck | undefined): { text: string; label: string } {
   switch (c) {
     case "no_concern":
-      return { text: "text-emerald-400", label: "無重大疑慮" };
+      return { text: "text-emerald-400", label: "已檢查・無重大疑慮" };
     case "watch":
       return { text: "text-amber-400", label: "觀察" };
     case "warning":
       return { text: "text-red-400", label: "疑似價值陷阱" };
+    case "not_applicable":
+      // 「沒有檢查」與「已檢查無虞」是兩回事 —— 中性呈現，不給綠色
+      return { text: "text-slate-400", label: "不適用（本策略未檢查）" };
     default:
       // 未知列舉值以警示色呈現（寧可誤警不可漏警）；無值維持中性
       return c
@@ -301,7 +305,9 @@ function PickCard({ pick, onClick }: { pick: PickDoc; onClick: () => void }) {
             </span>
           </div>
           <p className="text-xs text-slate-500 mt-0.5">
-            #{pick.rank_in_industry}/{pick.industry_size} · {pick.industry}
+            {pick.rank_overall ? `全市場 #${pick.rank_overall} · ` : ""}
+            {pick.industry}（同業評估 {pick.industry_size} 檔中第{" "}
+            {pick.rank_in_industry}）
           </p>
         </div>
         <GradeBadge grade={pick.final_grade} />
@@ -318,11 +324,13 @@ function PickCard({ pick, onClick }: { pick: PickDoc; onClick: () => void }) {
           <p className="text-slate-200">${fmtNum(pick.snapshot.price)}</p>
         </div>
         <div>
-          <p className="text-slate-600">合理中值</p>
+          <p className="text-slate-600">同業推算中值</p>
           <p className="text-slate-200">${fmtNum(v?.fair_value_mid)}</p>
         </div>
         <div>
-          <p className="text-slate-600">上行</p>
+          {/* 刻意不用「上行/upside」報酬語言：此數字是相對同業的估值差
+              （與入選規則同一把尺，非預期報酬），預測力由 tracking 檢驗 */}
+          <p className="text-slate-600">同業估值差</p>
           <p
             className={
               upside == null
@@ -347,13 +355,96 @@ function PickCard({ pick, onClick }: { pick: PickDoc; onClick: () => void }) {
   );
 }
 
+// ── EvidenceBanner（策略證據揭露 — evidence gate）─────────────────────────
+
+function EvidenceBanner({ evidence }: { evidence: StrategyEvidence | null | undefined }) {
+  const [expanded, setExpanded] = useState(false);
+  if (!evidence) return null;
+
+  const isBacktested = evidence.status === "backtested";
+  const m13 = evidence.metrics?.hold_13w;
+  const m26 = evidence.metrics?.hold_26w;
+
+  return (
+    <div
+      className="rounded-2xl p-4 mb-6 text-xs leading-relaxed"
+      style={{
+        background: isBacktested
+          ? "rgba(245, 158, 11, 0.08)"
+          : "rgba(148, 163, 184, 0.08)",
+        border: isBacktested
+          ? "1px solid rgba(245, 158, 11, 0.3)"
+          : "1px solid rgba(148, 163, 184, 0.3)",
+      }}
+    >
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div className="flex-1 min-w-[16rem]">
+          <p
+            className={`font-semibold mb-1 ${
+              isBacktested ? "text-amber-300" : "text-slate-300"
+            }`}
+          >
+            📋 策略證據：{evidence.headline}
+          </p>
+          {isBacktested && m13 && (
+            <p className="text-slate-400">
+              回測 {evidence.backtest_period}・持有 13 週：年化{" "}
+              <span className="text-slate-200">
+                {fmtSignedPct(m13.strategy_cagr)}
+              </span>{" "}
+              vs 大盤 {fmtSignedPct(m13.benchmark_cagr)}（超額{" "}
+              <span className={pnlColor(m13.excess_cagr)}>
+                {fmtSignedPct(m13.excess_cagr)}
+              </span>
+              ）
+              {m26 && (
+                <>
+                  ・持有 26 週超額{" "}
+                  <span className={pnlColor(m26.excess_cagr)}>
+                    {fmtSignedPct(m26.excess_cagr)}
+                  </span>
+                </>
+              )}
+              ・最大回撤 {fmtSignedPct(m13.max_drawdown)}
+            </p>
+          )}
+          {!isBacktested && evidence.caveats?.[0] && (
+            <p className="text-slate-400">{evidence.caveats[0]}</p>
+          )}
+        </div>
+        <button
+          onClick={() => setExpanded(!expanded)}
+          className="text-slate-400 hover:text-slate-200 whitespace-nowrap"
+        >
+          {expanded ? "收合 ▲" : "完整揭露 ▼"}
+        </button>
+      </div>
+      {expanded && (
+        <div className="mt-3 pt-3 border-t border-slate-700/40">
+          {evidence.method && (
+            <p className="text-slate-500 mb-2">回測方法：{evidence.method}</p>
+          )}
+          <ul className="list-disc list-inside space-y-1 text-slate-400">
+            {evidence.caveats.map((c, i) => (
+              <li key={i}>{c}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── TrackingPanel（推薦實績追蹤）───────────────────────────────────────────
 
-const TRACKING_HORIZONS: { key: string; label: string }[] = [
+const TRACKING_HORIZONS: { key: string; label: string; primary?: boolean }[] = [
   { key: "t5", label: "T+5" },
   { key: "t20", label: "T+20" },
   { key: "t60", label: "T+60" },
+  { key: "t120", label: "T+120", primary: true }, // ≈ 6 個月，主要成功指標
 ];
+
+const MIN_RELIABLE_SAMPLE = 30;
 
 function TrackingPanel({ profile }: { profile: ScreenerProfile }) {
   const [summary, setSummary] = useState<TrackingSummary | null>(null);
@@ -380,8 +471,8 @@ function TrackingPanel({ profile }: { profile: ScreenerProfile }) {
           {summary.pick_events} 次推薦事件 · {summary.report_count} 份報告
         </span>
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        {TRACKING_HORIZONS.map(({ key, label }) => {
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {TRACKING_HORIZONS.map(({ key, label, primary }) => {
           const h = summary.horizons?.[key];
           if (!h || h.n === 0) {
             return (
@@ -390,21 +481,31 @@ function TrackingPanel({ profile }: { profile: ScreenerProfile }) {
                 className="rounded-xl p-3"
                 style={{ background: "var(--overlay-bg)" }}
               >
-                <p className="text-[11px] text-slate-500 mb-1">{label} 交易日</p>
+                <p className="text-[11px] text-slate-500 mb-1">
+                  {label} 交易日{primary ? "・主指標" : ""}
+                </p>
                 <p className="text-sm text-slate-600">樣本累積中…</p>
               </div>
             );
           }
+          const lowSample = h.n < MIN_RELIABLE_SAMPLE;
           return (
             <div
               key={key}
               className="rounded-xl p-3"
-              style={{ background: "var(--overlay-bg)" }}
+              style={{
+                background: "var(--overlay-bg)",
+                border: primary ? "1px solid rgba(99,102,241,0.35)" : undefined,
+              }}
             >
               <p className="text-[11px] text-slate-500 mb-1">
-                {label} 交易日 · n={h.n}
+                {label} 交易日{primary ? "・主指標" : ""} · n={h.n}
               </p>
-              <p className={`text-lg font-semibold ${pnlColor(h.avg_return)}`}>
+              <p
+                className={`text-lg font-semibold ${
+                  lowSample ? "text-slate-400" : pnlColor(h.avg_return)
+                }`}
+              >
                 {fmtSignedPct(h.avg_return)}
               </p>
               <p className="text-[11px] text-slate-500 mt-1">
@@ -412,22 +513,49 @@ function TrackingPanel({ profile }: { profile: ScreenerProfile }) {
                 {h.avg_excess != null && (
                   <>
                     {" "}· 超額大盤{" "}
-                    <span className={pnlColor(h.avg_excess)}>
+                    <span
+                      className={lowSample ? "text-slate-500" : pnlColor(h.avg_excess)}
+                    >
                       {fmtSignedPct(h.avg_excess)}
                     </span>
                   </>
                 )}
               </p>
+              {lowSample && (
+                <p className="text-[10px] text-amber-400/80 mt-1">
+                  樣本 &lt; {MIN_RELIABLE_SAMPLE}，勿據此下結論
+                </p>
+              )}
             </div>
           );
         })}
       </div>
+      <UpsideValidationNote summary={summary} />
       {summary.methodology && (
         <p className="text-[11px] text-slate-600 mt-3 leading-relaxed">
           {summary.methodology}
         </p>
       )}
     </div>
+  );
+}
+
+function UpsideValidationNote({ summary }: { summary: TrackingSummary }) {
+  // 「上行空間」欄位的誠實檢驗：與實際報酬的相關性。樣本夠才顯示。
+  const v = summary.upside_validation?.t120 ?? summary.upside_validation?.t60;
+  if (!v || v.n < MIN_RELIABLE_SAMPLE || v.pearson_r == null) return null;
+  const weak = Math.abs(v.pearson_r) < 0.1;
+  return (
+    <p className="text-[11px] mt-3 leading-relaxed text-slate-500">
+      🔬 「上行空間」預測力檢驗（n={v.n}）：與實際報酬相關係數 r=
+      {v.pearson_r.toFixed(2)}
+      {weak && (
+        <span className="text-amber-400/90">
+          {" "}
+          — 目前看不出預測力，該數字請當「相對同業折價」而非預期報酬
+        </span>
+      )}
+    </p>
   );
 }
 
@@ -440,7 +568,9 @@ function RuleRow({ c }: { c: RuleCheck }) {
     : c.severity === "critical"
       ? "text-red-400"
       : "text-amber-400";
-  const isMissing = String(c.actual ?? "").startsWith("資料不足");
+  // 優先用結構化欄位；舊報告無此欄位時 fallback 字串前綴
+  const isMissing = c.missing ?? String(c.actual ?? "").startsWith("資料不足");
+  const isSoftWarning = !c.passed && c.severity === "warning";
   return (
     <div
       className="flex items-start gap-3 py-2 px-3 rounded-lg text-xs"
@@ -456,6 +586,11 @@ function RuleRow({ c }: { c: RuleCheck }) {
           <span className="text-[10px] text-slate-500 font-mono">
             {c.rule_id}
           </span>
+          {isSoftWarning && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full border border-amber-500/40 bg-amber-400/10 text-amber-300">
+              警示・不影響入選
+            </span>
+          )}
         </div>
         <p className="text-slate-500 mt-0.5">{c.rule}</p>
         <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1 text-[11px]">
@@ -552,7 +687,7 @@ function ValuationBand({ pick }: { pick: PickDoc }) {
               : "text-red-400"
           }`}
         >
-          上行 {fmtSigned(v?.implied_upside_mid_pct)}
+          同業估值差 {fmtSigned(v?.implied_upside_mid_pct)}
         </span>
       </div>
 
@@ -620,7 +755,16 @@ function ValuationBand({ pick }: { pick: PickDoc }) {
         </div>
       </div>
 
-      {v?.notes && <p className="text-[11px] text-slate-500 mt-2">{v.notes}</p>}
+      <p className="text-[11px] text-slate-600 mt-2">
+        以同業 PE 區間推算（
+        {pick.snapshot.industry_anchor || "產業中位"}
+        ），為相對估值參考、非目標價；「同業估值差」非預期報酬。
+      </p>
+      {v?.notes && (
+        <p className="text-[11px] text-slate-500 mt-1">
+          {Array.isArray(v.notes) ? v.notes.join("；") : v.notes}
+        </p>
+      )}
     </div>
   );
 }
@@ -648,9 +792,9 @@ function PickDetailDrawer({
 我看到 Screener 給出以下評估：
 - 等級：${pick.final_grade}
 - 投資觀點：${interp?.narrative || "（無）"}
-- 估值中值：${pick.valuation?.fair_value_mid ?? "—"}（上行 ${
+- 同業推算估值中值：${pick.valuation?.fair_value_mid ?? "—"}（相對同業估值差 ${
       upside != null ? upside.toFixed(1) + "%" : "—"
-    }）
+    }，非預期報酬）
 - 主要警示：${(interp?.warnings || []).join("、") || "無"}
 - 價值陷阱檢查：${trapStyle.label}
 請結合最新基本面、技術面、籌碼面，告訴我這個論點目前是否仍成立？`;
@@ -767,12 +911,13 @@ function PickDetailDrawer({
                 經過 {pick.tracking.trading_days_elapsed ?? 0} 交易日
               </span>
             </div>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
               {[
                 { label: "目前", v: pick.tracking.return_current },
                 { label: "T+5", v: pick.tracking.return_t5 },
                 { label: "T+20", v: pick.tracking.return_t20 },
                 { label: "T+60", v: pick.tracking.return_t60 },
+                { label: "T+120", v: pick.tracking.return_t120 },
               ].map(({ label, v }) => (
                 <div key={label}>
                   <p className="text-slate-600">{label}</p>
@@ -899,12 +1044,22 @@ function PickDetailDrawer({
             checks={t?.bonus?.checks ?? []}
           />
           <CheckSection
-            title="剔除條件 (Disqualifier)"
-            summary={
-              t?.disqualifier?.triggered.length
-                ? `已觸發：${t.disqualifier.triggered.join(", ")}`
-                : "未觸發"
-            }
+            title="剔除條件與風險警示 (Disqualifier)"
+            summary={(() => {
+              const checks = t?.disqualifier?.checks ?? [];
+              const hard = t?.disqualifier?.triggered.length ?? 0;
+              const soft = checks.filter(
+                (c) => !c.passed && c.severity === "warning",
+              ).length;
+              const parts: string[] = [];
+              parts.push(
+                hard
+                  ? `硬剔除已觸發：${t!.disqualifier.triggered.join(", ")}`
+                  : "硬剔除未觸發",
+              );
+              if (soft) parts.push(`軟警示 ${soft} 條（不影響入選）`);
+              return parts.join(" · ");
+            })()}
             checks={t?.disqualifier?.checks ?? []}
           />
         </section>
@@ -1271,6 +1426,17 @@ export default function Screener() {
 
       {report && !loading && (
         <>
+          {/* Evidence gate：策略證據常駐揭露 */}
+          <EvidenceBanner evidence={report.report.evidence} />
+
+          {profile === "value" && (
+            <p className="text-[11px] text-slate-500 mb-4 leading-relaxed">
+              ℹ️ Value Hunter 的財務安全規則（負債比 &lt;
+              60%、流動比）不適用於金融保險業的負債結構，金融股不會出現在本名單
+              —— 這是規則設計的限制，不代表金融股本期不值得投資。
+            </p>
+          )}
+
           {/* Report meta */}
           <div
             className="rounded-2xl p-4 md:p-5 mb-6 flex flex-wrap gap-4 items-center justify-between"

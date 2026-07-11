@@ -8,8 +8,12 @@
   - 追蹤基準：報告日的還原收盤價（yfinance auto_adjust）。screener 於
     盤後產報，snapshot.price ≈ 當日收盤；改用還原價是為了讓後續報酬
     含股利且與比較序列自洽（除息不會造成假下跌）。
-  - 追蹤節點：T+5 / T+20 / T+60 交易日，另含最新報酬與期間最大漲跌幅。
+  - 追蹤節點：T+5 / T+20 / T+60 / T+120 交易日，另含最新報酬與期間最大漲跌幅。
+    T+120（約 6 個月）是主要成功指標 —— 對齊使用者「個股持有 3-6 個月」的用法；
+    T+5/T+20 僅供參考。
   - 相對基準：^TWII 同視窗報酬 → excess return。
+  - 上行空間驗證：聚合時回歸 valuation.implied_upside_mid_pct 與實際
+    T+60/T+120 報酬的相關性 —— 若證明無預測力，該欄位應從 UI 移除。
   - 結果寫回 pick doc 的 `tracking` 欄位；報告全部 picks 追滿 T+60 後
     在報告 doc 標記 `tracking_complete=True`，之後不再重算。
   - 聚合統計寫入 `screener_tracking/{profile}`，供前端展示。
@@ -32,7 +36,7 @@ from services.firestore_client import get_db
 logger = logging.getLogger(__name__)
 
 BENCHMARK = "^TWII"
-HORIZONS: dict[str, int] = {"t5": 5, "t20": 20, "t60": 60}
+HORIZONS: dict[str, int] = {"t5": 5, "t20": 20, "t60": 60, "t120": 120}
 FINAL_HORIZON_DAYS = max(HORIZONS.values())
 REPORTS_COLLECTION = "screener_reports"
 TRACKING_COLLECTION = "screener_tracking"
@@ -156,7 +160,46 @@ def aggregate_tracking(picks: list[dict[str, Any]]) -> dict[str, Any]:
         "pick_events": len(tracked),
         "horizons": horizons,
         "by_grade": by_grade,
+        "upside_validation": _validate_upside(picks),
     }
+
+
+def _validate_upside(
+    picks: list[dict[str, Any]], horizons: tuple[str, ...] = ("t60", "t120"),
+) -> dict[str, Any]:
+    """驗證「上行空間」欄位的預測力：implied_upside vs 實際報酬.
+
+    這是對估值層的誠實檢驗 —— implied_upside 由「產業 PE 中位 × EPS」推出，
+    與入選規則共用同一把尺（選擇效應），若與實際報酬無相關性，
+    就不該在 UI 以報酬語言呈現。
+    """
+    out: dict[str, Any] = {}
+    for key in horizons:
+        pairs = [
+            (
+                float(p["valuation"]["implied_upside_mid_pct"]),
+                float(p["tracking"][f"return_{key}"]),
+            )
+            for p in picks
+            if (p.get("valuation") or {}).get("implied_upside_mid_pct") is not None
+            and (p.get("tracking") or {}).get(f"return_{key}") is not None
+        ]
+        if len(pairs) < 10:
+            out[key] = {"n": len(pairs)}  # 樣本不足不給結論
+            continue
+        upsides = pd.Series([u for u, _ in pairs])
+        rets = pd.Series([r for _, r in pairs])
+        median_upside = float(upsides.median())
+        high = rets[upsides > median_upside]
+        low = rets[upsides <= median_upside]
+        corr = float(upsides.corr(rets))
+        out[key] = {
+            "n": len(pairs),
+            "pearson_r": round(corr, 4) if pd.notna(corr) else None,
+            "high_upside_avg_return": round(float(high.mean()), 6) if len(high) else None,
+            "low_upside_avg_return": round(float(low.mean()), 6) if len(low) else None,
+        }
+    return out
 
 
 # ── Firestore + yfinance orchestration ──────────────────────────────────────
@@ -326,9 +369,10 @@ def rebuild_tracking_summary(profile: str) -> dict[str, Any]:
             "last_report_id": reports[-1]["report_id"] if reports else None,
             "updated_at": datetime.now().isoformat(),
             "methodology": (
-                "以報告日還原收盤價為基準，追蹤 T+5/T+20/T+60 交易日報酬；"
-                "超額報酬相對 ^TWII 同視窗。統計單位為推薦事件，"
-                "同檔多次入選會重複計入。"
+                "以報告日還原收盤價為基準，追蹤 T+5/T+20/T+60/T+120 交易日報酬"
+                "（T+120 ≈ 6 個月，為主要成功指標）；超額報酬相對 ^TWII 同視窗。"
+                "統計單位為推薦事件，同檔多次入選會重複計入。"
+                "upside_validation 檢驗「上行空間」與實際報酬的相關性。"
             ),
         }
     )
