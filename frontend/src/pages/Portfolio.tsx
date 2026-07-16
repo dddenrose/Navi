@@ -16,81 +16,71 @@ import { fmt, pnlColor, pnlBg } from "@/lib/format";
 import TickerAutocomplete from "@/components/TickerAutocomplete";
 import { usePrivacyStore } from "@/store/privacyStore";
 
-// ── Lock glyph（開/關鎖頭）──────────────────────────────────────────────────
+// ── Eye glyph（顯示/隱藏金額切換）─────────────────────────────────────────────
 
-function LockGlyph({
-  open,
+function EyeGlyph({
+  off,
   className = "h-4 w-4",
 }: {
-  open: boolean;
+  /** true = 目前隱藏中（顯示劃線眼睛，提示點擊可顯示） */
+  off: boolean;
   className?: string;
 }) {
   return (
     <svg
-      viewBox="0 0 20 20"
-      fill="currentColor"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.6}
+      strokeLinecap="round"
+      strokeLinejoin="round"
       className={className}
       aria-hidden="true"
     >
-      {open ? (
-        // 開鎖
-        <path
-          fillRule="evenodd"
-          d="M10 1a4.5 4.5 0 00-4.5 4.5 1 1 0 001 1 1 1 0 001-1 2.5 2.5 0 015 0V8H5a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2v-6a2 2 0 00-2-2h-2.5V5.5A4.5 4.5 0 0010 1z"
-          clipRule="evenodd"
-        />
+      {off ? (
+        // 劃線眼睛：目前隱藏中
+        <>
+          <path d="M9.88 5.09A9.6 9.6 0 0 1 12 4.85c4.64 0 8.57 3.02 9.96 7.15a11.9 11.9 0 0 1-2.28 3.63M6.16 6.16A11.9 11.9 0 0 0 2.04 12c1.39 4.13 5.32 7.15 9.96 7.15a9.6 9.6 0 0 0 4.2-.96" />
+          <path d="M10.58 10.58a2 2 0 0 0 2.83 2.83" />
+          <path d="M3 3l18 18" />
+        </>
       ) : (
-        // 上鎖
-        <path
-          fillRule="evenodd"
-          d="M10 1a4.5 4.5 0 00-4.5 4.5V8H5a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2v-6a2 2 0 00-2-2h-.5V5.5A4.5 4.5 0 0010 1zm3 7V5.5a3 3 0 10-6 0V8h6z"
-          clipRule="evenodd"
-        />
+        // 眼睛：目前顯示中
+        <>
+          <path d="M2.04 12C3.43 7.87 7.36 4.85 12 4.85s8.57 3.02 9.96 7.15c-1.39 4.13-5.32 7.15-9.96 7.15S3.43 16.13 2.04 12z" />
+          <circle cx="12" cy="12" r="2.6" />
+        </>
       )}
     </svg>
   );
 }
 
-// ── Lock overlay（上鎖時蓋在損益/持股區的毛玻璃遮罩）────────────────────────
+// ── 隱私遮罩圓點（鎖定時取代金額，銀行 App 風格；只遮數字、不蓋整區）──────────
 
-function LockOverlay({ onUnlock }: { onUnlock: () => void }) {
+/**
+ * 鎖定時顯示的一串圓點，取代真實數字。
+ * - 保留幣別/百分比符號，維持「這裡有個金額被藏起來」的語意
+ * - 色調中性 slate-500、tabular-nums 對齊、淡入、不可選取
+ */
+function Masked({
+  prefix = "",
+  suffix = "",
+  count = 6,
+}: {
+  prefix?: string;
+  suffix?: string;
+  count?: number;
+}) {
   return (
-    <div
-      className="absolute inset-0 z-20 flex justify-center"
-      style={{
-        background: "var(--modal-overlay)",
-        backdropFilter: "blur(14px)",
-        WebkitBackdropFilter: "blur(14px)",
-      }}
+    <span
+      className="animate-fade-in select-none tabular-nums text-slate-500"
+      aria-label="金額已隱藏"
+      title="已鎖定，點右上角眼睛顯示"
     >
-      <div
-        className="sticky top-24 my-10 flex h-fit max-w-sm flex-col items-center rounded-2xl px-8 py-7 text-center"
-        style={{
-          background: "var(--bg-surface)",
-          border: "1px solid var(--border)",
-        }}
-      >
-        <div
-          className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl text-slate-100"
-          style={{ background: "rgba(99,102,241,0.18)" }}
-          aria-hidden="true"
-        >
-          <LockGlyph open={false} className="h-5 w-5" />
-        </div>
-        <h2 className="text-base font-semibold text-white">投資組合已鎖定</h2>
-        <p className="mt-2 text-sm leading-6 text-slate-500">
-          損益與持股已隱藏，避免旁人不經意看到。點擊下方按鈕即可顯示。
-        </p>
-        <button
-          onClick={onUnlock}
-          className="mt-5 inline-flex items-center gap-1.5 rounded-xl px-5 py-2.5 text-sm font-medium text-white transition-opacity hover:opacity-90"
-          style={{ background: "linear-gradient(135deg,#6366f1,#8b5cf6)" }}
-        >
-          <LockGlyph open />
-          顯示損益
-        </button>
-      </div>
-    </div>
+      {prefix}
+      <span className="tracking-[0.18em]">{"•".repeat(count)}</span>
+      {suffix}
+    </span>
   );
 }
 
@@ -636,11 +626,13 @@ function EditHoldingModal({
 function HoldingRow({
   holding,
   totalValue,
+  locked,
   onEdit,
   onDelete,
 }: {
   holding: HoldingWithPrice;
   totalValue: number;
+  locked: boolean;
   onEdit: (holding: HoldingWithPrice) => void;
   onDelete: (id: string) => void;
 }) {
@@ -659,10 +651,14 @@ function HoldingRow({
         </div>
       </td>
       <td className="py-4 px-3 text-right text-sm text-slate-300 tabular-nums">
-        {fmt(holding.shares)}
+        {locked ? <Masked count={4} /> : fmt(holding.shares)}
       </td>
       <td className="py-4 px-3 text-right text-sm text-slate-400 tabular-nums">
-        ${fmt(holding.avg_cost, 2)}
+        {locked ? (
+          <Masked prefix="$" count={5} />
+        ) : (
+          <>${fmt(holding.avg_cost, 2)}</>
+        )}
       </td>
       <td className="py-4 px-3 text-right text-sm text-slate-200 tabular-nums">
         {holding.current_price != null
@@ -670,20 +666,26 @@ function HoldingRow({
           : "—"}
       </td>
       <td className="py-4 px-3 text-right text-sm text-slate-300 tabular-nums">
-        ${fmt(holding.market_value)}
+        {locked ? <Masked prefix="$" /> : <>${fmt(holding.market_value)}</>}
       </td>
       <td
-        className={`py-4 px-3 text-right text-sm tabular-nums ${pnlColor(holding.pnl)}`}
+        className={`py-4 px-3 text-right text-sm tabular-nums ${locked ? "text-slate-500" : pnlColor(holding.pnl)}`}
       >
-        {holding.pnl >= 0 ? "+" : ""}
-        {fmt(holding.pnl)}
-        <span className="text-xs ml-1 opacity-70">
-          ({holding.pnl_percent >= 0 ? "+" : ""}
-          {holding.pnl_percent.toFixed(2)}%)
-        </span>
+        {locked ? (
+          <Masked prefix="$" count={5} />
+        ) : (
+          <>
+            {holding.pnl >= 0 ? "+" : ""}
+            {fmt(holding.pnl)}
+            <span className="text-xs ml-1 opacity-70">
+              ({holding.pnl_percent >= 0 ? "+" : ""}
+              {holding.pnl_percent.toFixed(2)}%)
+            </span>
+          </>
+        )}
       </td>
       <td className="py-4 px-3 text-right text-sm text-slate-500 tabular-nums">
-        {pct.toFixed(1)}%
+        {locked ? <Masked suffix="%" count={3} /> : <>{pct.toFixed(1)}%</>}
       </td>
       <td className="py-4 px-3 text-right whitespace-nowrap">
         <button
@@ -719,7 +721,6 @@ export default function Portfolio() {
   const [error, setError] = useState("");
   const pnlLocked = usePrivacyStore((s) => s.pnlLocked);
   const toggleLock = usePrivacyStore((s) => s.toggleLock);
-  const unlock = usePrivacyStore((s) => s.unlock);
 
   const fetchPortfolio = useCallback(async () => {
     try {
@@ -806,11 +807,11 @@ export default function Portfolio() {
                 background: "var(--overlay-bg)",
                 border: "1px solid var(--border)",
               }}
-              title={pnlLocked ? "顯示損益與持股" : "鎖定損益與持股"}
+              title={pnlLocked ? "顯示損益與持股金額" : "隱藏損益與持股金額"}
               aria-pressed={pnlLocked}
             >
-              <LockGlyph open={!pnlLocked} />
-              {pnlLocked ? "已鎖定" : "鎖定"}
+              <EyeGlyph off={pnlLocked} />
+              {pnlLocked ? "顯示金額" : "隱藏金額"}
             </button>
           )}
           <button
@@ -836,12 +837,7 @@ export default function Portfolio() {
         </div>
       </div>
 
-      {/* 損益 / 持股 / 交易 —— 上鎖時整區以毛玻璃遮罩隱藏 */}
-      <div className="relative">
-        <div
-          className={pnlLocked && hasHoldings ? "select-none" : undefined}
-          inert={pnlLocked && !!hasHoldings}
-        >
+      {/* 損益 / 持股 / 交易 —— 鎖定時各金額欄位以圓點遮罩（見 Masked、locked prop） */}
       {/* Summary cards */}
       {hasHoldings && summary && (
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4 mb-8 md:mb-10">
@@ -854,7 +850,7 @@ export default function Portfolio() {
           >
             <p className="text-xs text-slate-500 mb-2">總市值</p>
             <p className="text-lg font-semibold text-white tabular-nums">
-              ${fmt(summary.total_value)}
+              {pnlLocked ? <Masked prefix="$" /> : <>${fmt(summary.total_value)}</>}
             </p>
           </div>
           <div
@@ -866,42 +862,54 @@ export default function Portfolio() {
           >
             <p className="text-xs text-slate-500 mb-2">總成本</p>
             <p className="text-lg font-semibold text-slate-300 tabular-nums">
-              ${fmt(summary.total_cost)}
+              {pnlLocked ? <Masked prefix="$" /> : <>${fmt(summary.total_cost)}</>}
             </p>
           </div>
           <div
             className="rounded-2xl p-5"
             style={{
-              background: pnlBg(summary.total_pnl),
+              background: pnlLocked ? "var(--card-bg)" : pnlBg(summary.total_pnl),
               border: "1px solid var(--border)",
             }}
           >
             <p className="text-xs text-slate-500 mb-2">總損益</p>
             <p
-              className={`text-lg font-semibold tabular-nums ${pnlColor(summary.total_pnl)}`}
+              className={`text-lg font-semibold tabular-nums ${pnlLocked ? "text-slate-500" : pnlColor(summary.total_pnl)}`}
             >
-              {summary.total_pnl >= 0 ? "+" : ""}${fmt(summary.total_pnl)}
+              {pnlLocked ? (
+                <Masked prefix="$" />
+              ) : (
+                <>
+                  {summary.total_pnl >= 0 ? "+" : ""}${fmt(summary.total_pnl)}
+                </>
+              )}
             </p>
           </div>
           <div
             className="rounded-2xl p-5"
             style={{
-              background: pnlBg(summary.total_pnl),
+              background: pnlLocked ? "var(--card-bg)" : pnlBg(summary.total_pnl),
               border: "1px solid var(--border)",
             }}
           >
             <p className="text-xs text-slate-500 mb-2">報酬率</p>
             <p
-              className={`text-lg font-semibold tabular-nums ${pnlColor(summary.total_pnl_percent)}`}
+              className={`text-lg font-semibold tabular-nums ${pnlLocked ? "text-slate-500" : pnlColor(summary.total_pnl_percent)}`}
             >
-              {summary.total_pnl_percent >= 0 ? "+" : ""}
-              {summary.total_pnl_percent.toFixed(2)}%
+              {pnlLocked ? (
+                <Masked suffix="%" count={4} />
+              ) : (
+                <>
+                  {summary.total_pnl_percent >= 0 ? "+" : ""}
+                  {summary.total_pnl_percent.toFixed(2)}%
+                </>
+              )}
             </p>
           </div>
           <div
             className="rounded-2xl p-5"
             style={{
-              background: pnlBg(summary.realized_pnl),
+              background: pnlLocked ? "var(--card-bg)" : pnlBg(summary.realized_pnl),
               border: "1px solid var(--border)",
             }}
           >
@@ -909,10 +917,16 @@ export default function Portfolio() {
               已實現損益（含費稅）
             </p>
             <p
-              className={`text-lg font-semibold tabular-nums ${pnlColor(summary.realized_pnl)}`}
+              className={`text-lg font-semibold tabular-nums ${pnlLocked ? "text-slate-500" : pnlColor(summary.realized_pnl)}`}
             >
-              {summary.realized_pnl >= 0 ? "+" : ""}$
-              {fmt(summary.realized_pnl)}
+              {pnlLocked ? (
+                <Masked prefix="$" />
+              ) : (
+                <>
+                  {summary.realized_pnl >= 0 ? "+" : ""}$
+                  {fmt(summary.realized_pnl)}
+                </>
+              )}
             </p>
           </div>
         </div>
@@ -960,6 +974,7 @@ export default function Portfolio() {
                       key={h.id}
                       holding={h}
                       totalValue={summary.total_value}
+                      locked={pnlLocked}
                       onEdit={setEditing}
                       onDelete={handleDelete}
                     />
@@ -1059,24 +1074,36 @@ export default function Portfolio() {
                       </span>
                     </td>
                     <td className="py-3 px-3 text-right text-sm text-slate-300 tabular-nums">
-                      {fmt(t.shares)}
+                      {pnlLocked ? <Masked count={4} /> : fmt(t.shares)}
                     </td>
                     <td className="py-3 px-3 text-right text-sm text-slate-300 tabular-nums">
                       ${fmt(t.price, 2)}
                     </td>
                     <td className="py-3 px-3 text-right text-xs text-slate-500 tabular-nums">
-                      ${fmt(t.fee + t.tax, 0)}
+                      {pnlLocked ? (
+                        <Masked prefix="$" count={4} />
+                      ) : (
+                        <>${fmt(t.fee + t.tax, 0)}</>
+                      )}
                     </td>
                     <td
                       className={`py-3 px-3 text-right text-sm tabular-nums ${
-                        t.action === "sell"
-                          ? pnlColor(t.realized_pnl)
-                          : "text-slate-600"
+                        pnlLocked
+                          ? "text-slate-500"
+                          : t.action === "sell"
+                            ? pnlColor(t.realized_pnl)
+                            : "text-slate-600"
                       }`}
                     >
-                      {t.action === "sell"
-                        ? `${t.realized_pnl >= 0 ? "+" : ""}${fmt(t.realized_pnl)}`
-                        : "—"}
+                      {t.action === "sell" ? (
+                        pnlLocked ? (
+                          <Masked prefix="$" count={5} />
+                        ) : (
+                          `${t.realized_pnl >= 0 ? "+" : ""}${fmt(t.realized_pnl)}`
+                        )
+                      ) : (
+                        "—"
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -1085,9 +1112,6 @@ export default function Portfolio() {
           </div>
         </div>
       )}
-        </div>
-        {hasHoldings && pnlLocked && <LockOverlay onUnlock={unlock} />}
-      </div>
 
       <p className="text-xs text-slate-500 leading-relaxed mt-6">
         ⚠️ 損益以台股牌告費率（手續費 0.1425%、賣出證交稅
