@@ -6,12 +6,10 @@ export default function AdminLogs() {
   const [logs, setLogs] = useState<UsageLog[]>([]);
   const [uid, setUid] = useState("");
   const [blocked, setBlocked] = useState<"" | "true" | "false">("");
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const load = () => {
-    setLoading(true);
-    setError(null);
     adminListLogs({
       uid: uid || undefined,
       blocked: blocked === "" ? undefined : blocked === "true",
@@ -22,8 +20,16 @@ export default function AdminLogs() {
       .finally(() => setLoading(false));
   };
 
+  const search = () => {
+    setLoading(true);
+    setError(null);
+    load();
+  };
+
   useEffect(() => {
-    load(); /* eslint-disable-next-line */
+    // 僅在掛載時載入一次；篩選條件改變後由「重新查詢」按鈕觸發 load()
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
@@ -53,7 +59,7 @@ export default function AdminLogs() {
           </option>
         </select>
         <button
-          onClick={load}
+          onClick={search}
           className="px-3 py-1.5 rounded-lg text-xs text-white"
           style={{ background: "linear-gradient(135deg,#6366f1,#8b5cf6)" }}
         >

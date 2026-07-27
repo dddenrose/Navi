@@ -8,7 +8,6 @@ export default function AdminDashboard() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    setLoading(true);
     adminGetUsageSummary(30)
       .then(setData)
       .catch((e) => setError(String(e)))

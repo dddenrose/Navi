@@ -10,7 +10,6 @@ export default function AdminQuotaConfigs() {
   const [savedTier, setSavedTier] = useState<string | null>(null);
 
   const load = () => {
-    setLoading(true);
     adminListQuotaConfigs()
       .then((r) => setConfigs(r.configs))
       .catch((e) => setError(String(e)))
@@ -39,6 +38,7 @@ export default function AdminQuotaConfigs() {
       setSavedTier(tier);
       setEdits((p) => ({ ...p, [tier]: {} }));
       setTimeout(() => setSavedTier(null), 2500);
+      setLoading(true);
       load();
     } catch (e) {
       setError(String(e));

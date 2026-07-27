@@ -451,7 +451,6 @@ function TrackingPanel({ profile }: { profile: ScreenerProfile }) {
 
   useEffect(() => {
     let active = true;
-    setSummary(null);
     getTrackingSummary(profile).then((s) => active && setSummary(s));
     return () => {
       active = false;
@@ -1387,7 +1386,7 @@ export default function Screener() {
         <EmailSubscribeToggle />
       </div>
 
-      <TrackingPanel profile={profile} />
+      <TrackingPanel key={profile} profile={profile} />
 
       <ReportHistory
         reports={reports}
