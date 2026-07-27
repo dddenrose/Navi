@@ -1,0 +1,22 @@
+rules_version = '2';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Navi — Firestore Security Rules
+//
+// 全站採「client 端一律拒絕」策略:所有資料存取都經由後端 FastAPI + Firebase
+// Admin SDK 進行,而 Admin SDK 以服務帳戶身分執行、**繞過本規則**,不受影響。
+//
+// 前端(frontend/)僅使用 firebase/app + firebase/auth 做 Google 登入,
+// 不直接讀寫 Firestore(2026-07-27 以 grep 確認無 firebase/firestore import)。
+// 因此對 client 端 deny-all 是安全的,不會影響任何前端功能。
+//
+// ⚠️ 若未來前端改為直接讀寫 Firestore,必須在此改寫對應的 per-user 規則,
+//    否則功能會壞。修改前請重新確認前端的 Firestore 使用情形。
+// ─────────────────────────────────────────────────────────────────────────────
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

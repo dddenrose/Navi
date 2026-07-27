@@ -51,4 +51,14 @@ dist/
 # Secrets
 .secrets/
 
-.github/
+# Local agent-skill downloads (keep .github/workflows/ trackable for CI)
+.github/skills/
+
+# Firebase debug logs
+firebase-debug.log*
+
+# Local AI tooling config
+.gemini/
+
+# Internal audit notes — 不進對外展示 repo
+AUDIT-*.md
