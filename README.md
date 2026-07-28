@@ -15,7 +15,7 @@ _Named after Navi, the fairy guide in **The Legend of Zelda: Ocarina of Time** �
   <img src="https://img.shields.io/badge/Firestore-FFCA28?logo=firebase&logoColor=black" alt="Firestore">
 </p>
 
-### 🔗 [Live Demo](https://navi-stock-analyzer.web.app) &nbsp;·&nbsp; [繁體中文 README](README.zh-TW.md)
+### 🔗 [Live Demo](https://navi-stock-analyzer.web.app) — no sign-up needed, click _"以訪客身分體驗"_ (guest mode) &nbsp;·&nbsp; [繁體中文 README](README.zh-TW.md)
 
 ![Navi in action](docs/demo.gif)
 

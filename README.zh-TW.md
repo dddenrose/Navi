@@ -15,7 +15,7 @@ _名稱取自《薩爾達傳說：時之笛》中的精靈嚮導 Navi —— 一
   <img src="https://img.shields.io/badge/Firestore-FFCA28?logo=firebase&logoColor=black" alt="Firestore">
 </p>
 
-### 🔗 [線上 Demo](https://navi-stock-analyzer.web.app) &nbsp;·&nbsp; [English README](README.md)
+### 🔗 [線上 Demo](https://navi-stock-analyzer.web.app) — 免註冊，點「以訪客身分體驗」即可 &nbsp;·&nbsp; [English README](README.md)
 
 ![Navi 實際操作](docs/demo.gif)
 

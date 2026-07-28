@@ -161,10 +161,12 @@ export default function Layout() {
     await signOut(auth);
   };
 
-  const initials =
-    user?.displayName?.[0]?.toUpperCase() ??
-    user?.email?.[0]?.toUpperCase() ??
-    "U";
+  const isGuest = user?.isAnonymous ?? false;
+  const initials = isGuest
+    ? "訪"
+    : (user?.displayName?.[0]?.toUpperCase() ??
+      user?.email?.[0]?.toUpperCase() ??
+      "U");
 
   const visibleNavItems = navItems.filter(
     (item) =>
@@ -403,9 +405,11 @@ export default function Layout() {
               )}
               <div className="min-w-0">
                 <p className="text-xs font-medium text-slate-300 truncate">
-                  {user?.displayName ?? "使用者"}
+                  {isGuest ? "訪客" : (user?.displayName ?? "使用者")}
                 </p>
-                <p className="text-xs text-slate-600 truncate">{user?.email}</p>
+                <p className="text-xs text-slate-600 truncate">
+                  {isGuest ? "訪客模式・登入可保留資料" : user?.email}
+                </p>
               </div>
             </div>
           ) : (

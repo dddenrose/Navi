@@ -1,6 +1,10 @@
 import { useState } from "react";
 import { Navigate } from "react-router-dom";
-import { signInWithPopup, signInWithEmailAndPassword } from "firebase/auth";
+import {
+  signInWithPopup,
+  signInWithEmailAndPassword,
+  signInAnonymously,
+} from "firebase/auth";
 import { auth, googleProvider } from "@/lib/firebase";
 import { useAuthStore } from "@/store/authStore";
 
@@ -26,6 +30,9 @@ function authErrorMessage(e: unknown): string {
       return "登入視窗已關閉，請再試一次";
     case "auth/network-request-failed":
       return "網路連線異常，請檢查網路後重試";
+    case "auth/admin-restricted-operation":
+    case "auth/operation-not-allowed":
+      return "訪客模式暫時無法使用，請改用其他方式登入";
     default:
       return "登入失敗，請稍後再試";
   }
@@ -47,6 +54,18 @@ export default function Login() {
     setSubmitting(true);
     try {
       await signInWithPopup(auth, googleProvider);
+    } catch (e: unknown) {
+      setError(authErrorMessage(e));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleGuestSignIn = async () => {
+    setError("");
+    setSubmitting(true);
+    try {
+      await signInAnonymously(auth);
     } catch (e: unknown) {
       setError(authErrorMessage(e));
     } finally {
@@ -227,6 +246,21 @@ export default function Login() {
             </svg>
             Google 登入
           </button>
+
+          {/* Guest */}
+          <button
+            onClick={handleGuestSignIn}
+            disabled={submitting}
+            className="w-full flex items-center justify-center gap-2 rounded-xl py-2.5 mt-3 text-sm font-medium text-slate-400 transition-opacity hover:opacity-80 disabled:opacity-40"
+            style={{
+              border: "1px dashed var(--border-light)",
+            }}
+          >
+            👀 以訪客身分體驗（免註冊）
+          </button>
+          <p className="text-[11px] text-slate-600 text-center mt-2.5">
+            每日 10 則 AI 對話・訪客資料不長期保留
+          </p>
         </div>
       </div>
     </div>
