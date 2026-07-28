@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import re
+import time
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -134,4 +135,30 @@ def search_news(query: str, max_results: int = 8, lang: str = "zh-TW") -> NewsRe
     if not result.articles:
         result.error = f"未找到與「{query}」相關的新聞。"
 
+    return result
+
+
+# ── Stock news（GET /api/stock/{ticker}/news 用）───────────────────────────
+# 30 分鐘 TTL 快取：個股新聞更新頻率遠低於報價，避免每次切分頁就重打 RSS。
+
+_stock_news_cache: dict[str, tuple[float, NewsResult]] = {}
+_STOCK_NEWS_CACHE_TTL = 1800  # 30 分鐘
+
+
+def get_stock_news(ticker: str, company_name: str, limit: int = 10) -> NewsResult:
+    """個股新聞查詢：以公司名稱搜尋 Google News RSS，30 分鐘 TTL 快取。
+
+    Args:
+        ticker: 正規化後的股票代碼，僅作快取 key 用途。
+        company_name: 用於搜尋的公司名稱（中文名稱效果較佳）。
+        limit: 回傳新聞則數上限。
+    """
+    cache_key = f"{ticker}:{limit}"
+    now = time.time()
+    cached = _stock_news_cache.get(cache_key)
+    if cached and (now - cached[0] < _STOCK_NEWS_CACHE_TTL):
+        return cached[1]
+
+    result = search_news(company_name, max_results=limit)
+    _stock_news_cache[cache_key] = (now, result)
     return result

@@ -114,6 +114,47 @@ class FundamentalResponse(BaseModel):
     description: str = ""
 
 
+# ── Stock: News ──────────────────────────────────────────────────────────────
+
+
+class NewsArticle(BaseModel):
+    title: str = ""
+    link: str = ""
+    source: str = ""
+    published: str = ""
+
+
+class NewsResponse(BaseModel):
+    ticker: str
+    query: str = ""
+    articles: list[NewsArticle] = []
+    error: str = ""
+
+
+# ── Stock: Monthly Revenue ───────────────────────────────────────────────────
+
+
+class MonthlyRevenueResponse(BaseModel):
+    ticker: str
+    label: str = ""  # 資料年月，如「115年5月」
+    revenue: int | None = None  # 當月營收（仟元）
+    yoy: float | None = None  # 去年同月增減（小數，0.30 = +30%）
+    mom: float | None = None  # 上月比較增減（小數）
+    yoy_acc: float | None = None  # 累計營收較去年同期增減（小數）
+
+
+# ── Stock: Industry PE ───────────────────────────────────────────────────────
+
+
+class IndustryPeResponse(BaseModel):
+    ticker: str
+    stock_pe: float
+    industry: str  # 估值錨名稱（含細分類/大類標示）
+    percentile: float  # 個股 PE 在同業中的分位數（0~100）
+    sample_size: int
+    median_pe: float
+
+
 # ── Knowledge ────────────────────────────────────────────────────────────────
 
 

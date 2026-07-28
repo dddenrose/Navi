@@ -5,6 +5,9 @@ import type {
   Fundamentals,
   InstitutionalData,
   MarginData,
+  NewsData,
+  MonthlyRevenueData,
+  IndustryPeData,
 } from "@/types/stock";
 
 const BASE_URL =
@@ -121,6 +124,40 @@ export async function getStockMargin(
 ): Promise<MarginData> {
   return apiFetch<MarginData>(
     `/api/stock/${encodeURIComponent(symbol)}/margin`,
+    {},
+    headers,
+  );
+}
+
+export async function getStockNews(
+  symbol: string,
+  limit = 10,
+  headers?: Record<string, string>,
+): Promise<NewsData> {
+  return apiFetch<NewsData>(
+    `/api/stock/${encodeURIComponent(symbol)}/news?limit=${limit}`,
+    {},
+    headers,
+  );
+}
+
+export async function getStockMonthlyRevenue(
+  symbol: string,
+  headers?: Record<string, string>,
+): Promise<MonthlyRevenueData> {
+  return apiFetch<MonthlyRevenueData>(
+    `/api/stock/${encodeURIComponent(symbol)}/monthly-revenue`,
+    {},
+    headers,
+  );
+}
+
+export async function getStockIndustryPe(
+  symbol: string,
+  headers?: Record<string, string>,
+): Promise<IndustryPeData> {
+  return apiFetch<IndustryPeData>(
+    `/api/stock/${encodeURIComponent(symbol)}/industry-pe`,
     {},
     headers,
   );

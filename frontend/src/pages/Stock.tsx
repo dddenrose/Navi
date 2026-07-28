@@ -23,6 +23,7 @@ import StockOverviewTab from "@/pages/stock/StockOverviewTab";
 import StockTechnicalTab from "@/pages/stock/StockTechnicalTab";
 import StockFundamentalTab from "@/pages/stock/StockFundamentalTab";
 import StockInstitutionalTab from "@/pages/stock/StockInstitutionalTab";
+import StockNewsTab from "@/pages/stock/StockNewsTab";
 
 // bundle-dynamic-imports: defer ~240 kB recharts until chart is visible
 const PriceChart = lazy(() => import("@/components/PriceChart"));
@@ -38,6 +39,7 @@ const TAB_LABELS: Record<Tab, string> = {
   technical: "技術分析",
   fundamental: "基本面",
   institutional: "籌碼面",
+  news: "新聞",
 };
 
 export default function Stock() {
@@ -363,7 +365,9 @@ export default function Stock() {
               border: "1px solid var(--border)",
             }}
           >
-            {(["overview", "technical", "fundamental", "institutional"] as Tab[]).map(
+            {(
+              ["overview", "technical", "fundamental", "institutional", "news"] as Tab[]
+            ).map(
               (tab) => (
                 <button
                   key={tab}
@@ -395,13 +399,19 @@ export default function Stock() {
           ) : activeTab === "technical" && technicalData ? (
             <StockTechnicalTab technicalData={technicalData} priceData={priceData} />
           ) : activeTab === "fundamental" && fundamentalData ? (
-            <StockFundamentalTab fundamentalData={fundamentalData} currency={currency} />
+            <StockFundamentalTab
+              fundamentalData={fundamentalData}
+              currency={currency}
+              ticker={priceData.ticker}
+            />
           ) : activeTab === "institutional" ? (
             <StockInstitutionalTab
               institutionalData={institutionalData}
               marginData={marginData}
               isTW={isTW}
             />
+          ) : activeTab === "news" ? (
+            <StockNewsTab ticker={priceData.ticker} />
           ) : (
             // 該分頁資料載入失敗時不能靜默空白，要給可行動的訊息
             <div

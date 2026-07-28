@@ -127,4 +127,36 @@ export interface Fundamentals {
   description: string;
 }
 
-export type Tab = "overview" | "technical" | "fundamental" | "institutional";
+export interface NewsArticle {
+  title: string;
+  link: string;
+  source: string;
+  published: string;
+}
+
+export interface NewsData {
+  ticker: string;
+  query: string;
+  articles: NewsArticle[];
+  error: string;
+}
+
+export interface MonthlyRevenueData {
+  ticker: string;
+  label: string;
+  revenue: number | null;
+  yoy: number | null;
+  mom: number | null;
+  yoy_acc: number | null;
+}
+
+export interface IndustryPeData {
+  ticker: string;
+  stock_pe: number;
+  industry: string;
+  percentile: number;
+  sample_size: number;
+  median_pe: number;
+}
+
+export type Tab = "overview" | "technical" | "fundamental" | "institutional" | "news";
