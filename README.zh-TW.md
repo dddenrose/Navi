@@ -1,12 +1,25 @@
 # 🧚 Navi — AI 智能股票分析助手
 
-[English](README.md)
+_名稱取自《薩爾達傳說：時之笛》中的精靈嚮導 Navi —— 一位為你指出關鍵所在的小夥伴。_
 
-> _"Hey! Listen!"_ — 你的個人投資分析精靈
->
-> 靈感來自《薩爾達傳說：時之笛》中的精靈嚮導 Navi，用 AI 為你導航股海。
+**Navi 是一套面向台股的全端 LLM Agent 股票分析助手。** 每個自然語言問題會由**混合式意圖分類器**在低延遲的**平行工具 Prefetch** 路徑與自主的 **LangGraph ReAct Agent**（12 種工具）之間路由 —— 每個回答都以 RAG 知識庫與即時市場數據接地，透過 SSE 串流即時回傳瀏覽器。另有一套**確定性量化選股器**以明確的規則引擎排序選股；LLM 只負責_解讀_數字，從不決定選股。
 
-⚠️ **免責聲明：本專案僅供學習與研究用途，所有分析結果不構成投資建議。投資有風險，決策請自行判斷。**
+<p>
+  <img src="https://img.shields.io/badge/React_19-20232A?logo=react&logoColor=61DAFB" alt="React 19">
+  <img src="https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white" alt="TypeScript">
+  <img src="https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white" alt="FastAPI">
+  <img src="https://img.shields.io/badge/Python_3.12-3776AB?logo=python&logoColor=white" alt="Python 3.12">
+  <img src="https://img.shields.io/badge/LangChain_·_LangGraph-1C3C3C?logo=langchain&logoColor=white" alt="LangChain / LangGraph">
+  <img src="https://img.shields.io/badge/Gemini_2.5-8E75B2?logo=googlegemini&logoColor=white" alt="Gemini 2.5">
+  <img src="https://img.shields.io/badge/Cloud_Run-4285F4?logo=googlecloud&logoColor=white" alt="Cloud Run">
+  <img src="https://img.shields.io/badge/Firestore-FFCA28?logo=firebase&logoColor=black" alt="Firestore">
+</p>
+
+### 🔗 [線上 Demo](https://navi-stock-analyzer.web.app) &nbsp;·&nbsp; [English README](README.md)
+
+![Navi 實際操作](docs/demo.gif)
+
+> ⚠️ **免責聲明** — 僅供學習與研究之用。所有分析皆由軟體生成，**不構成投資建議**。投資有風險，決策請自行判斷。
 
 ---
 
@@ -32,44 +45,39 @@
 
 ## 🏗️ 系統架構
 
-```
-┌──────────────────┐         ┌─────────────────────────────────────────┐
-│  React + Vite    │  REST   │              Cloud Run                   │
-│  (TypeScript)    │────────▶│           FastAPI Backend                │
-│                  │◀────────│                                          │
-│ Firebase Hosting │   SSE   │  ┌────────────┐                         │
-│                  │         │  │  混合意圖    │ ── 信心度 < 0.7 ──────┐│
-│                  │         │  │  Classifier │                       ││
-│                  │         │  └──────┬─────┘                        ││
-│                  │         │   Prefetch │ 意圖             Agent    ││
-│                  │         │         ▼                     模式     ││
-│                  │         │  ┌────────────┐        ┌────────────┐  ││
-│                  │         │  │  平行工具   │        │  LangGraph │◀─┘│
-│                  │         │  │  執行       │        │  ReAct     │   │
-│                  │         │  └──────┬─────┘        └──────┬─────┘   │
-│                  │         │         └──────────┬───────────┘         │
-│                  │         │                    ▼                     │
-│                  │         │            ┌──────────────┐              │
-│                  │         │            │  12 種 Agent │              │
-│                  │         │            │  工具         │              │
-└──────────────────┘         │            └──────┬───────┘              │
-                             └───────────────────┼─────────────────────┘
-                                                 │
-                    ┌────────────────┬────────────┼────────────┐
-                    ▼                ▼            ▼            ▼
-            ┌──────────────┐ ┌──────────┐ ┌────────────┐ ┌──────────┐
-            │  Firestore   │ │ Gemini   │ │ yfinance   │ │ TWSE/TPEx│
-            │  Vector      │ │ 2.5 Flash│ │            │ │ + TAIFEX │
-            │  Search      │ │  / -Lite │ └────────────┘ ├──────────┤
-            │  + Auth      │ └──────────┘                │Google    │
-            │  + 對話歷史   │                             │News RSS  │
-            │  + 額度       │                             └──────────┘
-            └──────────────┘
+```mermaid
+flowchart TD
+    UI["🖥️ React + Vite + TypeScript<br/>Firebase Hosting"]
+    UI -->|"REST · SSE 串流"| HC
+
+    subgraph BE["☁️ Cloud Run · FastAPI 後端"]
+        direction TB
+        HC["🧭 混合式意圖分類器<br/>規則 fast path + LLM fallback"]
+        HC -->|"明確意圖"| PF["⚡ Prefetch 模式<br/>平行工具執行"]
+        HC -->|"信心度 &lt; 0.7 · 開放式"| AG["🤖 Agent 模式<br/>LangGraph ReAct"]
+        PF --> TOOLS["🧰 12 種 Agent 工具"]
+        AG --> TOOLS
+    end
+
+    TOOLS --> FS[("🔥 Firestore<br/>向量搜尋 · 認證<br/>對話歷史 · 額度")]
+    TOOLS --> LLM["✨ Gemini 2.5<br/>Flash / Flash-Lite"]
+    TOOLS --> MKT["📈 市場數據<br/>yfinance · TWSE / TPEx<br/>TAIFEX · Google News"]
 ```
 
 除了請求驅動的對話流程外，另有一條**定時 Screener 管線**獨立運行
 （Cloud Scheduler → Cloud Run）：規則引擎 → 因子評分 → 估值 → AI 解讀 →
 Firestore，並含推薦實績追蹤與選配的 SendGrid Email 週報寄送。
+
+```mermaid
+flowchart LR
+    S["⏰ Cloud Scheduler"] --> R["📏 規則引擎"]
+    R --> F["🔢 因子評分"]
+    F --> V["💰 估值"]
+    V --> N["📝 LLM 解讀<br/>(僅敘述)"]
+    N --> DB[("🔥 Firestore")]
+    DB --> T["📊 推薦實績追蹤<br/>T+5 / 20 / 60 對比 TWII"]
+    DB --> E["📧 SendGrid 週報"]
+```
 
 ### 雙模式分派
 
