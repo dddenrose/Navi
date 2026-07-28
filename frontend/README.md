@@ -59,7 +59,6 @@ frontend/
 │   │   ├── Stock.tsx              # 個股分析（slim coordinator）
 │   │   ├── stock/                 #   四個分頁：概覽 / 技術 / 基本面 / 籌碼
 │   │   ├── Portfolio.tsx          # 投資組合
-│   │   ├── Backtest.tsx           # 策略回測
 │   │   └── Login.tsx              # Firebase 登入
 │   ├── components/
 │   │   ├── Layout.tsx             # 主版型

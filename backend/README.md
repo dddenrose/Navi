@@ -89,7 +89,6 @@ uv run python cli.py
 | GET      | `/api/stock/{ticker}/institutional`     | 三大法人買賣超             |
 | GET      | `/api/stock/{ticker}/margin`            | 融資融券                   |
 | GET/POST | `/api/portfolio` ・ `/holdings`         | 投資組合 CRUD             |
-| POST     | `/api/backtest`                         | 策略回測                   |
 | GET      | `/api/knowledge/stats`                  | 知識庫統計                 |
 
 ### Chat API 範例
@@ -115,7 +114,6 @@ backend/
 │       ├── chat.py                # POST /api/chat (SSE) + 對話歷史
 │       ├── stock.py               # 概覽 / 技術 / 基本 / 法人 / 融資
 │       ├── portfolio.py           # 投資組合 CRUD
-│       ├── backtest.py            # 策略回測
 │       └── knowledge.py           # 知識庫統計
 ├── services/
 │   ├── agent_service.py           # LangGraph ReAct + 混合意圖分類 + Prefetch
@@ -125,7 +123,7 @@ backend/
 │   ├── margin_service.py          # 融資融券
 │   ├── news_service.py            # Google News RSS
 │   ├── portfolio_service.py       # 投資組合
-│   ├── backtest_service.py        # 回測引擎
+│   ├── backtest_service.py        # 回測引擎（僅供 agent tool 呼叫，無 REST 路由）
 │   ├── embedding_service.py       # text-embedding-004 + Vector Search
 │   └── firestore_client.py        # Firestore singleton
 ├── tools/                         # LangChain / LangGraph Agent Tools（9 種）

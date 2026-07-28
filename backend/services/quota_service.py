@@ -223,12 +223,10 @@ def _effective_daily_limit(user: dict[str, Any], config: dict[str, Any]) -> int:
     return int(config.get("daily_limit", 10))
 
 
-# chat 以外功能的每日額度（-1 = 無限制）。
-# backtest 每次會觸發 yfinance 抓取 + 密集運算，無額度時是成本與濫用破口。
-# 可被 quota_configs 文件中的 "{feature}_daily_limit" 欄位覆寫。
-FEATURE_DAILY_LIMITS: dict[str, dict[str, int]] = {
-    "backtest": {"free": 5, "pro": 50, "unlimited": -1, "admin": -1},
-}
+# chat 以外功能的每日額度（-1 = 無限制），可被 quota_configs 文件中的
+# "{feature}_daily_limit" 欄位覆寫；未列出的功能預設不限量。
+# 目前僅 chat 走計量，此表保留供日後擴充（如自帶抓取/運算成本的功能）。
+FEATURE_DAILY_LIMITS: dict[str, dict[str, int]] = {}
 
 
 def _feature_daily_limit(

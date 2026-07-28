@@ -9,6 +9,13 @@
 
 ## [Unreleased]
 
+### Removed（2026-07-28 功能收斂：策略回測頁下架，能力收回 Chat）
+
+- **移除 `/backtest` 頁面與 REST 端點**：刪除 `frontend/src/pages/Backtest.tsx`、`backend/api/routes/backtest.py`（含 `POST /api/backtest`、`GET /api/backtest/strategies`），連同 `lib/api.ts` 的 `runBacktest` / `getStrategies` 與型別、`Layout` 側邊欄項目、`Dashboard` 入口卡、`rate_limit.backtest_limiter`、`feature_access` 的 `backtest` feature key 與 `quota_service.FEATURE_DAILY_LIMITS` 的 backtest 額度。
+  - **理由**：(1) 該功能限 `pro` 以上，而訪客與新註冊皆為 `free`，導覽列與 Dashboard 會直接濾除 → 在 Live Demo 上對任何訪客都不可見，展示價值為零；(2) 能力與 Chat 的 `run_strategy_backtest` agent tool 完全重疊，且 agent 路徑會強制搭配知識庫解讀（夏普／過度擬合），體驗優於裸表單；(3) 固定參數、單標的、全額進出的三個教科書策略，其量化說服力遠低於 Screener 已有的 8.4 年 momentum 回測與 T+5/20/60 forward tracking，並列反而稀釋後者。
+- **保留（未受影響）**：`services/backtest_service.py`、`tools/backtest_tool.py`、`tests/test_backtest_service.py`、agent 的 `run_strategy_backtest` tool 與 backtest 意圖分類、知識庫 `tool_interpretation/backtest_results.md`、`scripts/backtest_momentum.py` 與 Screener 的 `backtested` 揭露。回測能力僅改為單一入口（Chat），未刪除。
+- **線上資料**：Firestore `feature_access_configs/backtest` 文件不再被 `FEATURE_ORDER` 讀取，成為孤兒 doc；未刪除，保留以便日後復原。
+
 ### Added（2026-07-07 可驗證性批次：回測重建 + 實績追蹤）
 
 - **Momentum 回測腳本重建**：`backend/scripts/backtest_momentum.py` 補回 repo（原腳本遺失）。指標口徑對齊線上 screener（Wilder RSI、SMA60/120、120 交易日相對強度），月底訊號→次一交易日開盤成交（無 look-ahead）、30bps 單邊成本，支援 `--rebalance/--top/--start/--end/--cost-bps/--limit/--exec`，輸出 equity curve CSV 與 yfinance 快取。

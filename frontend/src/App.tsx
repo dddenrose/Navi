@@ -13,7 +13,6 @@ const Dashboard = lazy(() => import("@/pages/Dashboard"));
 const Chat = lazy(() => import("@/pages/Chat"));
 const Stock = lazy(() => import("@/pages/Stock"));
 const Portfolio = lazy(() => import("@/pages/Portfolio"));
-const Backtest = lazy(() => import("@/pages/Backtest"));
 const Screener = lazy(() => import("@/pages/Screener"));
 const AdminLayout = lazy(() => import("@/pages/admin/AdminLayout"));
 const AdminDashboard = lazy(() => import("@/pages/admin/AdminDashboard"));
@@ -109,16 +108,6 @@ export default function App() {
                   <FeatureGuard featureKey="portfolio" featureName="投資組合">
                     <ErrorBoundary>
                       <Portfolio />
-                    </ErrorBoundary>
-                  </FeatureGuard>
-                }
-              />
-              <Route
-                path="backtest"
-                element={
-                  <FeatureGuard featureKey="backtest" featureName="策略回測">
-                    <ErrorBoundary>
-                      <Backtest />
                     </ErrorBoundary>
                   </FeatureGuard>
                 }

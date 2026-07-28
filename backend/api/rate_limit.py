@@ -43,9 +43,6 @@ class RateLimiter:
 # Global rate limiters with different limits per endpoint type
 chat_limiter = RateLimiter(max_requests=10, window_seconds=60)
 api_limiter = RateLimiter(max_requests=30, window_seconds=60)
-# 回測觸發外部抓取 + 密集運算，限流較嚴；同時是 quota fail-open 時的硬上限
-backtest_limiter = RateLimiter(max_requests=5, window_seconds=60)
-
 
 def rate_limited(limiter: RateLimiter):
     """FastAPI dependency 形式的限流器（以 IP 為 key；適合掛在 router 層）."""

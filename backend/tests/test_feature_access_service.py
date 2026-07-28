@@ -19,7 +19,7 @@ def test_default_screener_access_requires_paid_tier():
 
 
 def test_default_free_tier_features():
-    """成本/價值對齊：便宜的 stock 查詢開放 free 當漏斗；貴的 backtest/screener 收費."""
+    """成本/價值對齊：便宜的 stock 查詢開放 free 當漏斗；貴的 screener 收費."""
     free_features = {
         key
         for key, cfg in feature_access_service.DEFAULT_FEATURE_ACCESS_CONFIGS.items()
@@ -28,10 +28,14 @@ def test_default_free_tier_features():
     assert free_features == {"chat", "portfolio", "stock"}
 
 
-def test_default_backtest_and_screener_require_paid_tier():
-    assert feature_access_service.DEFAULT_FEATURE_ACCESS_CONFIGS["backtest"][
-        "allowed_tiers"
-    ] == ["pro", "unlimited", "admin"]
+def test_paid_only_features_in_defaults():
+    """付費功能僅剩 screener；回測已收斂到 Chat 的 agent tool，不再是獨立 feature."""
+    paid_only = {
+        key
+        for key, cfg in feature_access_service.DEFAULT_FEATURE_ACCESS_CONFIGS.items()
+        if "free" not in cfg["allowed_tiers"]
+    }
+    assert paid_only == {"screener"}
     assert feature_access_service.DEFAULT_FEATURE_ACCESS_CONFIGS["screener"][
         "allowed_tiers"
     ] == ["pro", "unlimited", "admin"]

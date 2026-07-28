@@ -37,7 +37,7 @@ _Named after Navi, the fairy guide in **The Legend of Zelda: Ocarina of Time** �
 - **Macro / Market Overview** — Whole-market indicators: index quotes, aggregate institutional flows (foreign / trust / dealer), and TAIFEX futures open-interest positioning
 - **Financial News** — Real-time financial news search via Google News RSS
 - **Portfolio Tracking** — Record holdings and transactions with real-time market value, allocation %, and **realized P/L**; buy/sell automatically computes Taiwan-market fees (0.1425%, min NT$20) and sell-side transaction tax (0.3%) using average-cost basis. The AI agent can query your positions directly
-- **Strategy Backtesting** — Supports MA crossover, RSI, MACD, and custom condition strategies; simulates historical performance with full metrics (return, Sharpe ratio, max drawdown, win rate) and discloses execution assumptions (fees, taxes, adjusted prices)
+- **Strategy Backtesting (in-chat)** — Ask the agent to backtest MA crossover, RSI, MACD, or custom-condition strategies; returns full metrics (return, Sharpe ratio, max drawdown, win rate) with execution assumptions disclosed (fees, taxes, slippage, next-open fills to avoid look-ahead bias). Exposed only as an agent tool, so the LLM always interprets the numbers against the knowledge base rather than handing back a bare metrics table
 - **User Tiers, Quota & Feature Access** — Per-user daily message quotas and feature gating by tier (free / pro / unlimited / admin); LLM model is selected by tier for cost control (Flash-Lite for free, Flash for paid)
 - **Admin Console** — Web back office for user management, quota configuration, feature-flag control, usage summaries, and audit logs
 - **Conversation History** — Multi-turn conversations persisted per-user in Firestore with full history retrieval API
@@ -182,12 +182,10 @@ The **Hybrid Intent Classifier** (rule-based fast path + LLM fallback) analyzes 
 | `/api/portfolio/transactions`     | GET/POST   | List / record buy-sell transactions (fees + tax) | ✓ |
 | `/api/portfolio/transactions/estimate` | GET   | Estimate fees/tax for a transaction | ✓ |
 
-### Backtest & Knowledge
+### Knowledge
 
 | Path                       | Method | Description               | Auth |
 | -------------------------- | ------ | ------------------------- | ---- |
-| `/api/backtest`            | POST   | Run strategy backtest (quota + rate limit) | ✓ |
-| `/api/backtest/strategies` | GET    | List available strategies | ✓    |
 | `/api/knowledge/stats`     | GET    | Knowledge base statistics | ✓    |
 
 ### Screener
@@ -325,7 +323,6 @@ navi/
 │   │   ├── chat.py              #   AI chat (SSE Streaming) + quota
 │   │   ├── stock.py             #   Stock data & analysis (search, technical, fundamental, chips)
 │   │   ├── portfolio.py         #   Portfolio + transactions (fees/tax, realized P/L)
-│   │   ├── backtest.py          #   Strategy backtesting
 │   │   ├── screener.py          #   AI screener: run / reports / tracking / subscriptions
 │   │   ├── features.py          #   Feature-access discovery
 │   │   ├── admin.py             #   Admin console API (users, quota, flags, logs)
@@ -335,7 +332,7 @@ navi/
 │   │   ├── conversation_service.py # Multi-turn conversation history (Firestore)
 │   │   ├── stock_service.py     #   Stock data (yfinance) + ticker resolution
 │   │   ├── embedding_service.py #   Embedding processing
-│   │   ├── backtest_service.py  #   Backtesting engine
+│   │   ├── backtest_service.py  #   Backtesting engine (agent tool only, no REST route)
 │   │   ├── institutional_service.py # TWSE/OTC institutional data
 │   │   ├── margin_service.py    #   Margin trading data
 │   │   ├── macro_service.py     #   Market-wide index / flows / futures positioning
@@ -362,7 +359,7 @@ navi/
 │   └── tests/                   # Pytest tests (services, screener, parsers, RAG, quota …)
 ├── frontend/
 │   ├── src/
-│   │   ├── pages/               # Dashboard, Chat, Stock (tabs), Portfolio, Backtest, Screener, Login, admin/
+│   │   ├── pages/               # Dashboard, Chat, Stock (tabs), Portfolio, Screener, Login, admin/
 │   │   ├── components/          # Layout, PriceChart, RsiChart, StatCard, QuotaBadge, FeatureGuard, etc.
 │   │   ├── lib/                 # API client (+ api/screener.ts) & Firebase config
 │   │   └── store/               # Zustand (auth + theme + quota)

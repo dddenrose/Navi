@@ -37,7 +37,7 @@ _名稱取自《薩爾達傳說：時之笛》中的精靈嚮導 Navi —— 一
 - **總經 / 大盤分析** — 全市場指標：大盤指數報價、三大法人整體買賣超彙總、TAIFEX 期貨未平倉多空部位
 - **財經新聞** — Google News RSS 即時財經新聞搜尋
 - **投資組合追蹤** — 記錄持股與交易，即時計算市值、持股佔比與**已實現損益**；買賣自動以平均成本法計算台股手續費（0.1425%、最低 NT$20）與賣出證交稅（0.3%），AI 可直接查詢你的持倉狀態
-- **策略回測** — 支援均線交叉、RSI、MACD 及自訂條件策略；完整績效報告（報酬率、夏普比率、最大回撤、勝率），並揭露成交假設（費稅、還原股價）
+- **策略回測（對話內）** — 在 Chat 中請 Navi 回測均線交叉、RSI、MACD 或自訂條件策略；完整績效報告（報酬率、夏普比率、最大回撤、勝率），並揭露成交假設（費稅、滑價、以次一交易日開盤價成交以消除 look-ahead bias）。僅以 agent tool 形式提供，因此 LLM 一律搭配知識庫解讀數字，而不是丟一張裸的績效表
 - **使用者分層、額度與功能權限** — 每位使用者每日訊息額度，並依 tier（free / pro / unlimited / admin）控管功能存取；LLM 模型依 tier 選擇以控制成本（免費層用 Flash-Lite、付費層用 Flash）
 - **後台管理主控台** — Web 後台管理使用者、額度設定、功能開關、用量統計與稽核日誌
 - **對話歷史** — 多輪對話以使用者為單位持久化至 Firestore，支援歷史訊息載入
@@ -181,12 +181,10 @@ flowchart LR
 | `/api/portfolio/transactions`           | GET/POST   | 查看 / 記錄買賣交易（含費稅） | ✓ |
 | `/api/portfolio/transactions/estimate`  | GET        | 試算交易費用 / 稅          | ✓    |
 
-### 回測與知識庫
+### 知識庫
 
 | 路徑                       | 方法 | 說明                    | 認證 |
 | -------------------------- | ---- | ----------------------- | ---- |
-| `/api/backtest`            | POST | 執行策略回測（額度 + 限流） | ✓ |
-| `/api/backtest/strategies` | GET  | 列出可用策略            | ✓    |
 | `/api/knowledge/stats`     | GET  | 知識庫統計              | ✓    |
 
 ### 智能選股 Screener
@@ -324,7 +322,6 @@ navi/
 │   │   ├── chat.py              #   AI 對話（SSE Streaming）+ 額度
 │   │   ├── stock.py             #   股票數據與分析（搜尋、技術、基本、籌碼）
 │   │   ├── portfolio.py         #   投資組合 + 交易（費稅、已實現損益）
-│   │   ├── backtest.py          #   策略回測
 │   │   ├── screener.py          #   AI 選股：run / reports / tracking / subscriptions
 │   │   ├── features.py          #   功能存取探索
 │   │   ├── admin.py             #   後台管理 API（使用者、額度、開關、日誌）
@@ -334,7 +331,7 @@ navi/
 │   │   ├── conversation_service.py # 多輪對話歷史（Firestore）
 │   │   ├── stock_service.py     #   股票數據（yfinance）+ 代碼解析
 │   │   ├── embedding_service.py #   Embedding 處理
-│   │   ├── backtest_service.py  #   回測引擎
+│   │   ├── backtest_service.py  #   回測引擎（僅供 agent tool 呼叫，無 REST 路由）
 │   │   ├── institutional_service.py # TWSE/OTC 法人數據
 │   │   ├── margin_service.py    #   融資融券數據
 │   │   ├── macro_service.py     #   大盤指數 / 法人資金流 / 期貨部位
@@ -361,7 +358,7 @@ navi/
 │   └── tests/                   # Pytest 測試（services、screener、parsers、RAG、quota…）
 ├── frontend/
 │   ├── src/
-│   │   ├── pages/               # Dashboard、Chat、Stock（分頁）、Portfolio、Backtest、Screener、Login、admin/
+│   │   ├── pages/               # Dashboard、Chat、Stock（分頁）、Portfolio、Screener、Login、admin/
 │   │   ├── components/          # Layout、PriceChart、RsiChart、StatCard、QuotaBadge、FeatureGuard 等
 │   │   ├── lib/                 # API Client（含 api/screener.ts）& Firebase 設定
 │   │   └── store/               # Zustand（auth + theme + quota）

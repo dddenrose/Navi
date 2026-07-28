@@ -66,20 +66,6 @@ const featureCards: FeatureCard[] = [
       "text-emerald-400/50 group-hover:text-emerald-400 transition-colors",
   },
   {
-    featureKey: "backtest",
-    to: "/backtest",
-    emoji: "📊",
-    title: "策略回測",
-    description: "用歷史數據驗證均線交叉、RSI、MACD 策略績效",
-    iconBg: "rgba(245,158,11,0.2)",
-    cardBg:
-      "linear-gradient(135deg, rgba(245,158,11,0.12), rgba(251,191,36,0.06))",
-    cardBorder: "1px solid rgba(245,158,11,0.2)",
-    glow: "radial-gradient(circle at 50% 50%, rgba(245,158,11,0.08), transparent 70%)",
-    arrowClass:
-      "text-amber-600/50 group-hover:text-amber-500 transition-colors",
-  },
-  {
     featureKey: "screener",
     to: "/screener",
     emoji: "🔍",

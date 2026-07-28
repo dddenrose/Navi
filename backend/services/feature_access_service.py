@@ -28,7 +28,7 @@ DEFAULT_FEATURE_ACCESS_CONFIGS: dict[str, dict[str, Any]] = {
         "enabled": True,
     },
     # 成本/價值對齊：stock 是便宜的 deterministic 查詢，開放 free 當漏斗入口；
-    # 真正貴的是 chat（LLM）與 backtest/screener（運算+LLM），由額度與 tier 控制。
+    # 真正貴的是 chat（LLM）與 screener（運算+LLM），由額度與 tier 控制。
     "stock": {
         "feature_key": "stock",
         "display_name": "股票分析",
@@ -43,13 +43,6 @@ DEFAULT_FEATURE_ACCESS_CONFIGS: dict[str, dict[str, Any]] = {
         "allowed_tiers": ["free", "pro", "unlimited", "admin"],
         "enabled": True,
     },
-    "backtest": {
-        "feature_key": "backtest",
-        "display_name": "策略回測",
-        "description": "策略績效回測工具",
-        "allowed_tiers": ["pro", "unlimited", "admin"],
-        "enabled": True,
-    },
     "screener": {
         "feature_key": "screener",
         "display_name": "智能選股",
@@ -59,7 +52,7 @@ DEFAULT_FEATURE_ACCESS_CONFIGS: dict[str, dict[str, Any]] = {
     },
 }
 
-FEATURE_ORDER = ["chat", "stock", "portfolio", "backtest", "screener"]
+FEATURE_ORDER = ["chat", "stock", "portfolio", "screener"]
 VALID_FEATURE_KEYS = set(DEFAULT_FEATURE_ACCESS_CONFIGS.keys())
 
 
