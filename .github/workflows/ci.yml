@@ -1,0 +1,77 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# 同一分支的新 push 取消尚未跑完的舊 run，省 runner 時間
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Backend (ruff + pytest)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      # 測試不需要任何 GCP / LLM 憑證：需要憑證的 4 個 test 會自行 skip。
+      # CORS_ORIGINS 是唯一必要的設定 —— main.py 在 import 時就依它組出
+      # 允許清單，test_cors_preflight_allows_dev_origin 驗的就是這條路徑。
+      CORS_ORIGINS: http://localhost:5173
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v9.0.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+
+      # Python 版本由 backend/.python-version（3.12）決定，uv 會自行安裝
+      - name: Install dependencies
+        run: uv sync --frozen --group dev
+
+      # 只把 pyflakes（F：undefined name / unused import）當紅線。
+      # E501 / I001 / UP 等風格規則現有 68 處未清，暫不阻擋 CI。
+      - name: Lint (ruff, pyflakes rules)
+        run: uv run --frozen ruff check . --select F
+
+      - name: Test (pytest)
+        run: uv run --frozen pytest tests/ -q
+
+  frontend:
+    name: Frontend (eslint + tsc + build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint (eslint)
+        run: npm run lint
+
+      # build = tsc -b && vite build，型別檢查與打包一併驗證。
+      # VITE_* 環境變數只在 runtime 讀取，缺少不影響 build 結果。
+      - name: Build
+        run: npm run build

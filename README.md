@@ -5,6 +5,7 @@ _Named after Navi, the fairy guide in **The Legend of Zelda: Ocarina of Time** â
 **Navi is a full-stack, LLM-agent stock-analysis assistant for the Taiwan market.** Each natural-language question is routed by a **hybrid intent classifier** between a low-latency **parallel-tool Prefetch** path and an autonomous **LangGraph ReAct agent** (12 tools) â€” every answer grounded in a RAG knowledge base and live market data, streamed to the browser over SSE. A separate **deterministic quant screener** ranks stocks with an explicit rule engine; the LLM only _narrates_ the numbers, it never selects them.
 
 <p>
+  <a href="https://github.com/dddenrose/Navi/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/dddenrose/Navi/ci.yml?branch=main&label=CI&logo=githubactions&logoColor=white" alt="CI"></a>
   <img src="https://img.shields.io/badge/React_19-20232A?logo=react&logoColor=61DAFB" alt="React 19">
   <img src="https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white" alt="TypeScript">
   <img src="https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white" alt="FastAPI">

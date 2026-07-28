@@ -31,6 +31,7 @@ from services.screener.rules import (
 )
 from services.screener.universe import UniverseRecord
 from services.screener.valuation import (
+    IndustryStats,
     Valuation,
     compute_industry_stats,
     compute_valuation,
@@ -300,7 +301,7 @@ def evaluate_universe(
     for d in data_list:
         evaluated_per_industry[d.industry] = evaluated_per_industry.get(d.industry, 0) + 1
 
-    anchor_stats: dict[str, "IndustryStats | None"] = {}
+    anchor_stats: dict[str, IndustryStats | None] = {}
     for d in data_list:
         fine_name = get_fine_industry(d.ticker)
         fine_st = fine_stats_map.get(fine_name) if fine_name else None

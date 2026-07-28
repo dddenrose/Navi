@@ -13,8 +13,6 @@ from services.macro_service import (
     InstitutionalDailyAggregate,
     MarketIndexData,
     _fetch_bfi82u_one_day,
-    _fetch_mis_index,
-    _fetch_openapi_taiex,
     _fetch_taifex_one_day,
     get_futures_positions,
     get_institutional_aggregate,

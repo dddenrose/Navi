@@ -5,6 +5,7 @@ _名稱取自《薩爾達傳說：時之笛》中的精靈嚮導 Navi —— 一
 **Navi 是一套面向台股的全端 LLM Agent 股票分析助手。** 每個自然語言問題會由**混合式意圖分類器**在低延遲的**平行工具 Prefetch** 路徑與自主的 **LangGraph ReAct Agent**（12 種工具）之間路由 —— 每個回答都以 RAG 知識庫與即時市場數據接地，透過 SSE 串流即時回傳瀏覽器。另有一套**確定性量化選股器**以明確的規則引擎排序選股；LLM 只負責_解讀_數字，從不決定選股。
 
 <p>
+  <a href="https://github.com/dddenrose/Navi/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/dddenrose/Navi/ci.yml?branch=main&label=CI&logo=githubactions&logoColor=white" alt="CI"></a>
   <img src="https://img.shields.io/badge/React_19-20232A?logo=react&logoColor=61DAFB" alt="React 19">
   <img src="https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white" alt="TypeScript">
   <img src="https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white" alt="FastAPI">
