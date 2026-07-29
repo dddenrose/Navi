@@ -9,10 +9,17 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { useThemeStore } from "@/store/themeStore";
+import type { PricePoint } from "@/types/stock";
 
 interface PriceChartProps {
-  history: Array<{ date: string; close: number }>;
+  history: PricePoint[];
   isPositive: boolean;
+}
+
+/** "2026-05-26" → "05/26"；非預期格式原樣回傳。 */
+function shortDate(value: string): string {
+  const parts = value.split("-");
+  return parts.length === 3 ? `${parts[1]}/${parts[2]}` : value;
 }
 
 export default function PriceChart({ history, isPositive }: PriceChartProps) {
@@ -43,6 +50,8 @@ export default function PriceChart({ history, isPositive }: PriceChartProps) {
           tick={{ fontSize: 10, fill: tick }}
           tickLine={false}
           axisLine={false}
+          tickFormatter={shortDate}
+          minTickGap={40}
         />
         <YAxis
           tick={{ fontSize: 10, fill: tick }}
@@ -59,6 +68,10 @@ export default function PriceChart({ history, isPositive }: PriceChartProps) {
           }}
           labelStyle={{ color: tick, fontSize: "11px" }}
           itemStyle={{ color: "#818cf8", fontSize: "12px" }}
+          formatter={(value: number | undefined) => [
+            value?.toFixed(2) ?? "—",
+            "收盤",
+          ]}
         />
         <Line
           type="monotone"

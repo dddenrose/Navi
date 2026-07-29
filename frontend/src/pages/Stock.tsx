@@ -18,7 +18,9 @@ import type {
   InstitutionalData,
   MarginData,
   Tab,
+  ChartPeriod,
 } from "@/types/stock";
+import { CHART_PERIODS, CHART_PERIOD_LABELS } from "@/types/stock";
 import StockOverviewTab from "@/pages/stock/StockOverviewTab";
 import StockTechnicalTab from "@/pages/stock/StockTechnicalTab";
 import StockFundamentalTab from "@/pages/stock/StockFundamentalTab";
@@ -61,6 +63,10 @@ export default function Stock() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  // 走勢圖期間；只影響圖表長度，技術指標數值不受影響（後端一律用 ≥1y 資料計算）
+  const [chartPeriod, setChartPeriod] = useState<ChartPeriod>("3mo");
+  const [chartLoading, setChartLoading] = useState(false);
+
   // Autocomplete state
   const [suggestions, setSuggestions] = useState<StockSuggestion[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -77,27 +83,25 @@ export default function Stock() {
 
     try {
       // Fetch token once, share across parallel requests (async-parallel)
+      // 技術指標不在此列：它依賴 chartPeriod，由下方獨立 effect 負責
       const headers = await getAuthHeaders();
       const isTWSE = sym.endsWith(".TW") || sym.endsWith(".TWO");
       const promises: [
         Promise<StockPrice>,
-        Promise<Technicals>,
         Promise<Fundamentals>,
         Promise<InstitutionalData>,
         Promise<MarginData>,
       ] = [
         getStockPrice(sym, headers),
-        getStockTechnicals(sym, headers),
         getStockFundamentals(sym, headers),
         isTWSE ? getStockInstitutional(sym, headers) : Promise.reject("skip"),
         isTWSE ? getStockMargin(sym, headers) : Promise.reject("skip"),
       ];
-      const [price, tech, fund, inst, margin] = await Promise.allSettled(promises);
+      const [price, fund, inst, margin] = await Promise.allSettled(promises);
 
       if (price.status === "fulfilled") setPriceData(price.value);
       else setError("無法取得股票資料，請確認代碼是否正確");
 
-      if (tech.status === "fulfilled") setTechnicalData(tech.value);
       if (fund.status === "fulfilled") setFundamentalData(fund.value);
       if (inst.status === "fulfilled") setInstitutionalData(inst.value);
       if (margin.status === "fulfilled") setMarginData(margin.value);
@@ -111,6 +115,28 @@ export default function Stock() {
   useEffect(() => {
     if (symbol) fetchData(symbol);
   }, [symbol, fetchData]);
+
+  // 技術指標與走勢圖序列獨立抓取：切換期間時只重打這一支，
+  // 其餘區塊（報價、基本面、籌碼）不重抓也不閃爍。
+  useEffect(() => {
+    if (!symbol) return;
+    let cancelled = false;
+    setChartLoading(true);
+    (async () => {
+      try {
+        const headers = await getAuthHeaders();
+        const tech = await getStockTechnicals(symbol, headers, chartPeriod);
+        if (!cancelled) setTechnicalData(tech);
+      } catch {
+        // 保留既有資料；報價失敗才視為整頁錯誤（見 fetchData）
+      } finally {
+        if (!cancelled) setChartLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [symbol, chartPeriod]);
 
   // Debounced autocomplete
   useEffect(() => {
@@ -342,19 +368,67 @@ export default function Stock() {
             </div>
 
             {/* Price chart */}
-            {priceData.history && priceData.history.length > 0 && (
-              <div className="mt-6 h-48">
-                <Suspense
-                  fallback={
-                    <div className="flex items-center justify-center h-full text-xs text-slate-600">
-                      圖表載入中…
-                    </div>
-                  }
+            <div className="mt-6">
+              <div className="flex items-center justify-between gap-3 mb-2">
+                <span className="text-[11px] font-semibold tracking-wide text-slate-500">
+                  收盤走勢
+                </span>
+                <div
+                  className="flex gap-0.5 p-1 rounded-xl"
+                  style={{
+                    background: "var(--overlay-bg)",
+                    border: "1px solid var(--border)",
+                  }}
                 >
-                  <PriceChart history={priceData.history} isPositive={isPositive} />
-                </Suspense>
+                  {CHART_PERIODS.map((p) => (
+                    <button
+                      key={p}
+                      onClick={() => setChartPeriod(p)}
+                      aria-pressed={chartPeriod === p}
+                      className="shrink-0 whitespace-nowrap px-3 py-1 rounded-lg text-[11px] font-semibold tracking-wide transition-colors"
+                      style={
+                        chartPeriod === p
+                          ? {
+                              background:
+                                "linear-gradient(135deg, rgba(99,102,241,0.3), rgba(139,92,246,0.2))",
+                              border: "1px solid rgba(99,102,241,0.3)",
+                              color: "var(--text-secondary)",
+                            }
+                          : {
+                              color: "var(--text-dim)",
+                              border: "1px solid transparent",
+                            }
+                      }
+                    >
+                      {CHART_PERIOD_LABELS[p]}
+                    </button>
+                  ))}
+                </div>
               </div>
-            )}
+              <div
+                className="h-48 transition-opacity duration-200"
+                style={{ opacity: chartLoading ? 0.45 : 1 }}
+              >
+                {technicalData && technicalData.history.length > 0 ? (
+                  <Suspense
+                    fallback={
+                      <div className="flex items-center justify-center h-full text-xs text-slate-600">
+                        圖表載入中…
+                      </div>
+                    }
+                  >
+                    <PriceChart
+                      history={technicalData.history}
+                      isPositive={isPositive}
+                    />
+                  </Suspense>
+                ) : (
+                  <div className="flex items-center justify-center h-full text-xs text-slate-600">
+                    {chartLoading ? "圖表載入中…" : "查無歷史價格資料"}
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
 
           {/* Tabs */}

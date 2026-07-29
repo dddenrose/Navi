@@ -25,6 +25,13 @@ class ChatResponse(BaseModel):
 # ── Stock ────────────────────────────────────────────────────────────────────
 
 
+class PricePoint(BaseModel):
+    """單一交易日的收盤價（供前端畫走勢圖）."""
+
+    date: str
+    close: float
+
+
 class StockOverview(BaseModel):
     ticker: str
     name: str = ""
@@ -79,6 +86,8 @@ class TechnicalResponse(BaseModel):
     stop_loss: float | None = None
     stop_loss_note: str = ""
     risk_reward_note: str = ""
+    # 走勢圖序列（依 period 截取的收盤價，由舊到新）
+    history: list[PricePoint] = []
     # 綜合
     summary: str = ""
 

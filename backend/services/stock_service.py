@@ -554,6 +554,14 @@ class StockOverviewData:
 
 
 @dataclass
+class PricePoint:
+    """單一交易日的收盤價（供前端畫走勢圖）."""
+
+    date: str  # ISO 日期 e.g. "2026-05-26"
+    close: float
+
+
+@dataclass
 class TechnicalIndicators:
     """技術指標計算結果."""
 
@@ -596,6 +604,9 @@ class TechnicalIndicators:
     stop_loss: float | None = None  # 趨勢警戒參考位（教育性，非停損指令）
     stop_loss_note: str = ""  # 警戒位依據說明
     risk_reward_note: str = ""  # deprecated：法遵移除風險報酬比輸出，保留欄位相容舊前端
+    # 走勢圖序列
+    history: list[PricePoint] = field(default_factory=list)
+    """依 `period` 截取的收盤價序列（由舊到新）；資料抓取失敗時為空。"""
     # 綜合
     summary: str = ""
 
@@ -744,13 +755,29 @@ def _get_yf_overview(ticker: str) -> StockOverviewData:
     )
 
 
+# period → (實際向 yfinance 抓取的期間, 圖表保留的交易日數；None = 全部)
+# 指標一律以 ≥1 年的資料計算，避免使用者把圖表切到 1mo 時 MA60 等長週期指標變成 None；
+# `period` 只決定回傳給前端畫圖的長度，不影響指標數值。
+_PERIOD_SPEC: dict[str, tuple[str, int | None]] = {
+    "1mo": ("1y", 22),
+    "3mo": ("1y", 63),
+    "6mo": ("1y", 126),
+    "1y": ("1y", None),
+    "2y": ("2y", None),
+    "5y": ("5y", None),
+}
+
+
 def get_technical_indicators(ticker: str, period: str = "3mo") -> TechnicalIndicators:
-    """計算技術指標：MA, RSI, MACD, KD, 布林通道。"""
+    """計算技術指標：MA, RSI, MACD, KD, 布林通道，並回傳走勢圖用的收盤序列。"""
     ticker = normalize_ticker(ticker)
     stock = yf.Ticker(ticker)
 
+    # 未知的 period 直接透傳給 yfinance，並回傳整段序列（維持舊行為）
+    fetch_period, keep_rows = _PERIOD_SPEC.get(period, (period, None))
+
     try:
-        df = stock.history(period=period)
+        df = stock.history(period=fetch_period)
     except Exception as e:
         logger.warning("Failed to fetch history for %s: %s", ticker, e)
         return TechnicalIndicators(ticker=ticker)
@@ -761,6 +788,11 @@ def get_technical_indicators(ticker: str, period: str = "3mo") -> TechnicalIndic
 
     close = df["Close"]
     result = TechnicalIndicators(ticker=ticker, period=period)
+    chart_df = df if keep_rows is None else df.tail(keep_rows)
+    result.history = [
+        PricePoint(date=idx.strftime("%Y-%m-%d"), close=round(float(val), 2))
+        for idx, val in chart_df["Close"].items()
+    ]
     result.current_price = round(float(close.iloc[-1]), 2)
 
     # ── 均線 ──

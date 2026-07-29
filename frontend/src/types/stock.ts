@@ -1,5 +1,21 @@
 // Centralized type definitions for stock-related data
 
+export interface PricePoint {
+  date: string;
+  close: number;
+}
+
+/** 走勢圖可選期間；與後端 `_PERIOD_SPEC` 的 key 對應。 */
+export const CHART_PERIODS = ["1mo", "3mo", "6mo", "1y"] as const;
+export type ChartPeriod = (typeof CHART_PERIODS)[number];
+
+export const CHART_PERIOD_LABELS: Record<ChartPeriod, string> = {
+  "1mo": "1個月",
+  "3mo": "3個月",
+  "6mo": "6個月",
+  "1y": "1年",
+};
+
 export interface StockPrice {
   ticker: string;
   name: string;
@@ -15,7 +31,6 @@ export interface StockPrice {
   as_of_date: string;
   data_source: string;
   is_intraday: boolean;
-  history?: Array<{ date: string; close: number }>;
 }
 
 export interface Technicals {
@@ -48,6 +63,8 @@ export interface Technicals {
   stop_loss: number | null;
   stop_loss_note: string;
   risk_reward_note: string;
+  /** 依 period 截取的收盤價序列（由舊到新）；抓取失敗時為空陣列。 */
+  history: PricePoint[];
   summary: string;
 }
 

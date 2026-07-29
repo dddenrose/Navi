@@ -9,6 +9,20 @@
 
 ## [Unreleased]
 
+### Fixed（2026-07-29 個股頁走勢圖修復）
+
+- **個股頁的收盤走勢圖從未被畫出來**：`Stock.tsx` 的 `PriceChart` 以 `priceData.history` 為渲染條件，但 `GET /api/stock/{ticker}` 的 `StockOverview` 從來沒有這個欄位；前端 `StockPrice.history?` 宣告成 optional，TypeScript 因此不報錯，整段圖表淪為無聲的死碼。修法是改由技術面端點供給序列——`get_technical_indicators()` 本來就抓了完整 OHLCV 才能算指標，收盤價算完即丟。
+  - `TechnicalIndicators` / `TechnicalResponse` 新增 `history: list[PricePoint]`（`{date, close}`，由舊到新）。
+  - 前端刪除誤導的 `StockPrice.history?`，改讀 `technicalData.history`。
+
+### Added（2026-07-29 個股頁走勢圖修復）
+
+- **走勢圖期間切換**：1個月 / 3個月 / 6個月 / 1年，對應 `GET /api/stock/{ticker}/technical?period=`。技術指標改由獨立 effect 依 `[symbol, chartPeriod]` 抓取，切換期間只重打這一支，報價與基本面等區塊不重載也不閃爍。
+
+### Changed（2026-07-29 個股頁走勢圖修復）
+
+- **技術指標的計算範圍與圖表期間脫鉤**：新增 `_PERIOD_SPEC` 對照表，後端一律以 ≥1 年的資料計算指標，`period` 只決定回傳給前端畫圖的長度。否則使用者把圖切到 1mo 時，MA60 等長週期指標會因樣本不足整排變成 `null`。實測 2330.TW 在 1mo/3mo/6mo/1y 下 MA60 恆為 2346.03、RSI 恆為 35.2。附帶效果是原本 `3mo` 僅 63 根、MA60 幾乎踩在 60 根下限的問題一併消失。未知的 `period` 值仍原樣透傳給 yfinance 並回傳整段序列，維持既有行為。
+
 ### Removed（2026-07-28 功能收斂：策略回測頁下架，能力收回 Chat）
 
 - **移除 `/backtest` 頁面與 REST 端點**：刪除 `frontend/src/pages/Backtest.tsx`、`backend/api/routes/backtest.py`（含 `POST /api/backtest`、`GET /api/backtest/strategies`），連同 `lib/api.ts` 的 `runBacktest` / `getStrategies` 與型別、`Layout` 側邊欄項目、`Dashboard` 入口卡、`rate_limit.backtest_limiter`、`feature_access` 的 `backtest` feature key 與 `quota_service.FEATURE_DAILY_LIMITS` 的 backtest 額度。

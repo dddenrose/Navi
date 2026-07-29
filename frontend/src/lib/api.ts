@@ -88,9 +88,11 @@ export async function getStockPrice(
 export async function getStockTechnicals(
   symbol: string,
   headers?: Record<string, string>,
+  period?: string,
 ): Promise<Technicals> {
+  const query = period ? `?period=${encodeURIComponent(period)}` : "";
   return apiFetch<Technicals>(
-    `/api/stock/${encodeURIComponent(symbol)}/technical`,
+    `/api/stock/${encodeURIComponent(symbol)}/technical${query}`,
     {},
     headers,
   );
