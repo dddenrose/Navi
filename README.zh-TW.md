@@ -124,9 +124,9 @@ cd backend && uv run pytest tests/
 
 | 文件                                                       | 內容                                             |
 | ---------------------------------------------------------- | ------------------------------------------------ |
-| [`SCREENER_ARCHITECTURE.md`](SCREENER_ARCHITECTURE.md)     | 選股系統架構、資料流與「規則引擎優先」設計理念   |
-| [`MOMENTUM_BACKTEST_NOTES.md`](MOMENTUM_BACKTEST_NOTES.md) | 動能策略研究，以及我把自己舊回測數字判定失效的稽核 |
-| [`docs/DESIGN-NOTES.md`](docs/DESIGN-NOTES.md)             | 技術選型理由、開發中推翻的決定、已知限制         |
+| [`docs/SCREENER_ARCHITECTURE.md`](docs/SCREENER_ARCHITECTURE.md)     | 選股系統架構、資料流與「規則引擎優先」設計理念   |
+| [`docs/MOMENTUM_BACKTEST_NOTES.md`](docs/MOMENTUM_BACKTEST_NOTES.md) | 動能策略研究，以及我把自己舊回測數字判定失效的稽核 |
+| [`docs/DESIGN_NOTES.md`](docs/DESIGN_NOTES.md)             | 技術選型理由、開發中推翻的決定、已知限制         |
 | [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md)               | 安裝設定、環境變數、專案結構、部署流程（英文）   |
 | [`docs/API.md`](docs/API.md)                               | REST 端點與 Agent 工具清單（英文）               |
 | [`CHANGELOG.md`](CHANGELOG.md)                             | 版本變更記錄                                     |

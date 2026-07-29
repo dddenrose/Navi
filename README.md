@@ -124,9 +124,9 @@ Requires Python 3.12+ ([uv](https://docs.astral.sh/uv/)), Node 20+, and a Google
 
 | Document                                                   | Contents                                                                     |
 | ---------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| [`SCREENER_ARCHITECTURE.md`](SCREENER_ARCHITECTURE.md) 🇹🇼   | Screener architecture, data flow, and the rule-engine-first rationale        |
-| [`MOMENTUM_BACKTEST_NOTES.md`](MOMENTUM_BACKTEST_NOTES.md) 🇹🇼 | Momentum research, and the audit that invalidated my own earlier backtest |
-| [`docs/DESIGN-NOTES.md`](docs/DESIGN-NOTES.md) 🇹🇼           | Tech-selection rationale, decisions I reversed mid-project, known limitations |
+| [`docs/SCREENER_ARCHITECTURE.md`](docs/SCREENER_ARCHITECTURE.md) 🇹🇼   | Screener architecture, data flow, and the rule-engine-first rationale        |
+| [`docs/MOMENTUM_BACKTEST_NOTES.md`](docs/MOMENTUM_BACKTEST_NOTES.md) 🇹🇼 | Momentum research, and the audit that invalidated my own earlier backtest |
+| [`docs/DESIGN_NOTES.md`](docs/DESIGN_NOTES.md) 🇹🇼           | Tech-selection rationale, decisions I reversed mid-project, known limitations |
 | [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md)               | Setup, environment variables, project structure, deployment                  |
 | [`docs/API.md`](docs/API.md)                               | REST endpoints and agent tools                                               |
 | [`CHANGELOG.md`](CHANGELOG.md)                             | Version history                                                              |

@@ -9,7 +9,7 @@ Momentum 回測口徑（backend/scripts/backtest_momentum.py，2026-07-11 執行
       --select global --total 10 --max-per-industry 2
 
 數字更新流程：改規則 → 重跑上述指令 → 更新本檔常數 → 更新
-MOMENTUM_BACKTEST_NOTES.md。規則與回測數字不同步就是說謊，
+docs/MOMENTUM_BACKTEST_NOTES.md。規則與回測數字不同步就是說謊，
 寧可標 experimental。
 """
 

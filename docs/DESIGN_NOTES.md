@@ -3,8 +3,8 @@
 本文記錄 Navi 的技術選型理由、以及開發過程中「原本打算這樣做、後來改成那樣」的取捨。
 內容以**目前程式碼實作為準**；純粹的實作前企劃書已於 2026-07 移除（可在 git 歷史中找到）。
 
-架構與資料流細節見 [`SCREENER_ARCHITECTURE.md`](../SCREENER_ARCHITECTURE.md)；
-回測方法論與實證見 [`MOMENTUM_BACKTEST_NOTES.md`](../MOMENTUM_BACKTEST_NOTES.md)。
+架構與資料流細節見 [`SCREENER_ARCHITECTURE.md`](SCREENER_ARCHITECTURE.md)；
+回測方法論與實證見 [`MOMENTUM_BACKTEST_NOTES.md`](MOMENTUM_BACKTEST_NOTES.md)。
 
 ---
 
@@ -108,4 +108,4 @@ UI 元件數量不多但客製化程度高（圖表卡片、選股結果、額�
 - **限流為 in-memory per-instance**——Cloud Run 冷啟動會歸零，換 IP 可繞過
 - **排程失敗無告警**——Cloud Scheduler 觸發失敗目前只留 Cloud Logging 一筆紀錄
 - **處置 / 全額交割股排除不完整**——依賴 TWSE 公告抓取，變更交易方法目前無資料源
-- **選股回測的 universe 含倖存者偏差**——詳見 [`MOMENTUM_BACKTEST_NOTES.md`](../MOMENTUM_BACKTEST_NOTES.md)
+- **選股回測的 universe 含倖存者偏差**——詳見 [`MOMENTUM_BACKTEST_NOTES.md`](MOMENTUM_BACKTEST_NOTES.md)
