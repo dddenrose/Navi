@@ -114,6 +114,32 @@ flowchart TD
 
 注意股 / 處置股資料來自 TWSE endpoint，實作上是 best-effort：如果 TWSE API 暫時失敗，不會阻塞整個選股流程。
 
+### 3.1 產業分類（Navi-11）
+
+TWSE 官方分類（28 類）太細，同類樣本數不足以算產業 PE 中位數；GICS（11 類）對台股又不夠貼切。
+因此自建 **11 類**，由 `backend/scripts/seed_industry_mapping.py` 從
+[TWSE ISIN 公開清單](https://isin.twse.com.tw/isin/C_public.jsp?strMode=2) 抓取後映射，
+產出 `backend/services/screener/industry_data.json`。對照關係以 `NAVI_BUCKETS` 常數為準：
+
+| Navi-11    | 對應 TWSE 類別關鍵字                       |
+| ---------- | ------------------------------------------ |
+| 半導體     | 半導體                                     |
+| 電子零組件 | 電子零組件、光電、其他電子                 |
+| 電腦及週邊 | 電腦及週邊 / 周邊、通信網路                |
+| 電子製造   | 電子通路、資訊服務                         |
+| 金融保險   | 金融、證券                                 |
+| 傳產製造   | 鋼鐵、塑膠、化學、化工、橡膠、玻璃、紡織   |
+| 航運汽車   | 航運、汽車                                 |
+| 生技醫療   | 生技、醫療                                 |
+| 民生消費   | 食品、貿易百貨、觀光、居家                 |
+| 建材營造   | 建材、水泥                                 |
+| 公用其他   | 公用、油電、其他（**未命中時的 fallback**） |
+
+配對用「包含」而非完全相等，以容納 TWSE 的類別名稱變體（如「化學工業」與「化學生技醫療」）。
+
+注意「公用其他」是異質 fallback 桶，其產業 PE 中位數無估值意義——落在該桶的股票估值一律回
+`unavailable`（見 §5）。新增產業或 TWSE 改分類名稱時，改 `NAVI_BUCKETS` 後重跑 seed 腳本。
+
 ## 4. Stage 2: Rule Engine
 
 Stage 2 是目前智能選股的核心。它不是舊 proposal 中的 z-score 加權打分，而是規則化、可追蹤、可向使用者解釋的 rule engine。
