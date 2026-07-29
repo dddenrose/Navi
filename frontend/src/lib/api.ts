@@ -8,6 +8,7 @@ import type {
   NewsData,
   MonthlyRevenueData,
   IndustryPeData,
+  PopularData,
 } from "@/types/stock";
 
 const BASE_URL =
@@ -83,6 +84,14 @@ export async function getStockPrice(
     {},
     headers,
   );
+}
+
+export async function getPopularStocks(
+  headers?: Record<string, string>,
+  limit?: number,
+): Promise<PopularData> {
+  const query = limit ? `?limit=${limit}` : "";
+  return apiFetch<PopularData>(`/api/stock/popular${query}`, {}, headers);
 }
 
 export async function getStockTechnicals(

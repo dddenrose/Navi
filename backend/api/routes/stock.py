@@ -11,6 +11,7 @@ from models.schemas import (
     IndustryPeResponse,
     MonthlyRevenueResponse,
     NewsResponse,
+    PopularResponse,
     StockOverview,
     TechnicalResponse,
 )
@@ -18,6 +19,7 @@ from services.industry_valuation_service import get_industry_pe
 from services.institutional_service import get_institutional_data
 from services.margin_service import get_margin_data
 from services.news_service import get_stock_news
+from services.popular_service import get_popular_stocks
 from services.screener.monthly_revenue import get_monthly_revenue
 from services.stock_service import (
     get_fundamental_data,
@@ -41,6 +43,21 @@ async def search_stocks(q: str = ""):
     if not q:
         return []
     return search_tw_stocks(q)
+
+
+@router.get("/popular", response_model=PopularResponse)
+async def get_popular(limit: int = 8):
+    """熱門標的排行：成交值／漲幅／跌幅三榜（僅台股上市櫃普通股）。
+
+    必須註冊在 `/{ticker}` 之前，否則會被那條 catch-all 當成股票代碼吃掉。
+    """
+    limit = max(1, min(limit, 20))
+    try:
+        data = get_popular_stocks(top_n=limit)
+        return PopularResponse(**asdict(data))
+    except Exception as e:
+        logger.exception("Failed to get popular stocks")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/{ticker}", response_model=StockOverview)

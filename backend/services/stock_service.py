@@ -73,6 +73,7 @@ class _TWQuote:
     low: float | None = None
     change: float | None = None
     volume_shares: int | None = None  # 成交股數
+    turnover: float | None = None  # 成交值（元），交易所原始欄位，非收盤價×股數的近似
     transaction: int | None = None  # 成交筆數
     date: str = ""  # API 回傳的資料日期 (ISO yyyy-mm-dd)；空字串代表未知
 
@@ -198,6 +199,7 @@ def _fetch_tw_quotes() -> dict[str, _TWQuote]:
                 low=_safe_float(item.get("LowestPrice")),
                 change=_safe_float(item.get("Change")),
                 volume_shares=_safe_int(item.get("TradeVolume")),
+                turnover=_safe_float(item.get("TradeValue")),
                 transaction=_safe_int(item.get("Transaction")),
                 date=_roc_date_to_iso(item.get("Date")),
             )
@@ -233,6 +235,9 @@ def _fetch_tw_quotes() -> dict[str, _TWQuote]:
                 volume_shares=_safe_int(
                     item.get("TradingShares") or item.get("TradeVolume")
                 ),
+                turnover=_safe_float(
+                    item.get("TransactionAmount") or item.get("TradeValue")
+                ),
                 transaction=_safe_int(item.get("Transaction")),
                 date=_roc_date_to_iso(item.get("Date")),
             )
@@ -247,6 +252,15 @@ def _fetch_tw_quotes() -> dict[str, _TWQuote]:
         logger.info("Loaded %d TW quotes (TWSE + TPEx)", len(quotes))
 
     return _tw_quote_cache
+
+
+def get_tw_quotes_snapshot() -> dict[str, _TWQuote]:
+    """全台股（上市＋上櫃）最近一個交易日的收盤報價快照，30 分鐘快取。
+
+    供需要全市場視角的 service（如熱門標的排行）使用，避免各自重打交易所 API。
+    回傳的 dict 是快取本身，呼叫端請勿修改。
+    """
+    return _fetch_tw_quotes()
 
 
 def _fetch_tw_stock_listing() -> dict[str, str]:
@@ -607,6 +621,8 @@ class TechnicalIndicators:
     # 走勢圖序列
     history: list[PricePoint] = field(default_factory=list)
     """依 `period` 截取的收盤價序列（由舊到新）；資料抓取失敗時為空。"""
+    history_interval: str = "1d"
+    """`history` 的實際 K 棒週期："1d" / "1wk" / "1mo"。長期間會降頻，需標示給使用者。"""
     # 綜合
     summary: str = ""
 
@@ -755,16 +771,24 @@ def _get_yf_overview(ticker: str) -> StockOverviewData:
     )
 
 
-# period → (實際向 yfinance 抓取的期間, 圖表保留的交易日數；None = 全部)
-# 指標一律以 ≥1 年的資料計算，避免使用者把圖表切到 1mo 時 MA60 等長週期指標變成 None；
-# `period` 只決定回傳給前端畫圖的長度，不影響指標數值。
-_PERIOD_SPEC: dict[str, tuple[str, int | None]] = {
-    "1mo": ("1y", 22),
-    "3mo": ("1y", 63),
-    "6mo": ("1y", 126),
-    "1y": ("1y", None),
-    "2y": ("2y", None),
-    "5y": ("5y", None),
+# 指標一律以這組參數計算，與使用者選的圖表期間無關：
+# 否則把圖表切到 1mo 會讓 MA60 因樣本不足變成 None，切到 max（月線）更會讓
+# 「MA5」變成月線 MA5，語意完全走樣。
+_INDICATOR_PERIOD = "1y"
+_INDICATOR_INTERVAL = "1d"
+
+# period → (抓取期間, K 棒週期, 圖表保留筆數；None = 全部)
+# 長期間降頻是為了控制點數：max 用日線在台股是 6600+ 根、美股上萬根，
+# JSON 逼近 400 KB 且 recharts 的 hover 會明顯卡頓。降頻後各期間都在 1500 點以內。
+_PERIOD_SPEC: dict[str, tuple[str, str, int | None]] = {
+    "1mo": ("1y", "1d", 22),
+    "3mo": ("1y", "1d", 63),
+    "6mo": ("1y", "1d", 126),
+    "1y": ("1y", "1d", None),
+    "2y": ("2y", "1d", None),
+    "5y": ("5y", "1d", None),
+    "10y": ("10y", "1wk", None),
+    "max": ("max", "1mo", None),
 }
 
 
@@ -774,10 +798,10 @@ def get_technical_indicators(ticker: str, period: str = "3mo") -> TechnicalIndic
     stock = yf.Ticker(ticker)
 
     # 未知的 period 直接透傳給 yfinance，並回傳整段序列（維持舊行為）
-    fetch_period, keep_rows = _PERIOD_SPEC.get(period, (period, None))
+    fetch_period, interval, keep_rows = _PERIOD_SPEC.get(period, (period, "1d", None))
 
     try:
-        df = stock.history(period=fetch_period)
+        df = stock.history(period=_INDICATOR_PERIOD, interval=_INDICATOR_INTERVAL)
     except Exception as e:
         logger.warning("Failed to fetch history for %s: %s", ticker, e)
         return TechnicalIndicators(ticker=ticker)
@@ -788,10 +812,28 @@ def get_technical_indicators(ticker: str, period: str = "3mo") -> TechnicalIndic
 
     close = df["Close"]
     result = TechnicalIndicators(ticker=ticker, period=period)
-    chart_df = df if keep_rows is None else df.tail(keep_rows)
+    result.history_interval = interval
+
+    # 圖表序列：與指標同參數時直接沿用，免去第二次網路往返
+    chart_df = df
+    if (fetch_period, interval) != (_INDICATOR_PERIOD, _INDICATOR_INTERVAL):
+        try:
+            fetched = stock.history(period=fetch_period, interval=interval)
+            if not fetched.empty:
+                chart_df = fetched
+            else:
+                # 例如新上市股票沒有 10y 資料：退回日線，並據實回報實際週期
+                result.history_interval = _INDICATOR_INTERVAL
+        except Exception as e:
+            logger.warning("Failed to fetch chart series for %s (%s): %s", ticker, period, e)
+            result.history_interval = _INDICATOR_INTERVAL
+    if keep_rows is not None:
+        chart_df = chart_df.tail(keep_rows)
+
     result.history = [
         PricePoint(date=idx.strftime("%Y-%m-%d"), close=round(float(val), 2))
         for idx, val in chart_df["Close"].items()
+        if val == val  # 濾掉 NaN（降頻後最後一根可能尚未收盤）
     ]
     result.current_price = round(float(close.iloc[-1]), 2)
 

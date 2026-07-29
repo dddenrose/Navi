@@ -7,6 +7,7 @@ import {
   getStockFundamentals,
   getStockInstitutional,
   getStockMargin,
+  getPopularStocks,
   searchStocks,
   type StockSuggestion,
 } from "@/lib/api";
@@ -19,8 +20,14 @@ import type {
   MarginData,
   Tab,
   ChartPeriod,
+  PopularData,
 } from "@/types/stock";
-import { CHART_PERIODS, CHART_PERIOD_LABELS } from "@/types/stock";
+import {
+  CHART_PERIODS,
+  CHART_PERIOD_LABELS,
+  INTERVAL_LABELS,
+} from "@/types/stock";
+import PopularStocks from "@/components/PopularStocks";
 import StockOverviewTab from "@/pages/stock/StockOverviewTab";
 import StockTechnicalTab from "@/pages/stock/StockTechnicalTab";
 import StockFundamentalTab from "@/pages/stock/StockFundamentalTab";
@@ -63,9 +70,10 @@ export default function Stock() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  // 走勢圖期間；只影響圖表長度，技術指標數值不受影響（後端一律用 ≥1y 資料計算）
+  // 走勢圖期間；只影響圖表長度，技術指標數值不受影響（後端一律用 1y 日線計算）
   const [chartPeriod, setChartPeriod] = useState<ChartPeriod>("3mo");
   const [chartLoading, setChartLoading] = useState(false);
+  const [popularData, setPopularData] = useState<PopularData | null>(null);
 
   // Autocomplete state
   const [suggestions, setSuggestions] = useState<StockSuggestion[]>([]);
@@ -112,6 +120,26 @@ export default function Stock() {
     }
   }, []);
 
+  // 網址是查詢對象的單一真實來源。少了這段，瀏覽器上一頁／下一頁只會改網址，
+  // symbol state 停在原值，畫面完全不動——返回鍵之外的返回路徑都會失效。
+  useEffect(() => {
+    const next = paramSymbol ?? "";
+    setSymbol(next);
+    if (!next) {
+      // 回到卡片頁：個股資料一定要清，否則會和熱門標的同時出現在畫面上
+      setSearchInput("");
+      setError("");
+      setPriceData(null);
+      setTechnicalData(null);
+      setFundamentalData(null);
+      setInstitutionalData(null);
+      setMarginData(null);
+      setChartPeriod("3mo");
+      setShowSuggestions(false);
+      setSuggestions([]);
+    }
+  }, [paramSymbol]);
+
   useEffect(() => {
     if (symbol) fetchData(symbol);
   }, [symbol, fetchData]);
@@ -137,6 +165,24 @@ export default function Stock() {
       cancelled = true;
     };
   }, [symbol, chartPeriod]);
+
+  // 熱門標的：只在還沒有查詢對象時需要，且後端已快取 30 分鐘 —— 一個 session 抓一次就夠
+  useEffect(() => {
+    if (symbol || popularData) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const headers = await getAuthHeaders();
+        const data = await getPopularStocks(headers);
+        if (!cancelled) setPopularData(data);
+      } catch {
+        // 輔助資訊，失敗就退回原本的文字提示
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [symbol, popularData]);
 
   // Debounced autocomplete
   useEffect(() => {
@@ -168,25 +214,39 @@ export default function Stock() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const handleSelectSuggestion = useCallback(
-    (s: StockSuggestion) => {
-      setSearchInput(`${s.code} ${s.name}`);
+  /**
+   * 前往個股頁。從熱門標的頁進入時用 push，讓瀏覽器上一頁能回到卡片頁；
+   * 個股之間切換用 replace，免得連查五檔就要按五次上一頁才回得去。
+   */
+  const goToSymbol = useCallback(
+    (ticker: string, label: string) => {
+      setSearchInput(label);
       setShowSuggestions(false);
       setSuggestions([]);
-      setSymbol(s.ticker);
-      navigate(`/stock/${encodeURIComponent(s.ticker)}`, { replace: true });
+      navigate(`/stock/${encodeURIComponent(ticker)}`, {
+        replace: Boolean(symbol),
+      });
+      setSymbol(ticker);
     },
-    [navigate],
+    [navigate, symbol],
+  );
+
+  /** 回到熱門標的頁。實際的狀態清理由下方的 URL 同步 effect 負責。 */
+  const backToPopular = useCallback(() => {
+    navigate("/stock", { replace: true });
+  }, [navigate]);
+
+  const handleSelectSuggestion = useCallback(
+    (s: StockSuggestion) => goToSymbol(s.ticker, `${s.code} ${s.name}`),
+    [goToSymbol],
   );
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     const trimmed = searchInput.trim();
     if (!trimmed) return;
-    setShowSuggestions(false);
     const sym = /^[A-Za-z$]+$/.test(trimmed) ? trimmed.toUpperCase() : trimmed;
-    setSymbol(sym);
-    navigate(`/stock/${encodeURIComponent(sym)}`, { replace: true });
+    goToSymbol(sym, searchInput);
   };
 
   const isPositive = (priceData?.change ?? 0) >= 0;
@@ -225,12 +285,25 @@ export default function Stock() {
             onChange={(e) => setSearchInput(e.target.value)}
             onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
             placeholder="輸入股票代號或名稱（例：2330、台積電）…"
-            className="stock-search-input w-full rounded-2xl pl-11 pr-5 py-4 text-sm text-slate-200 placeholder-slate-700"
+            className="stock-search-input w-full rounded-2xl pl-11 pr-11 py-4 text-sm text-slate-200 placeholder-slate-700"
             style={{
               background: "var(--overlay-bg)",
               border: "1px solid var(--border)",
             }}
           />
+          {/* 清空＝回到熱門標的：此頁的「初始狀態」就是卡片頁，只清文字會停在個股頁上 */}
+          {searchInput && (
+            <button
+              type="button"
+              onClick={backToPopular}
+              aria-label="清除搜尋並返回熱門標的"
+              className="absolute right-3.5 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center rounded-full text-slate-600 hover:text-slate-300 transition-colors"
+            >
+              <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+                <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
+              </svg>
+            </button>
+          )}
           {/* Autocomplete dropdown */}
           {showSuggestions && suggestions.length > 0 && (
             <ul
@@ -286,6 +359,28 @@ export default function Stock() {
         </button>
       </form>
 
+      {symbol && (
+        <button
+          onClick={backToPopular}
+          className="inline-flex items-center gap-1.5 mb-6 -mt-2 px-3 py-1.5 rounded-xl text-xs font-medium transition-colors hover:text-slate-200"
+          style={{ color: "var(--text-dim)", background: "var(--overlay-bg)" }}
+        >
+          <svg
+            viewBox="0 0 20 20"
+            fill="currentColor"
+            className="w-3.5 h-3.5"
+            aria-hidden="true"
+          >
+            <path
+              fillRule="evenodd"
+              d="M12.79 5.23a.75.75 0 01-.02 1.06L8.832 10l3.938 3.71a.75.75 0 11-1.04 1.08l-4.5-4.25a.75.75 0 010-1.08l4.5-4.25a.75.75 0 011.06.02z"
+              clipRule="evenodd"
+            />
+          </svg>
+          熱門標的
+        </button>
+      )}
+
       {error && (
         <div
           role="alert"
@@ -301,18 +396,22 @@ export default function Stock() {
       )}
 
       {!symbol && !loading && (
-        <div className="flex flex-col items-center justify-center py-24 text-center animate-fade-in">
-          <div
-            className="w-16 h-16 rounded-2xl flex items-center justify-center text-3xl mb-5"
-            style={{
-              background: "var(--overlay-bg)",
-              border: "1px solid var(--border)",
-            }}
-          >
-            📈
+        popularData ? (
+          <PopularStocks data={popularData} onSelect={goToSymbol} />
+        ) : (
+          <div className="flex flex-col items-center justify-center py-24 text-center animate-fade-in">
+            <div
+              className="w-16 h-16 rounded-2xl flex items-center justify-center text-3xl mb-5"
+              style={{
+                background: "var(--overlay-bg)",
+                border: "1px solid var(--border)",
+              }}
+            >
+              📈
+            </div>
+            <p className="text-slate-600 text-sm">輸入股票代號或公司名稱開始查詢</p>
           </div>
-          <p className="text-slate-600 text-sm">輸入股票代號或公司名稱開始查詢</p>
-        </div>
+        )
       )}
 
       {priceData && (
@@ -369,12 +468,16 @@ export default function Stock() {
 
             {/* Price chart */}
             <div className="mt-6">
-              <div className="flex items-center justify-between gap-3 mb-2">
+              <div className="flex items-center justify-between gap-3 mb-2 flex-wrap">
                 <span className="text-[11px] font-semibold tracking-wide text-slate-500">
                   收盤走勢
+                  {/* 長期間會降頻，不標示的話使用者會把月線誤讀成日線 */}
+                  {technicalData &&
+                    technicalData.history_interval !== "1d" &&
+                    `（${INTERVAL_LABELS[technicalData.history_interval] ?? technicalData.history_interval}）`}
                 </span>
                 <div
-                  className="flex gap-0.5 p-1 rounded-xl"
+                  className="flex gap-0.5 p-1 rounded-xl overflow-x-auto max-w-full"
                   style={{
                     background: "var(--overlay-bg)",
                     border: "1px solid var(--border)",
@@ -385,7 +488,7 @@ export default function Stock() {
                       key={p}
                       onClick={() => setChartPeriod(p)}
                       aria-pressed={chartPeriod === p}
-                      className="shrink-0 whitespace-nowrap px-3 py-1 rounded-lg text-[11px] font-semibold tracking-wide transition-colors"
+                      className="shrink-0 whitespace-nowrap px-2.5 py-1 rounded-lg text-[11px] font-semibold tracking-wide transition-colors"
                       style={
                         chartPeriod === p
                           ? {

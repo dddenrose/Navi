@@ -6,7 +6,7 @@ export interface PricePoint {
 }
 
 /** 走勢圖可選期間；與後端 `_PERIOD_SPEC` 的 key 對應。 */
-export const CHART_PERIODS = ["1mo", "3mo", "6mo", "1y"] as const;
+export const CHART_PERIODS = ["1mo", "3mo", "6mo", "1y", "5y", "10y", "max"] as const;
 export type ChartPeriod = (typeof CHART_PERIODS)[number];
 
 export const CHART_PERIOD_LABELS: Record<ChartPeriod, string> = {
@@ -14,6 +14,16 @@ export const CHART_PERIOD_LABELS: Record<ChartPeriod, string> = {
   "3mo": "3個月",
   "6mo": "6個月",
   "1y": "1年",
+  "5y": "5年",
+  "10y": "10年",
+  max: "全部",
+};
+
+/** 後端長期間會降頻，標示實際 K 棒週期避免誤讀。 */
+export const INTERVAL_LABELS: Record<string, string> = {
+  "1d": "日線",
+  "1wk": "週線",
+  "1mo": "月線",
 };
 
 export interface StockPrice {
@@ -65,7 +75,35 @@ export interface Technicals {
   risk_reward_note: string;
   /** 依 period 截取的收盤價序列（由舊到新）；抓取失敗時為空陣列。 */
   history: PricePoint[];
+  /** history 的實際 K 棒週期："1d" / "1wk" / "1mo"。 */
+  history_interval: string;
   summary: string;
+}
+
+export interface PopularStockItem {
+  ticker: string;
+  code: string;
+  name: string;
+  price: number | null;
+  change: number | null;
+  change_percent: number | null;
+  volume_shares: number | null;
+  /** 成交值（元） */
+  turnover: number | null;
+  /** 近一個月收盤序列（由舊到新），供 sparkline 使用 */
+  spark: number[];
+}
+
+export interface PopularBoard {
+  key: string;
+  label: string;
+  items: PopularStockItem[];
+}
+
+export interface PopularData {
+  boards: PopularBoard[];
+  as_of_date: string;
+  note: string;
 }
 
 export interface InstitutionalDaily {

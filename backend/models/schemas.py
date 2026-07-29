@@ -32,6 +32,32 @@ class PricePoint(BaseModel):
     close: float
 
 
+class PopularStockItem(BaseModel):
+    """熱門標的排行榜上的單檔個股."""
+
+    ticker: str
+    code: str
+    name: str
+    price: float | None = None
+    change: float | None = None
+    change_percent: float | None = None
+    volume_shares: int | None = None
+    turnover: float | None = None  # 成交值（元）
+    spark: list[float] = []  # 近一個月收盤序列（由舊到新）
+
+
+class PopularBoardResponse(BaseModel):
+    key: str  # turnover / gainers / losers
+    label: str
+    items: list[PopularStockItem] = []
+
+
+class PopularResponse(BaseModel):
+    boards: list[PopularBoardResponse] = []
+    as_of_date: str = ""
+    note: str = ""
+
+
 class StockOverview(BaseModel):
     ticker: str
     name: str = ""
@@ -88,6 +114,7 @@ class TechnicalResponse(BaseModel):
     risk_reward_note: str = ""
     # 走勢圖序列（依 period 截取的收盤價，由舊到新）
     history: list[PricePoint] = []
+    history_interval: str = "1d"  # history 的實際 K 棒週期：1d / 1wk / 1mo
     # 綜合
     summary: str = ""
 

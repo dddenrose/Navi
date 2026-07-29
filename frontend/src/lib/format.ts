@@ -33,6 +33,14 @@ export const fmtLarge = (n?: number | null, currency = ""): string => {
   return `${prefix}${new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(n)}`;
 };
 
+/** 以台股慣用的中文單位縮寫金額（成交值多為億元等級） */
+export const fmtCompactTWD = (n?: number | null): string => {
+  if (n == null) return "-";
+  if (n >= 1e8) return `${(n / 1e8).toFixed(1)} 億`;
+  if (n >= 1e4) return `${(n / 1e4).toFixed(0)} 萬`;
+  return new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(n);
+};
+
 /** Format a number with configurable decimal places using locale */
 export function fmt(n: number, decimals = 0): string {
   return n.toLocaleString("en-US", {
