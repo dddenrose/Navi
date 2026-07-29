@@ -1,37 +1,35 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
-import { adminListUsers } from "@/lib/api";
-import type { AdminUser } from "@/lib/api";
+import { useAdminUsers, type AdminUserFilters } from "@/lib/queries/admin";
 
 const TIERS = ["", "free", "pro", "unlimited", "admin"];
 const STATUSES = ["", "active", "suspended"];
 
+const EMPTY_FILTERS: AdminUserFilters = { q: "", tier: "", status: "" };
+
 export default function AdminUsers() {
-  const [users, setUsers] = useState<AdminUser[]>([]);
+  // 輸入框的即時值與「已送出的查詢條件」分開：queryKey 只綁後者，
+  // 否則每打一個字都會變成一次新查詢（原本是按下搜尋才查）。
   const [q, setQ] = useState("");
   const [tier, setTier] = useState("");
   const [status, setStatus] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [filters, setFilters] = useState<AdminUserFilters>(EMPTY_FILTERS);
+
+  const { data, isFetching, error, refetch } = useAdminUsers(filters);
+  const users = data?.users ?? [];
+  const loading = isFetching;
 
   const load = () => {
-    setLoading(true);
-    setError(null);
-    adminListUsers({
-      q: q || undefined,
-      tier: tier || undefined,
-      status: status || undefined,
-      limit: 200,
-    })
-      .then((r) => setUsers(r.users))
-      .catch((e) => setError(String(e)))
-      .finally(() => setLoading(false));
+    const next: AdminUserFilters = { q, tier, status };
+    const changed =
+      next.q !== filters.q ||
+      next.tier !== filters.tier ||
+      next.status !== filters.status;
+    // 條件沒變時 queryKey 也不會變，要靠 refetch 才會真的重打——
+    // 使用者按下「搜尋」的預期是「現在就去拿一次」，不是「看情況」。
+    if (changed) setFilters(next);
+    else refetch();
   };
-
-  useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   return (
     <div className="space-y-4 max-w-6xl">
@@ -64,7 +62,7 @@ export default function AdminUsers() {
         </button>
       </div>
 
-      {error && <p className="text-xs text-rose-400">{error}</p>}
+      {error && <p className="text-xs text-rose-400">{String(error)}</p>}
 
       <div
         className="rounded-xl overflow-hidden"

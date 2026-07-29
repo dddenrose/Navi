@@ -51,6 +51,21 @@ export async function toUserMessage(res: Response): Promise<string> {
 }
 
 /**
+ * 帶 HTTP 狀態碼的錯誤。訊息與過去的 `new Error(...)` 完全相同，
+ * 既有只讀 `err.message` 的 catch 不受影響；多出來的 `status`
+ * 讓 React Query 能判斷「404 不用重試、500 才重試」。
+ */
+export class ApiError extends Error {
+  readonly status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
+
+/**
  * Unified fetch wrapper: handles auth headers, base URL, and error unwrapping.
  * Pass pre-fetched `headers` to avoid redundant getIdToken() calls when
  * firing multiple parallel requests (e.g. Stock page parallel fetches).
@@ -62,7 +77,7 @@ async function apiFetch<T>(
 ): Promise<T> {
   const h = headers ?? (await getAuthHeaders());
   const res = await fetch(`${BASE_URL}${path}`, { ...init, headers: h });
-  if (!res.ok) throw new Error(await toUserMessage(res));
+  if (!res.ok) throw new ApiError(await toUserMessage(res), res.status);
   const text = await res.text();
   return (text ? JSON.parse(text) : undefined) as T;
 }

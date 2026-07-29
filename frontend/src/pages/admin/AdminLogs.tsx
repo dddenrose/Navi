@@ -1,36 +1,28 @@
-import { useEffect, useState } from "react";
-import { adminListLogs } from "@/lib/api";
-import type { UsageLog } from "@/lib/api";
+import { useState } from "react";
+import { useAdminLogs, type AdminLogFilters } from "@/lib/queries/admin";
+
+const EMPTY_FILTERS: AdminLogFilters = {};
 
 export default function AdminLogs() {
-  const [logs, setLogs] = useState<UsageLog[]>([]);
   const [uid, setUid] = useState("");
   const [blocked, setBlocked] = useState<"" | "true" | "false">("");
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  // 篩選條件改變不會自動查；一律由「重新查詢」按鈕觸發（維持原行為）
+  const [filters, setFilters] = useState<AdminLogFilters>(EMPTY_FILTERS);
 
-  const load = () => {
-    adminListLogs({
-      uid: uid || undefined,
-      blocked: blocked === "" ? undefined : blocked === "true",
-      limit: 200,
-    })
-      .then((r) => setLogs(r.logs))
-      .catch((e) => setError(String(e)))
-      .finally(() => setLoading(false));
-  };
+  const { data, isFetching, error, refetch } = useAdminLogs(filters);
+  const logs = data?.logs ?? [];
+  const loading = isFetching;
 
   const search = () => {
-    setLoading(true);
-    setError(null);
-    load();
+    const next: AdminLogFilters = {
+      uid: uid || undefined,
+      blocked: blocked === "" ? undefined : blocked === "true",
+    };
+    const changed =
+      next.uid !== filters.uid || next.blocked !== filters.blocked;
+    if (changed) setFilters(next);
+    else refetch();
   };
-
-  useEffect(() => {
-    // 僅在掛載時載入一次；篩選條件改變後由「重新查詢」按鈕觸發 load()
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   return (
     <div className="space-y-4 max-w-6xl">
@@ -67,7 +59,7 @@ export default function AdminLogs() {
         </button>
       </div>
 
-      {error && <p className="text-xs text-rose-400">{error}</p>}
+      {error && <p className="text-xs text-rose-400">{String(error)}</p>}
 
       <div
         className="rounded-xl overflow-hidden"

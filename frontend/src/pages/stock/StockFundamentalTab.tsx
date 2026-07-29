@@ -1,12 +1,10 @@
-import { useState, useEffect } from "react";
 import StatCard from "@/components/StatCard";
 import { fmtNum, fmtPct, fmtPrice } from "@/lib/format";
 import {
-  getAuthHeaders,
-  getStockMonthlyRevenue,
-  getStockIndustryPe,
-} from "@/lib/api";
-import type { Fundamentals, MonthlyRevenueData, IndustryPeData } from "@/types/stock";
+  useStockIndustryPe,
+  useStockMonthlyRevenue,
+} from "@/lib/queries/stock";
+import type { Fundamentals } from "@/types/stock";
 
 interface StockFundamentalTabProps {
   fundamentalData: Fundamentals;
@@ -26,46 +24,12 @@ export default function StockFundamentalTab({
   currency,
   ticker,
 }: StockFundamentalTabProps) {
-  // 月營收快照與產業 PE 分位數：兩者皆為可選的加值資訊，
-  // 各自獨立 lazy fetch（進到基本面分頁才打），查無資料時整塊靜默隱藏，不顯示錯誤。
-  // state 帶 ticker 一起存，render 時比對即可濾掉換股後的舊資料，
-  // 不需要在 effect 裡同步 setState 重置。
-  const [extras, setExtras] = useState<{
-    ticker: string;
-    monthlyRevenue: MonthlyRevenueData | null;
-    industryPe: IndustryPeData | null;
-  } | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    (async () => {
-      try {
-        const headers = await getAuthHeaders();
-        const [revResult, peResult] = await Promise.allSettled([
-          getStockMonthlyRevenue(ticker, headers),
-          getStockIndustryPe(ticker, headers),
-        ]);
-        if (cancelled) return;
-        setExtras({
-          ticker,
-          monthlyRevenue:
-            revResult.status === "fulfilled" ? revResult.value : null,
-          industryPe: peResult.status === "fulfilled" ? peResult.value : null,
-        });
-      } catch {
-        // 靜默失敗：這兩項都是加值資訊，缺資料不影響基本面分頁其餘內容
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [ticker]);
-
-  const monthlyRevenue =
-    extras?.ticker === ticker ? extras.monthlyRevenue : null;
-  const industryPe = extras?.ticker === ticker ? extras.industryPe : null;
+  // 月營收快照與產業 PE 分位數：兩者皆為可選的加值資訊，各自獨立 lazy fetch
+  // （進到基本面分頁才打），查無資料時整塊靜默隱藏，不顯示錯誤——失敗時
+  // query 的 data 是 undefined，下方的條件渲染自然就跳過了。
+  // 換股票時 query key 跟著換，不會拿到上一檔的殘留資料。
+  const monthlyRevenue = useStockMonthlyRevenue(ticker).data ?? null;
+  const industryPe = useStockIndustryPe(ticker).data ?? null;
 
   return (
     <div className="space-y-6">

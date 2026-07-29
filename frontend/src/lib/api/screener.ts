@@ -1,5 +1,5 @@
 // Screener API client
-import { getAuthHeaders } from "@/lib/api";
+import { ApiError, getAuthHeaders } from "@/lib/api";
 import type {
   ReportSummary,
   ReportDetail,
@@ -16,7 +16,9 @@ const BASE_URL =
 async function authedFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = await getAuthHeaders();
   const res = await fetch(`${BASE_URL}${path}`, { ...init, headers });
-  if (!res.ok) throw new Error(await res.text());
+  // 訊息維持原本的原始 body，只補上狀態碼，讓 queryClient 的
+  // 「只重試 5xx」規則對 screener 這條路徑也生效
+  if (!res.ok) throw new ApiError(await res.text(), res.status);
   const text = await res.text();
   return (text ? JSON.parse(text) : undefined) as T;
 }

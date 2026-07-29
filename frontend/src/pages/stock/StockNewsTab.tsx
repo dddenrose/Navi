@@ -1,6 +1,4 @@
-import { useState, useEffect } from "react";
-import { getAuthHeaders, getStockNews } from "@/lib/api";
-import type { NewsArticle } from "@/types/stock";
+import { useStockNews } from "@/lib/queries/stock";
 
 interface StockNewsTabProps {
   ticker: string;
@@ -22,34 +20,16 @@ function relativeTime(published: string): string {
 }
 
 export default function StockNewsTab({ ticker }: StockNewsTabProps) {
-  const [articles, setArticles] = useState<NewsArticle[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  // 新聞快取 30 分鐘（對齊後端 TTL）：在分頁之間來回切不會重打 RSS
+  const { data, isLoading, isError } = useStockNews(ticker, 10);
 
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    setError("");
-    setArticles([]);
-
-    (async () => {
-      try {
-        const headers = await getAuthHeaders();
-        const data = await getStockNews(ticker, 10, headers);
-        if (cancelled) return;
-        setArticles(data.articles);
-        if (data.articles.length === 0) setError(data.error || "暫無相關新聞");
-      } catch {
-        if (!cancelled) setError("新聞載入失敗，請稍後再試");
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [ticker]);
+  const articles = data?.articles ?? [];
+  const error = isError
+    ? "新聞載入失敗，請稍後再試"
+    : data && articles.length === 0
+      ? data.error || "暫無相關新聞"
+      : "";
+  const loading = isLoading;
 
   const cardStyle = {
     background: "var(--card-bg)",

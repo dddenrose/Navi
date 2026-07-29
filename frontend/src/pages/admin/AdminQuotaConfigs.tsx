@@ -1,24 +1,19 @@
-import { useEffect, useState } from "react";
-import { adminListQuotaConfigs, adminUpdateQuotaConfig } from "@/lib/api";
+import { useState } from "react";
+import {
+  useAdminQuotaConfigs,
+  useAdminUpdateQuotaConfig,
+} from "@/lib/queries/admin";
 import type { QuotaConfig } from "@/lib/api";
 
 export default function AdminQuotaConfigs() {
-  const [configs, setConfigs] = useState<QuotaConfig[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { data, isPending, error: loadError } = useAdminQuotaConfigs();
+  const updateConfig = useAdminUpdateQuotaConfig();
+
   const [edits, setEdits] = useState<Record<string, Partial<QuotaConfig>>>({});
   const [savedTier, setSavedTier] = useState<string | null>(null);
 
-  const load = () => {
-    adminListQuotaConfigs()
-      .then((r) => setConfigs(r.configs))
-      .catch((e) => setError(String(e)))
-      .finally(() => setLoading(false));
-  };
-
-  useEffect(() => {
-    load();
-  }, []);
+  const configs = data?.configs ?? [];
+  const error = loadError ?? updateConfig.error;
 
   const updateEdit = (tier: string, key: keyof QuotaConfig, value: string) => {
     setEdits((prev) => ({
@@ -34,22 +29,22 @@ export default function AdminQuotaConfigs() {
     const patch = edits[tier];
     if (!patch || Object.keys(patch).length === 0) return;
     try {
-      await adminUpdateQuotaConfig(tier, patch);
+      // mutation 成功後由 onSuccess 失效 quota-configs，列表自動重抓，
+      // 不需要再手動 load()
+      await updateConfig.mutateAsync({ tier, patch });
       setSavedTier(tier);
       setEdits((p) => ({ ...p, [tier]: {} }));
       setTimeout(() => setSavedTier(null), 2500);
-      setLoading(true);
-      load();
-    } catch (e) {
-      setError(String(e));
+    } catch {
+      // 錯誤已由 updateConfig.error 帶出，此處僅避免未捕捉的 rejection
     }
   };
 
-  if (loading) return <p className="text-sm text-slate-500">載入中…</p>;
+  if (isPending) return <p className="text-sm text-slate-500">載入中…</p>;
 
   return (
     <div className="space-y-4 max-w-4xl">
-      {error && <p className="text-xs text-rose-400">{error}</p>}
+      {error && <p className="text-xs text-rose-400">{String(error)}</p>}
       <p className="text-xs text-slate-600">
         調整每個 Tier 的每日訊息上限與每分鐘速率。<code>-1</code> 代表無限。
       </p>

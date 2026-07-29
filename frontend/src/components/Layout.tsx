@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { signOut } from "firebase/auth";
 import { auth } from "@/lib/firebase";
-import { getFeatureAccess } from "@/lib/api";
+import { useAllowedFeatures } from "@/lib/queries/account";
 import { useAuthStore } from "@/store/authStore";
 import { useThemeStore } from "@/store/themeStore";
 import { useTokenClaims } from "@/lib/useTokenClaims";
@@ -107,33 +107,10 @@ export default function Layout() {
   const { theme, toggleTheme } = useThemeStore();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
-  const [allowedFeatures, setAllowedFeatures] = useState<Set<string> | null>(
-    null,
-  );
+  // 與 Dashboard、FeatureGuard 共用同一份權限快取（見 lib/queries/account.ts）
+  const allowedFeatures = useAllowedFeatures();
   const claims = useTokenClaims();
   const location = useLocation();
-
-  useEffect(() => {
-    let cancelled = false;
-    getFeatureAccess()
-      .then((data) => {
-        if (cancelled) return;
-        setAllowedFeatures(
-          new Set(
-            data.features
-              .filter((feature) => feature.allowed)
-              .map((feature) => feature.feature_key),
-          ),
-        );
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setAllowedFeatures(null);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [user?.uid]);
 
   // Close sidebar on route change (mobile)
   const [prevPathname, setPrevPathname] = useState(location.pathname);

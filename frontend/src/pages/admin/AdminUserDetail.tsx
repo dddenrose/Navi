@@ -1,15 +1,20 @@
-import { useEffect, useState, useCallback } from "react";
+import { useState } from "react";
 import { useParams, Link } from "react-router-dom";
-import { adminGetUser, adminUpdateUser } from "@/lib/api";
-import type { AdminUser, UsageDay } from "@/lib/api";
+import type { adminUpdateUser, AdminUser } from "@/lib/api";
+import { useAdminUpdateUser, useAdminUser } from "@/lib/queries/admin";
 import { TierBadge } from "./AdminUsers";
+
+/** 後端的 null/undefined 與輸入框的空字串來回對應，兩處判斷要一致。 */
+function customLimitToInput(value: number | null | undefined): string {
+  return value === null || value === undefined ? "" : String(value);
+}
 
 export default function AdminUserDetail() {
   const { uid = "" } = useParams();
-  const [user, setUser] = useState<AdminUser | null>(null);
-  const [usage, setUsage] = useState<UsageDay[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
+  const { data, error: loadError } = useAdminUser(uid);
+  const updateUser = useAdminUpdateUser(uid);
+
+  const [localError, setLocalError] = useState<string | null>(null);
   const [savedMsg, setSavedMsg] = useState<string | null>(null);
 
   // Editable fields
@@ -18,31 +23,26 @@ export default function AdminUserDetail() {
   const [customLimit, setCustomLimit] = useState<string>("");
   const [notes, setNotes] = useState("");
 
-  const load = useCallback(() => {
-    adminGetUser(uid)
-      .then((r) => {
-        setUser(r.user);
-        setUsage(r.usage);
-        setTier(r.user.tier);
-        setStatus(r.user.status);
-        setCustomLimit(
-          r.user.custom_daily_limit === null ||
-            r.user.custom_daily_limit === undefined
-            ? ""
-            : String(r.user.custom_daily_limit),
-        );
-        setNotes(r.user.notes || "");
-      })
-      .catch((e) => setError(String(e)));
-  }, [uid]);
+  const user = data?.user ?? null;
+  const usage = data?.usage ?? [];
+  const error = localError ?? loadError ?? updateUser.error;
+  const saving = updateUser.isPending;
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  // 表單欄位以 server 資料為初值。React Query 的 data 物件在資料沒變時
+  // 參照是穩定的，因此這個比對只會在「首次載入」與「存檔後重抓」時成立，
+  // 不會在每次 render 把管理者正在編輯的內容洗掉。
+  // （admin query 已關掉 refetchOnWindowFocus，切出去再回來也不會被蓋。）
+  const [seededFrom, setSeededFrom] = useState<AdminUser | null>(null);
+  if (user && user !== seededFrom) {
+    setSeededFrom(user);
+    setTier(user.tier);
+    setStatus(user.status);
+    setCustomLimit(customLimitToInput(user.custom_daily_limit));
+    setNotes(user.notes || "");
+  }
 
   const save = async () => {
-    setSaving(true);
-    setError(null);
+    setLocalError(null);
     setSavedMsg(null);
     try {
       const patch: Parameters<typeof adminUpdateUser>[1] = {};
@@ -50,23 +50,17 @@ export default function AdminUserDetail() {
       if (status !== user?.status) patch.status = status;
       if (notes !== (user?.notes || "")) patch.notes = notes;
       const trimmed = customLimit.trim();
-      const currentCustom =
-        user?.custom_daily_limit === null ||
-        user?.custom_daily_limit === undefined
-          ? ""
-          : String(user?.custom_daily_limit);
+      const currentCustom = customLimitToInput(user?.custom_daily_limit);
       if (trimmed !== currentCustom) {
         if (trimmed === "") {
           // Clear via separate flag in API
-          await adminUpdateUser(uid, { ...patch, custom_daily_limit: null });
+          await updateUser.mutateAsync({ ...patch, custom_daily_limit: null });
           setSavedMsg("已儲存");
-          load();
           return;
         }
         const v = Number(trimmed);
         if (Number.isNaN(v)) {
-          setError("自訂額度必須是數字");
-          setSaving(false);
+          setLocalError("自訂額度必須是數字");
           return;
         }
         patch.custom_daily_limit = v;
@@ -75,17 +69,16 @@ export default function AdminUserDetail() {
         setSavedMsg("沒有變更");
         return;
       }
-      await adminUpdateUser(uid, patch);
+      // 存檔後由 mutation 的 onSuccess 失效此使用者與使用者列表，
+      // 資料重抓後上面的 seed 比對會把表單刷成最新值
+      await updateUser.mutateAsync(patch);
       setSavedMsg("已儲存。tier 變更需使用者重新登入才會生效。");
-      load();
-    } catch (e) {
-      setError(String(e));
-    } finally {
-      setSaving(false);
+    } catch {
+      // 錯誤由 updateUser.error 呈現
     }
   };
 
-  if (error) return <p className="text-sm text-rose-400">{error}</p>;
+  if (error) return <p className="text-sm text-rose-400">{String(error)}</p>;
   if (!user) return <p className="text-sm text-slate-500">載入中…</p>;
 
   const maxUsage = Math.max(1, ...usage.map((u) => u.chat_count));

@@ -1,7 +1,6 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { type ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { getFeatureAccess } from "@/lib/api";
-import type { FeatureAccessItem } from "@/lib/api";
+import { useFeatureAccess } from "@/lib/queries/account";
 
 interface FeatureGuardProps {
   featureKey: string;
@@ -9,47 +8,16 @@ interface FeatureGuardProps {
   children: ReactNode;
 }
 
-type AccessState =
-  | { status: "loading" }
-  | { status: "allowed" }
-  | { status: "denied"; feature: FeatureAccessItem | null; tier: string }
-  | { status: "error"; message: string };
-
 export default function FeatureGuard({
   featureKey,
   featureName,
   children,
 }: FeatureGuardProps) {
-  const [state, setState] = useState<AccessState>({ status: "loading" });
+  // 權限清單與 Layout、Dashboard 共用快取：導覽回到已檢查過的功能時
+  // isPending 直接是 false，不會再擋一次「檢查功能權限中…」。
+  const { data, isPending, isError } = useFeatureAccess();
 
-  useEffect(() => {
-    let cancelled = false;
-    getFeatureAccess()
-      .then((data) => {
-        if (cancelled) return;
-        const feature = data.features.find(
-          (item) => item.feature_key === featureKey,
-        );
-        if (feature?.allowed) {
-          setState({ status: "allowed" });
-          return;
-        }
-        setState({
-          status: "denied",
-          feature: feature ?? null,
-          tier: data.tier,
-        });
-      })
-      .catch((error) => {
-        if (cancelled) return;
-        setState({ status: "error", message: String(error) });
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [featureKey]);
-
-  if (state.status === "loading") {
+  if (isPending) {
     return (
       <div className="flex items-center justify-center h-full min-h-[50vh]">
         <p className="text-sm text-slate-500">檢查功能權限中…</p>
@@ -57,11 +25,7 @@ export default function FeatureGuard({
     );
   }
 
-  if (state.status === "allowed") {
-    return <>{children}</>;
-  }
-
-  if (state.status === "error") {
+  if (isError || !data) {
     return (
       <AccessPanel
         title="暫時無法確認權限"
@@ -71,11 +35,18 @@ export default function FeatureGuard({
     );
   }
 
-  const allowedTiers = state.feature?.allowed_tiers.join(" / ") || "管理員設定";
-  const isDisabled = state.feature?.enabled === false;
+  const feature =
+    data.features.find((item) => item.feature_key === featureKey) ?? null;
+
+  if (feature?.allowed) {
+    return <>{children}</>;
+  }
+
+  const allowedTiers = feature?.allowed_tiers.join(" / ") || "管理員設定";
+  const isDisabled = feature?.enabled === false;
   const message = isDisabled
     ? `${featureName} 目前已被管理員停用。`
-    : `目前帳號方案：${state.tier}。此功能開放給 ${allowedTiers} 方案。`;
+    : `目前帳號方案：${data.tier}。此功能開放給 ${allowedTiers} 方案。`;
 
   return (
     <AccessPanel

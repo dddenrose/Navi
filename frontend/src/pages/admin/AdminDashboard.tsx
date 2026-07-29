@@ -1,21 +1,10 @@
-import { useEffect, useState } from "react";
-import { adminGetUsageSummary } from "@/lib/api";
-import type { AdminUsageSummary } from "@/lib/api";
+import { useAdminUsageSummary } from "@/lib/queries/admin";
 
 export default function AdminDashboard() {
-  const [data, setData] = useState<AdminUsageSummary | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { data, isPending, error } = useAdminUsageSummary(30);
 
-  useEffect(() => {
-    adminGetUsageSummary(30)
-      .then(setData)
-      .catch((e) => setError(String(e)))
-      .finally(() => setLoading(false));
-  }, []);
-
-  if (loading) return <p className="text-sm text-slate-500">載入中…</p>;
-  if (error) return <p className="text-sm text-rose-400">{error}</p>;
+  if (isPending) return <p className="text-sm text-slate-500">載入中…</p>;
+  if (error) return <p className="text-sm text-rose-400">{String(error)}</p>;
   if (!data) return null;
 
   const maxCount = Math.max(1, ...data.daily_breakdown.map((d) => d.count));

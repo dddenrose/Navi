@@ -1,17 +1,17 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import {
-  getPortfolio,
-  addHolding,
-  updateHolding,
-  deleteHolding,
-  addPortfolioTransaction,
-  getPortfolioTransactions,
-  estimateTransactionCosts,
-  type PortfolioSummary,
   type HoldingWithPrice,
-  type PortfolioTransaction,
   type AddTransactionInput,
 } from "@/lib/api";
+import {
+  useAddHolding,
+  useAddTransaction,
+  useDeleteHolding,
+  usePortfolio,
+  usePortfolioTransactions,
+  useTransactionCostEstimate,
+  useUpdateHolding,
+} from "@/lib/queries/portfolio";
 import { fmt, pnlColor, pnlBg } from "@/lib/format";
 import TickerAutocomplete from "@/components/TickerAutocomplete";
 import { usePrivacyStore } from "@/store/privacyStore";
@@ -100,25 +100,36 @@ function TransactionModal({
   const [tradeDate, setTradeDate] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [estimate, setEstimate] = useState<{ fee: number; tax: number } | null>(
-    null,
-  );
+  // 輸入完整時向後端估算費稅（debounce 400ms）。
+  // effect 只負責節流出「已定案的輸入」，請求與快取交給 query。
+  const [estimateInput, setEstimateInput] = useState<{
+    ticker: string;
+    shares: number;
+    price: number;
+  } | null>(null);
 
-  // 輸入完整時向後端估算費稅（debounce 400ms）
   useEffect(() => {
     const s = parseFloat(shares);
     const p = parseFloat(price);
     if (!ticker || !s || !p || s <= 0 || p <= 0) {
-      setEstimate(null);
+      setEstimateInput(null);
       return;
     }
-    const t = setTimeout(() => {
-      estimateTransactionCosts(ticker.toUpperCase(), action, s, p)
-        .then(setEstimate)
-        .catch(() => setEstimate(null));
-    }, 400);
+    const t = setTimeout(
+      () => setEstimateInput({ ticker: ticker.toUpperCase(), shares: s, price: p }),
+      400,
+    );
     return () => clearTimeout(t);
-  }, [ticker, action, shares, price]);
+  }, [ticker, shares, price]);
+
+  const estimate =
+    useTransactionCostEstimate({
+      ticker: estimateInput?.ticker ?? "",
+      action,
+      shares: estimateInput?.shares ?? 0,
+      price: estimateInput?.price ?? 0,
+      enabled: estimateInput !== null,
+    }).data ?? null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -712,35 +723,23 @@ function HoldingRow({
 // ── Main Component ───────────────────────────────────────────────────────────
 
 export default function Portfolio() {
-  const [portfolio, setPortfolio] = useState<PortfolioSummary | null>(null);
-  const [transactions, setTransactions] = useState<PortfolioTransaction[]>([]);
-  const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
   const [showTx, setShowTx] = useState(false);
   const [editing, setEditing] = useState<HoldingWithPrice | null>(null);
-  const [error, setError] = useState("");
   const pnlLocked = usePrivacyStore((s) => s.pnlLocked);
   const toggleLock = usePrivacyStore((s) => s.toggleLock);
 
-  const fetchPortfolio = useCallback(async () => {
-    try {
-      setLoading(true);
-      const [data, txs] = await Promise.all([
-        getPortfolio(),
-        getPortfolioTransactions().catch(() => []),
-      ]);
-      setPortfolio(data);
-      setTransactions(txs);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "載入失敗");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const portfolioQuery = usePortfolio();
+  // 交易紀錄抓不到不算整頁失敗（維持原本 .catch(() => []) 的語意）
+  const transactions = usePortfolioTransactions().data ?? [];
 
-  useEffect(() => {
-    fetchPortfolio();
-  }, [fetchPortfolio]);
+  // 四個 mutation 的 onSuccess 會失效整個 portfolio 前綴，
+  // 且 mutateAsync 會等失效後的重抓完成才 resolve —— 與原本
+  // 每個 handler 手動 await fetchPortfolio() 的時序一致。
+  const addHoldingMutation = useAddHolding();
+  const addTransactionMutation = useAddTransaction();
+  const updateHoldingMutation = useUpdateHolding();
+  const deleteHoldingMutation = useDeleteHolding();
 
   const handleAdd = async (data: {
     ticker: string;
@@ -749,29 +748,25 @@ export default function Portfolio() {
     name: string;
     notes: string;
   }) => {
-    await addHolding(data);
-    await fetchPortfolio();
+    await addHoldingMutation.mutateAsync(data);
   };
 
   const handleAddTransaction = async (data: AddTransactionInput) => {
-    await addPortfolioTransaction(data);
-    await fetchPortfolio();
+    await addTransactionMutation.mutateAsync(data);
   };
 
   const handleEdit = async (
     holdingId: string,
     data: { shares: number; avg_cost: number; notes: string },
   ) => {
-    await updateHolding(holdingId, data);
-    await fetchPortfolio();
+    await updateHoldingMutation.mutateAsync({ holdingId, data });
   };
 
   const handleDelete = async (holdingId: string) => {
-    await deleteHolding(holdingId);
-    await fetchPortfolio();
+    await deleteHoldingMutation.mutateAsync(holdingId);
   };
 
-  if (loading) {
+  if (portfolioQuery.isPending) {
     return (
       <div className="flex items-center justify-center h-full min-h-[50vh]">
         <p className="text-sm text-slate-500">載入投資組合中…</p>
@@ -779,15 +774,19 @@ export default function Portfolio() {
     );
   }
 
-  if (error) {
+  if (portfolioQuery.error) {
     return (
       <div className="flex items-center justify-center h-full min-h-[50vh]">
-        <p className="text-sm text-red-400">{error}</p>
+        <p className="text-sm text-red-400">
+          {portfolioQuery.error instanceof Error
+            ? portfolioQuery.error.message
+            : "載入失敗"}
+        </p>
       </div>
     );
   }
 
-  const summary = portfolio;
+  const summary = portfolioQuery.data;
   const hasHoldings = summary && summary.holdings_count > 0;
 
   return (

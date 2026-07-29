@@ -1,27 +1,17 @@
 import { useState, useEffect, useCallback, useRef, lazy, Suspense } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
+import { type StockSuggestion } from "@/lib/api";
 import {
-  getAuthHeaders,
-  getStockPrice,
-  getStockTechnicals,
-  getStockFundamentals,
-  getStockInstitutional,
-  getStockMargin,
-  getPopularStocks,
-  searchStocks,
-  type StockSuggestion,
-} from "@/lib/api";
+  usePopularStocks,
+  useStockFundamentals,
+  useStockInstitutional,
+  useStockMargin,
+  useStockPrice,
+  useStockSearch,
+  useStockTechnicals,
+} from "@/lib/queries/stock";
 import { fmtPrice } from "@/lib/format";
-import type {
-  StockPrice,
-  Technicals,
-  Fundamentals,
-  InstitutionalData,
-  MarginData,
-  Tab,
-  ChartPeriod,
-  PopularData,
-} from "@/types/stock";
+import type { Tab, ChartPeriod } from "@/types/stock";
 import {
   CHART_PERIODS,
   CHART_PERIOD_LABELS,
@@ -56,147 +46,61 @@ export default function Stock() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
-  const [searchInput, setSearchInput] = useState(paramSymbol ?? "");
-  const [symbol, setSymbol] = useState(paramSymbol ?? "");
+  // 網址是查詢對象的單一真實來源，直接推導而不另存一份 state：
+  // 瀏覽器上一頁／下一頁只會改網址，多存一份就得手動同步，同步不及時
+  // 就會出現「網址已變、畫面沒動」。
+  const symbol = paramSymbol ?? "";
   const activeTab = (searchParams.get("tab") as Tab) || "overview";
   const setActiveTab = (tab: Tab) =>
     setSearchParams({ tab }, { replace: true });
 
-  const [priceData, setPriceData] = useState<StockPrice | null>(null);
-  const [technicalData, setTechnicalData] = useState<Technicals | null>(null);
-  const [fundamentalData, setFundamentalData] = useState<Fundamentals | null>(null);
-  const [institutionalData, setInstitutionalData] = useState<InstitutionalData | null>(null);
-  const [marginData, setMarginData] = useState<MarginData | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-
+  const [searchInput, setSearchInput] = useState(paramSymbol ?? "");
   // 走勢圖期間；只影響圖表長度，技術指標數值不受影響（後端一律用 1y 日線計算）
   const [chartPeriod, setChartPeriod] = useState<ChartPeriod>("3mo");
-  const [chartLoading, setChartLoading] = useState(false);
-  const [popularData, setPopularData] = useState<PopularData | null>(null);
 
   // Autocomplete state
-  const [suggestions, setSuggestions] = useState<StockSuggestion[]>([]);
+  const [debouncedQuery, setDebouncedQuery] = useState("");
   const [showSuggestions, setShowSuggestions] = useState(false);
   const searchContainerRef = useRef<HTMLDivElement>(null);
 
-  const fetchData = useCallback(async (sym: string) => {
-    setLoading(true);
-    setError("");
-    setPriceData(null);
-    setTechnicalData(null);
-    setFundamentalData(null);
-    setInstitutionalData(null);
-    setMarginData(null);
+  // 各區塊各自一個 query：切換期間只會重打技術指標，其餘區塊不重抓也不閃爍；
+  // 查過的標的在 gcTime 內回頭再查是快取命中，直接秒出舊值並在背景更新。
+  const priceQuery = useStockPrice(symbol);
+  const technicalQuery = useStockTechnicals(symbol, chartPeriod);
+  const fundamentalQuery = useStockFundamentals(symbol);
+  const institutionalQuery = useStockInstitutional(symbol);
+  const marginQuery = useStockMargin(symbol);
+  const popularQuery = usePopularStocks(!symbol);
+  const { data: suggestions = [] } = useStockSearch(debouncedQuery);
 
-    try {
-      // Fetch token once, share across parallel requests (async-parallel)
-      // 技術指標不在此列：它依賴 chartPeriod，由下方獨立 effect 負責
-      const headers = await getAuthHeaders();
-      const isTWSE = sym.endsWith(".TW") || sym.endsWith(".TWO");
-      const promises: [
-        Promise<StockPrice>,
-        Promise<Fundamentals>,
-        Promise<InstitutionalData>,
-        Promise<MarginData>,
-      ] = [
-        getStockPrice(sym, headers),
-        getStockFundamentals(sym, headers),
-        isTWSE ? getStockInstitutional(sym, headers) : Promise.reject("skip"),
-        isTWSE ? getStockMargin(sym, headers) : Promise.reject("skip"),
-      ];
-      const [price, fund, inst, margin] = await Promise.allSettled(promises);
+  const priceData = priceQuery.data ?? null;
+  const technicalData = technicalQuery.data ?? null;
+  // isLoading（而非 isPending）：快取命中時為 false，不會再閃一次「查詢中…」
+  const loading = priceQuery.isLoading;
+  const chartLoading = technicalQuery.isFetching;
+  // 只有報價失敗才算整頁失敗；其餘區塊缺資料由各自的分頁自行呈現
+  const error = priceQuery.isError
+    ? "無法取得股票資料，請確認代碼是否正確"
+    : "";
 
-      if (price.status === "fulfilled") setPriceData(price.value);
-      else setError("無法取得股票資料，請確認代碼是否正確");
-
-      if (fund.status === "fulfilled") setFundamentalData(fund.value);
-      if (inst.status === "fulfilled") setInstitutionalData(inst.value);
-      if (margin.status === "fulfilled") setMarginData(margin.value);
-    } catch {
-      setError("資料載入失敗");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  // 網址是查詢對象的單一真實來源。少了這段，瀏覽器上一頁／下一頁只會改網址，
-  // symbol state 停在原值，畫面完全不動——返回鍵之外的返回路徑都會失效。
-  useEffect(() => {
-    const next = paramSymbol ?? "";
-    setSymbol(next);
-    if (!next) {
-      // 回到卡片頁：個股資料一定要清，否則會和熱門標的同時出現在畫面上
+  // 回到卡片頁（網址沒有 symbol）：個股資料隨 query key 變動自然消失，
+  // 這裡只需要收掉搜尋框殘留的 UI 狀態。
+  // 用 React 官方的「render 期間調整 state」寫法而不是 useEffect：effect 版
+  // 會先用舊值畫一幀再重畫，使用者會看到搜尋框殘留上一檔股票的名稱閃一下。
+  const [prevParamSymbol, setPrevParamSymbol] = useState(paramSymbol);
+  if (paramSymbol !== prevParamSymbol) {
+    setPrevParamSymbol(paramSymbol);
+    if (!paramSymbol) {
       setSearchInput("");
-      setError("");
-      setPriceData(null);
-      setTechnicalData(null);
-      setFundamentalData(null);
-      setInstitutionalData(null);
-      setMarginData(null);
       setChartPeriod("3mo");
       setShowSuggestions(false);
-      setSuggestions([]);
     }
-  }, [paramSymbol]);
+  }
 
+  // Debounced autocomplete：實際的請求與快取交給 useStockSearch，
+  // 這裡只負責把輸入節流成 query key。
   useEffect(() => {
-    if (symbol) fetchData(symbol);
-  }, [symbol, fetchData]);
-
-  // 技術指標與走勢圖序列獨立抓取：切換期間時只重打這一支，
-  // 其餘區塊（報價、基本面、籌碼）不重抓也不閃爍。
-  useEffect(() => {
-    if (!symbol) return;
-    let cancelled = false;
-    setChartLoading(true);
-    (async () => {
-      try {
-        const headers = await getAuthHeaders();
-        const tech = await getStockTechnicals(symbol, headers, chartPeriod);
-        if (!cancelled) setTechnicalData(tech);
-      } catch {
-        // 保留既有資料；報價失敗才視為整頁錯誤（見 fetchData）
-      } finally {
-        if (!cancelled) setChartLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [symbol, chartPeriod]);
-
-  // 熱門標的：只在還沒有查詢對象時需要，且後端已快取 30 分鐘 —— 一個 session 抓一次就夠
-  useEffect(() => {
-    if (symbol || popularData) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const headers = await getAuthHeaders();
-        const data = await getPopularStocks(headers);
-        if (!cancelled) setPopularData(data);
-      } catch {
-        // 輔助資訊，失敗就退回原本的文字提示
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [symbol, popularData]);
-
-  // Debounced autocomplete
-  useEffect(() => {
-    const trimmed = searchInput.trim();
-    if (trimmed.length < 1) {
-      setSuggestions([]);
-      setShowSuggestions(false);
-      return;
-    }
-    const timer = setTimeout(async () => {
-      const data = await searchStocks(trimmed);
-      setSuggestions(data);
-      setShowSuggestions(data.length > 0);
-    }, 300);
+    const timer = setTimeout(() => setDebouncedQuery(searchInput.trim()), 300);
     return () => clearTimeout(timer);
   }, [searchInput]);
 
@@ -222,11 +126,9 @@ export default function Stock() {
     (ticker: string, label: string) => {
       setSearchInput(label);
       setShowSuggestions(false);
-      setSuggestions([]);
       navigate(`/stock/${encodeURIComponent(ticker)}`, {
         replace: Boolean(symbol),
       });
-      setSymbol(ticker);
     },
     [navigate, symbol],
   );
@@ -282,7 +184,12 @@ export default function Stock() {
             name="symbol"
             autoComplete="off"
             value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
+            onChange={(e) => {
+              setSearchInput(e.target.value);
+              // 建議清單改由 query 快取提供，不再隨每次抓取自動開闔，
+              // 因此開啟的時機收斂成「使用者正在輸入」這一個。
+              setShowSuggestions(true);
+            }}
             onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
             placeholder="輸入股票代號或名稱（例：2330、台積電）…"
             className="stock-search-input w-full rounded-2xl pl-11 pr-11 py-4 text-sm text-slate-200 placeholder-slate-700"
@@ -395,9 +302,9 @@ export default function Stock() {
         </div>
       )}
 
-      {!symbol && !loading && (
-        popularData ? (
-          <PopularStocks data={popularData} onSelect={goToSymbol} />
+      {!symbol && (
+        popularQuery.data ? (
+          <PopularStocks data={popularQuery.data} onSelect={goToSymbol} />
         ) : (
           <div className="flex flex-col items-center justify-center py-24 text-center animate-fade-in">
             <div
@@ -575,16 +482,16 @@ export default function Stock() {
             <StockOverviewTab priceData={priceData} currency={currency} />
           ) : activeTab === "technical" && technicalData ? (
             <StockTechnicalTab technicalData={technicalData} priceData={priceData} />
-          ) : activeTab === "fundamental" && fundamentalData ? (
+          ) : activeTab === "fundamental" && fundamentalQuery.data ? (
             <StockFundamentalTab
-              fundamentalData={fundamentalData}
+              fundamentalData={fundamentalQuery.data}
               currency={currency}
               ticker={priceData.ticker}
             />
           ) : activeTab === "institutional" ? (
             <StockInstitutionalTab
-              institutionalData={institutionalData}
-              marginData={marginData}
+              institutionalData={institutionalQuery.data ?? null}
+              marginData={marginQuery.data ?? null}
               isTW={isTW}
             />
           ) : activeTab === "news" ? (

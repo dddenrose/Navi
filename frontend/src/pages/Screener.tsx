@@ -1,16 +1,15 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  getReport,
-  getSubscription,
-  getTrackingSummary,
-  listReports,
-  updateSubscription,
-} from "@/lib/api/screener";
+  useScreenerReport,
+  useScreenerReports,
+  useScreenerSubscription,
+  useTrackingSummary,
+  useUpdateScreenerSubscription,
+} from "@/lib/queries/screener";
 import type {
   FinalGrade,
   PickDoc,
-  ReportDetail,
   ReportSummary,
   RuleCheck,
   ScreenerFrequency,
@@ -447,15 +446,7 @@ const TRACKING_HORIZONS: { key: string; label: string; primary?: boolean }[] = [
 const MIN_RELIABLE_SAMPLE = 30;
 
 function TrackingPanel({ profile }: { profile: ScreenerProfile }) {
-  const [summary, setSummary] = useState<TrackingSummary | null>(null);
-
-  useEffect(() => {
-    let active = true;
-    getTrackingSummary(profile).then((s) => active && setSummary(s));
-    return () => {
-      active = false;
-    };
-  }, [profile]);
+  const summary = useTrackingSummary(profile).data ?? null;
 
   if (!summary || !summary.pick_events) return null;
 
@@ -1184,45 +1175,28 @@ function ReportHistory({
 // ── EmailSubscribeToggle ──────────────────────────────────────────────────
 
 function EmailSubscribeToggle() {
-  const [enabled, setEnabled] = useState(false);
-  const [email, setEmail] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const { data: subscription, isLoading } = useScreenerSubscription();
+  const updateSub = useUpdateScreenerSubscription();
   const [msg, setMsg] = useState("");
 
-  useEffect(() => {
-    let active = true;
-    getSubscription()
-      .then((s) => {
-        if (!active) return;
-        setEnabled(!!s.enabled);
-        setEmail(s.email || "");
-      })
-      .catch(() => {
-        /* 沒訂閱記錄就用預設 */
-      })
-      .finally(() => active && setLoading(false));
-    return () => {
-      active = false;
-    };
-  }, []);
+  // 查無訂閱記錄（data 為 null）時套用預設：未訂閱、無 email
+  const enabled = !!subscription?.enabled;
+  const email = subscription?.email || "";
+  const saving = updateSub.isPending;
 
   const handleToggle = async () => {
-    setSaving(true);
     setMsg("");
     try {
       const next = !enabled;
-      await updateSubscription({ enabled: next });
-      setEnabled(next);
+      // 成功後由 mutation 把回傳值寫回快取，enabled 自然跟著翻
+      await updateSub.mutateAsync({ enabled: next });
       setMsg(next ? "✓ 已開啟訂閱" : "已停止訂閱");
     } catch (e) {
       setMsg(e instanceof Error ? e.message : "更新失敗");
-    } finally {
-      setSaving(false);
     }
   };
 
-  if (loading) {
+  if (isLoading) {
     return <p className="text-xs text-slate-500">載入訂閱狀態…</p>;
   }
 
@@ -1258,30 +1232,43 @@ function EmailSubscribeToggle() {
 export default function Screener() {
   const [profile, setProfile] = useState<ScreenerProfile>("momentum");
   const [frequency, setFrequency] = useState<ScreenerFrequency>("weekly");
-  const [reports, setReports] = useState<ReportSummary[]>([]);
+  // 使用者手動選的報告；null＝跟隨清單第一份（最新一期）
   const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
-  const [report, setReport] = useState<ReportDetail | null>(null);
-  const [historyLoading, setHistoryLoading] = useState(true);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
   const [selectedIndustry, setSelectedIndustry] = useState<string | null>(null);
   const [activePick, setActivePick] = useState<PickDoc | null>(null);
 
+  const reportsQuery = useScreenerReports(profile, frequency);
+  const reports = reportsQuery.data ?? [];
+  // 「自動選第一份」從 effect 改為推導：清單換了、使用者又沒指定，
+  // 自然就落回新清單的第一份，不需要一個 effect 去追著 setState。
+  const activeReportId = selectedReportId ?? reports[0]?.report_id ?? null;
+  const reportQuery = useScreenerReport(activeReportId);
+  const report = reportQuery.data ?? null;
+
+  // isLoading（非 isPending）：query 停用或快取命中時為 false，
+  // 清單為空而沒有報告可載時才不會卡在「載入中」。
+  const historyLoading = reportsQuery.isLoading;
+  // 清單還在載入時報告區也算載入中：此時 activeReportId 還是 null、
+  // 細節 query 尚未啟用，只看 reportQuery 會讓報告區空白一段時間
+  // （原本 resetForReportList 會把兩個 loading 一起設為 true）。
+  const loading = reportsQuery.isLoading || reportQuery.isLoading;
+  const error =
+    reportsQuery.error || reportQuery.error
+      ? ((reportsQuery.error ?? reportQuery.error) as Error).message ||
+        "載入失敗"
+      : !reportsQuery.isLoading && reports.length === 0
+        ? "No report found"
+        : "";
+
+  // 換 profile／frequency 或換報告時，只需要清掉使用者的挑選狀態；
+  // 資料本身隨 queryKey 變動自動切換，不必手動清空。
   const resetForReportList = () => {
-    setHistoryLoading(true);
-    setLoading(true);
-    setError("");
-    setReport(null);
-    setReports([]);
     setSelectedReportId(null);
     setSelectedIndustry(null);
     setActivePick(null);
   };
 
   const resetForReportDetail = () => {
-    setLoading(true);
-    setError("");
-    setReport(null);
     setSelectedIndustry(null);
     setActivePick(null);
   };
@@ -1299,49 +1286,12 @@ export default function Screener() {
   };
 
   const handleReportSelect = (reportId: string) => {
-    if (reportId === selectedReportId) return;
+    // 比對 activeReportId：selectedReportId 為 null 時代表「跟隨最新一期」，
+    // 此時再點最新那一份不該當成換報告。
+    if (reportId === activeReportId) return;
     resetForReportDetail();
     setSelectedReportId(reportId);
   };
-
-  useEffect(() => {
-    let active = true;
-    listReports({ profile, frequency, limit: 24 })
-      .then((items) => {
-        if (!active) return;
-        setReports(items);
-        if (items.length === 0) {
-          setError("No report found");
-          setLoading(false);
-          return;
-        }
-        setSelectedReportId(items[0].report_id);
-      })
-      .catch((e) => {
-        if (!active) return;
-        setError(e instanceof Error ? e.message : "載入失敗");
-        setLoading(false);
-      })
-      .finally(() => active && setHistoryLoading(false));
-    return () => {
-      active = false;
-    };
-  }, [profile, frequency]);
-
-  useEffect(() => {
-    if (!selectedReportId) return;
-    let active = true;
-    getReport(selectedReportId)
-      .then((detail) => active && setReport(detail))
-      .catch((e) => {
-        if (!active) return;
-        setError(e instanceof Error ? e.message : "載入失敗");
-      })
-      .finally(() => active && setLoading(false));
-    return () => {
-      active = false;
-    };
-  }, [selectedReportId]);
 
   const industries = useMemo(
     () => (report ? Object.keys(report.picks_by_industry).sort() : []),
@@ -1390,7 +1340,7 @@ export default function Screener() {
 
       <ReportHistory
         reports={reports}
-        selectedReportId={selectedReportId}
+        selectedReportId={activeReportId}
         loading={historyLoading}
         onSelect={handleReportSelect}
       />

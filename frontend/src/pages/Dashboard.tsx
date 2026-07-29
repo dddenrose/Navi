@@ -1,6 +1,5 @@
-import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { getFeatureAccess } from "@/lib/api";
+import { useAllowedFeatures } from "@/lib/queries/account";
 import { useAuthStore } from "@/store/authStore";
 import { useTokenClaims } from "@/lib/useTokenClaims";
 
@@ -83,31 +82,8 @@ const featureCards: FeatureCard[] = [
 export default function Dashboard() {
   const { user } = useAuthStore();
   const claims = useTokenClaims();
-  const [allowedFeatures, setAllowedFeatures] = useState<Set<string> | null>(
-    null,
-  );
-
-  useEffect(() => {
-    let cancelled = false;
-    getFeatureAccess()
-      .then((data) => {
-        if (cancelled) return;
-        setAllowedFeatures(
-          new Set(
-            data.features
-              .filter((feature) => feature.allowed)
-              .map((feature) => feature.feature_key),
-          ),
-        );
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setAllowedFeatures(null);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [user?.uid]);
+  // 與 Layout、FeatureGuard 共用同一份權限快取（見 lib/queries/account.ts）
+  const allowedFeatures = useAllowedFeatures();
 
   // rerender-simple-expression-in-memo: trivial expression, no memo needed
   const hour = new Date().getHours();

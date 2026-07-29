@@ -1,38 +1,27 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
-  adminListFeatureAccessConfigs,
-  adminUpdateFeatureAccessConfig,
-} from "@/lib/api";
+  useAdminFeatureAccessConfigs,
+  useAdminUpdateFeatureAccessConfig,
+} from "@/lib/queries/admin";
 import type { FeatureAccessConfig } from "@/lib/api";
 
 const TIERS = ["free", "pro", "unlimited", "admin"];
 
 export default function AdminFeatureAccess() {
-  const [configs, setConfigs] = useState<FeatureAccessConfig[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [savingKey, setSavingKey] = useState<string | null>(null);
+  const { data, isPending, error: loadError } = useAdminFeatureAccessConfigs();
+  const updateConfig = useAdminUpdateFeatureAccessConfig();
+
+  // 送出前就擋下的規則錯誤，與 API 回來的錯誤分開存：
+  // 後者由 mutation 自己帶著，前者沒有對應的請求可掛。
+  const [validationError, setValidationError] = useState<string | null>(null);
   const [savedKey, setSavedKey] = useState<string | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    adminListFeatureAccessConfigs()
-      .then((result) => {
-        if (cancelled) return;
-        setConfigs(result.configs);
-      })
-      .catch((err) => {
-        if (cancelled) return;
-        setError(String(err));
-      })
-      .finally(() => {
-        if (cancelled) return;
-        setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const configs = data?.configs ?? [];
+  const error = validationError ?? loadError ?? updateConfig.error;
+  // 只有正在送出的那一列要顯示儲存中
+  const savingKey = updateConfig.isPending
+    ? (updateConfig.variables?.featureKey ?? null)
+    : null;
 
   const applyPatch = async (
     featureKey: string,
@@ -40,22 +29,14 @@ export default function AdminFeatureAccess() {
       Pick<FeatureAccessConfig, "enabled" | "allowed_tiers" | "description">
     >,
   ) => {
-    setSavingKey(featureKey);
     setSavedKey(null);
-    setError(null);
+    setValidationError(null);
     try {
-      const result = await adminUpdateFeatureAccessConfig(featureKey, patch);
-      setConfigs((current) =>
-        current.map((config) =>
-          config.feature_key === featureKey ? result.config : config,
-        ),
-      );
+      await updateConfig.mutateAsync({ featureKey, patch });
       setSavedKey(featureKey);
       setTimeout(() => setSavedKey(null), 2200);
-    } catch (err) {
-      setError(String(err));
-    } finally {
-      setSavingKey(null);
+    } catch {
+      // 錯誤由 updateConfig.error 呈現
     }
   };
 
@@ -65,7 +46,7 @@ export default function AdminFeatureAccess() {
       ? config.allowed_tiers.filter((item) => item !== tier)
       : [...config.allowed_tiers, tier];
     if (nextTiers.length === 0) {
-      setError(
+      setValidationError(
         "每個功能至少需要保留一個可使用的 Tier；若要全面關閉請切換啟用狀態。",
       );
       return;
@@ -73,7 +54,7 @@ export default function AdminFeatureAccess() {
     void applyPatch(config.feature_key, { allowed_tiers: nextTiers });
   };
 
-  if (loading) return <p className="text-sm text-slate-500">載入中…</p>;
+  if (isPending) return <p className="text-sm text-slate-500">載入中…</p>;
 
   return (
     <div className="space-y-4 max-w-5xl">
@@ -85,7 +66,7 @@ export default function AdminFeatureAccess() {
         </p>
       </div>
 
-      {error && <p className="text-xs text-rose-400">{error}</p>}
+      {error && <p className="text-xs text-rose-400">{String(error)}</p>}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {configs.map((config) => {
