@@ -133,7 +133,6 @@ navi/
 ├── docker-compose.yml           # Local dev container
 ├── cloudbuild.yaml              # Cloud Build → Cloud Run deployment
 ├── cloudbuild-ingest.yaml       # Cloud Build → Knowledge ingestion
-├── cloudbuild-test.yaml         # Cloud Build → Test pipeline
 └── scripts/
     ├── deploy.sh                # Manual deploy script (Artifact Registry → Cloud Run)
     ├── setup_screener_scheduler.sh # Cloud Scheduler jobs (run / track / notify)

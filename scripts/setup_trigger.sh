@@ -120,7 +120,7 @@ API_BASE="https://cloudbuild.googleapis.com/v1/projects/${PROJECT_ID}/locations/
 
 # ── 3. 建立 / 更新 Trigger：push to main → 部署 production ──────────────────
 echo ""
-echo "▶ 建立 Trigger [1/3]：push to main → deploy production..."
+echo "▶ 建立 Trigger [1/2]：push to main → deploy production..."
 
 # 先刪除已有的同類 trigger（idempotent，API 會在 name 加後綴所以用 description 匹配）
 EXISTING_ID="$(gcloud builds triggers list \
@@ -153,43 +153,11 @@ if 'error' in d: print('   ❌ 失敗:', d['error'].get('message',d)); sys.exit(
 else: print('   ✅ 建立成功:', d.get('name'))
 "
 
-# ── 4. 建立 Trigger：PR to main → 只跑測試（防禦性 CI）──────────────────────
-echo "▶ 建立 Trigger [2/3]：PR to main → run tests..."
+# PR to main 的測試由 GitHub Actions（.github/workflows/ci.yml）負責，
+# 涵蓋 backend ruff+pytest 與 frontend eslint+tsc+build，這裡不再建 test trigger。
 
-EXISTING_ID="$(gcloud builds triggers list \
-  --region="${TRIGGER_REGION}" --project="${PROJECT_ID}" \
-  --format='value(id)' --filter='description~"PR to main"' 2>/dev/null || true)"
-for TID in ${EXISTING_ID}; do
-  gcloud builds triggers delete "${TID}" \
-    --region="${TRIGGER_REGION}" --project="${PROJECT_ID}" --quiet
-done
-
-RESPONSE="$(curl -s -X POST \
-  -H "Authorization: Bearer ${ACCESS_TOKEN}" \
-  -H "Content-Type: application/json" \
-  "${API_BASE}" \
-  -d "{
-    \"description\": \"PR to main: run backend tests\",
-    \"serviceAccount\": \"${SERVICE_ACCOUNT}\",
-    \"filename\": \"cloudbuild-test.yaml\",
-    \"includedFiles\": [\"backend/**\"],
-    \"repositoryEventConfig\": {
-      \"repository\": \"${REPO_RESOURCE}\",
-      \"pullRequest\": {
-        \"branch\": \"^main$\",
-        \"commentControl\": \"COMMENTS_ENABLED_FOR_EXTERNAL_CONTRIBUTORS_ONLY\"
-      }
-    }
-  }")"
-echo "${RESPONSE}" | python3 -c "
-import sys,json
-d=json.load(sys.stdin)
-if 'error' in d: print('   ❌ 失敗:', d['error'].get('message',d)); sys.exit(1)
-else: print('   ✅ 建立成功:', d.get('name'))
-"
-
-# ── 5. 建立 Trigger：tag knowledge-v* → ingest knowledge base ────────────────
-echo "▶ 建立 Trigger [3/3]：tag knowledge-v* → ingest knowledge base..."
+# ── 4. 建立 Trigger：tag knowledge-v* → ingest knowledge base ────────────────
+echo "▶ 建立 Trigger [2/2]：tag knowledge-v* → ingest knowledge base..."
 
 EXISTING_ID="$(gcloud builds triggers list \
   --region="${TRIGGER_REGION}" --project="${PROJECT_ID}" \
@@ -219,7 +187,7 @@ if 'error' in d: print('   ❌ 失敗:', d['error'].get('message',d)); sys.exit(
 else: print('   ✅ 建立成功:', d.get('name'))
 "
 
-# ── 6. 列出已建立的 triggers ─────────────────────────────────────────────────
+# ── 5. 列出已建立的 triggers ─────────────────────────────────────────────────
 echo ""
 echo "✅ 所有 Trigger 設定完成！"
 echo ""
