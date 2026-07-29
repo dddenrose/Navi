@@ -28,13 +28,16 @@ export default function StockFundamentalTab({
 }: StockFundamentalTabProps) {
   // 月營收快照與產業 PE 分位數：兩者皆為可選的加值資訊，
   // 各自獨立 lazy fetch（進到基本面分頁才打），查無資料時整塊靜默隱藏，不顯示錯誤。
-  const [monthlyRevenue, setMonthlyRevenue] = useState<MonthlyRevenueData | null>(null);
-  const [industryPe, setIndustryPe] = useState<IndustryPeData | null>(null);
+  // state 帶 ticker 一起存，render 時比對即可濾掉換股後的舊資料，
+  // 不需要在 effect 裡同步 setState 重置。
+  const [extras, setExtras] = useState<{
+    ticker: string;
+    monthlyRevenue: MonthlyRevenueData | null;
+    industryPe: IndustryPeData | null;
+  } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    setMonthlyRevenue(null);
-    setIndustryPe(null);
 
     (async () => {
       try {
@@ -44,8 +47,12 @@ export default function StockFundamentalTab({
           getStockIndustryPe(ticker, headers),
         ]);
         if (cancelled) return;
-        if (revResult.status === "fulfilled") setMonthlyRevenue(revResult.value);
-        if (peResult.status === "fulfilled") setIndustryPe(peResult.value);
+        setExtras({
+          ticker,
+          monthlyRevenue:
+            revResult.status === "fulfilled" ? revResult.value : null,
+          industryPe: peResult.status === "fulfilled" ? peResult.value : null,
+        });
       } catch {
         // 靜默失敗：這兩項都是加值資訊，缺資料不影響基本面分頁其餘內容
       }
@@ -55,6 +62,10 @@ export default function StockFundamentalTab({
       cancelled = true;
     };
   }, [ticker]);
+
+  const monthlyRevenue =
+    extras?.ticker === ticker ? extras.monthlyRevenue : null;
+  const industryPe = extras?.ticker === ticker ? extras.industryPe : null;
 
   return (
     <div className="space-y-6">
