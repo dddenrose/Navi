@@ -8,8 +8,8 @@ interface PopularStocksProps {
 }
 
 /** 台股慣例：紅漲綠跌（與 PriceChart 一致，勿改成歐美的綠漲紅跌）。 */
-const UP = "#f87171";
-const DOWN = "#4ade80";
+const UP = "var(--market-up)";
+const DOWN = "var(--market-down)";
 
 /**
  * 迷你走勢圖。手刻 SVG 而非用 recharts：這裡有 8 張卡各一條線，
@@ -63,15 +63,14 @@ function StockCard({
   return (
     <button
       onClick={() => onSelect(item.ticker, `${item.code} ${item.name}`)}
-      className="text-left rounded-2xl p-4 transition-transform hover:-translate-y-0.5"
-      style={{ background: "var(--card-bg)", border: "1px solid var(--border)" }}
+      className="text-left card card-hover p-4"
     >
       <div className="flex items-baseline justify-between gap-2 mb-1">
-        <span className="text-sm font-bold text-white tabular-nums">{item.code}</span>
-        <span className="text-[11px] text-slate-500 truncate">{item.name}</span>
+        <span className="text-sm font-bold text-ink-strong tabular-nums">{item.code}</span>
+        <span className="text-[11px] text-ink-muted truncate">{item.name}</span>
       </div>
       <div className="flex items-baseline justify-between gap-2 mb-2">
-        <span className="text-base font-semibold text-slate-200 tabular-nums">
+        <span className="text-base font-semibold text-ink tabular-nums">
           {item.price?.toLocaleString("en-US", { maximumFractionDigits: 2 }) ?? "-"}
         </span>
         <span
@@ -82,7 +81,7 @@ function StockCard({
         </span>
       </div>
       <Sparkline values={item.spark} up={up} />
-      <div className="mt-1.5 text-[10px] text-slate-600 tabular-nums">
+      <div className="mt-1.5 text-[10px] text-ink-faint tabular-nums">
         成交值 {fmtCompactTWD(item.turnover)}
       </div>
     </button>
@@ -99,35 +98,26 @@ export default function PopularStocks({ data, onSelect }: PopularStocksProps) {
     <div className="animate-fade-in">
       <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
         <div className="flex items-baseline gap-2.5">
-          <h2 className="text-sm font-semibold text-slate-300">熱門標的</h2>
+          <h2 className="text-sm font-semibold text-ink">熱門標的</h2>
           {data.as_of_date && (
-            <span className="text-[11px] text-slate-600 tabular-nums">
+            <span className="text-[11px] text-ink-faint tabular-nums">
               {data.as_of_date} 收盤
             </span>
           )}
         </div>
-        <div
-          className="flex gap-0.5 p-1 rounded-xl"
-          style={{
-            background: "var(--overlay-bg)",
-            border: "1px solid var(--border)",
-          }}
-        >
+        <div className="flex gap-0.5 p-1 rounded-xl bg-[var(--surface-2)] border border-line-subtle">
           {data.boards.map((b) => (
             <button
               key={b.key}
               onClick={() => setActiveKey(b.key)}
               aria-pressed={b.key === activeKey}
-              className="shrink-0 px-3.5 py-1 rounded-lg text-[11px] font-semibold tracking-wide transition-colors"
-              style={
+              className={`shrink-0 px-3.5 py-1 rounded-lg text-[11px] font-semibold tracking-wide transition-colors ${
                 b.key === activeKey
-                  ? {
-                      background:
-                        "linear-gradient(135deg, rgba(99,102,241,0.3), rgba(139,92,246,0.2))",
-                      border: "1px solid rgba(99,102,241,0.3)",
-                      color: "var(--text-secondary)",
-                    }
-                  : { color: "var(--text-dim)", border: "1px solid transparent" }
+                  ? "text-ink border border-line-strong"
+                  : "text-ink-muted border border-transparent"
+              }`}
+              style={
+                b.key === activeKey ? { background: "var(--accent-soft)" } : undefined
               }
             >
               {b.label}
@@ -143,7 +133,7 @@ export default function PopularStocks({ data, onSelect }: PopularStocksProps) {
       </div>
 
       {data.note && (
-        <p className="mt-4 text-[10px] text-slate-600 leading-relaxed">{data.note}</p>
+        <p className="mt-4 text-[10px] text-ink-faint leading-relaxed">{data.note}</p>
       )}
     </div>
   );

@@ -27,7 +27,7 @@ const AdminLogs = lazy(() => import("@/pages/admin/AdminLogs"));
 function PageFallback() {
   return (
     <div className="flex items-center justify-center h-full min-h-[50vh]">
-      <p className="text-sm text-slate-500">載入中\u2026</p>
+      <p className="text-sm text-ink-muted">載入中\u2026</p>
     </div>
   );
 }

@@ -79,7 +79,7 @@ export default function AdminUserDetail() {
   };
 
   if (error) return <p className="text-sm text-rose-400">{String(error)}</p>;
-  if (!user) return <p className="text-sm text-slate-500">載入中…</p>;
+  if (!user) return <p className="text-sm text-ink-muted">載入中…</p>;
 
   const maxUsage = Math.max(1, ...usage.map((u) => u.chat_count));
 
@@ -87,24 +87,18 @@ export default function AdminUserDetail() {
     <div className="space-y-6 max-w-4xl">
       <Link
         to="/admin/users"
-        className="text-xs text-indigo-400 hover:text-indigo-300"
+        className="text-xs text-accent hover:text-[var(--accent-strong)]"
       >
         ← 回使用者列表
       </Link>
 
-      <div
-        className="rounded-xl p-5"
-        style={{
-          background: "var(--card-bg)",
-          border: "1px solid var(--border)",
-        }}
-      >
+      <div className="card p-5">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h2 className="text-lg font-semibold text-slate-100">
+            <h2 className="text-lg font-semibold text-ink-strong">
               {user.email || "(無 email)"}
             </h2>
-            <p className="text-xs font-mono text-slate-600 mt-1">{user.uid}</p>
+            <p className="text-xs font-mono text-ink-faint mt-1">{user.uid}</p>
           </div>
           <TierBadge tier={user.tier} />
         </div>
@@ -114,11 +108,14 @@ export default function AdminUserDetail() {
             <select
               value={tier}
               onChange={(e) => setTier(e.target.value)}
-              className="w-full px-3 py-2 rounded-lg text-sm bg-transparent text-slate-200"
-              style={{ border: "1px solid var(--border)" }}
+              className="w-full px-3 py-2 rounded-lg text-sm bg-transparent text-ink border border-line-subtle"
             >
               {["free", "pro", "unlimited", "admin"].map((t) => (
-                <option key={t} value={t} style={{ background: "#0f172a" }}>
+                <option
+                  key={t}
+                  value={t}
+                  style={{ background: "var(--bg-surface)" }}
+                >
                   {t}
                 </option>
               ))}
@@ -128,13 +125,15 @@ export default function AdminUserDetail() {
             <select
               value={status}
               onChange={(e) => setStatus(e.target.value)}
-              className="w-full px-3 py-2 rounded-lg text-sm bg-transparent text-slate-200"
-              style={{ border: "1px solid var(--border)" }}
+              className="w-full px-3 py-2 rounded-lg text-sm bg-transparent text-ink border border-line-subtle"
             >
-              <option value="active" style={{ background: "#0f172a" }}>
+              <option value="active" style={{ background: "var(--bg-surface)" }}>
                 active
               </option>
-              <option value="suspended" style={{ background: "#0f172a" }}>
+              <option
+                value="suspended"
+                style={{ background: "var(--bg-surface)" }}
+              >
                 suspended
               </option>
             </select>
@@ -144,16 +143,14 @@ export default function AdminUserDetail() {
               value={customLimit}
               onChange={(e) => setCustomLimit(e.target.value)}
               placeholder="（空白）"
-              className="w-full px-3 py-2 rounded-lg text-sm bg-transparent text-slate-200"
-              style={{ border: "1px solid var(--border)" }}
+              className="w-full px-3 py-2 rounded-lg text-sm bg-transparent text-ink placeholder:text-ink-faint border border-line-subtle"
             />
           </Field>
           <Field label="備註">
             <input
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              className="w-full px-3 py-2 rounded-lg text-sm bg-transparent text-slate-200"
-              style={{ border: "1px solid var(--border)" }}
+              className="w-full px-3 py-2 rounded-lg text-sm bg-transparent text-ink border border-line-subtle"
             />
           </Field>
         </div>
@@ -162,8 +159,7 @@ export default function AdminUserDetail() {
           <button
             onClick={save}
             disabled={saving}
-            className="px-4 py-2 rounded-lg text-sm text-white disabled:opacity-50"
-            style={{ background: "linear-gradient(135deg,#6366f1,#8b5cf6)" }}
+            className="btn btn-primary rounded-lg px-4 py-2 text-sm disabled:opacity-50"
           >
             {saving ? "儲存中…" : "儲存變更"}
           </button>
@@ -174,16 +170,8 @@ export default function AdminUserDetail() {
         </div>
       </div>
 
-      <div
-        className="rounded-xl p-5"
-        style={{
-          background: "var(--card-bg)",
-          border: "1px solid var(--border)",
-        }}
-      >
-        <h3 className="text-sm font-semibold text-slate-200 mb-3">
-          近 30 天用量
-        </h3>
+      <div className="card p-5">
+        <h3 className="text-sm font-semibold text-ink mb-3">近 30 天用量</h3>
         <div className="flex items-end gap-1 h-24">
           {usage
             .slice()
@@ -198,8 +186,7 @@ export default function AdminUserDetail() {
                   className="w-full rounded-t"
                   style={{
                     height: `${(d.chat_count / maxUsage) * 100}%`,
-                    background:
-                      "linear-gradient(180deg, rgba(99,102,241,0.9), rgba(139,92,246,0.5))",
+                    background: "var(--accent-strong)",
                     minHeight: d.chat_count > 0 ? "3px" : "1px",
                   }}
                 />
@@ -220,7 +207,7 @@ function Field({
 }) {
   return (
     <label className="block">
-      <span className="text-[11px] text-slate-600 mb-1.5 block">{label}</span>
+      <span className="text-[11px] text-ink-faint mb-1.5 block">{label}</span>
       {children}
     </label>
   );

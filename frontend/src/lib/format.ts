@@ -53,7 +53,7 @@ export function fmt(n: number, decimals = 0): string {
 export function pnlColor(n: number): string {
   if (n > 0) return "text-red-400";
   if (n < 0) return "text-emerald-400";
-  return "text-slate-400";
+  return "text-ink-secondary";
 }
 
 /** Inline background color for P&L card backgrounds（台股慣例：紅漲綠跌） */

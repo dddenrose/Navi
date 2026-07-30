@@ -40,12 +40,12 @@ export default function AdminQuotaConfigs() {
     }
   };
 
-  if (isPending) return <p className="text-sm text-slate-500">載入中…</p>;
+  if (isPending) return <p className="text-sm text-ink-muted">載入中…</p>;
 
   return (
     <div className="space-y-4 max-w-4xl">
       {error && <p className="text-xs text-rose-400">{String(error)}</p>}
-      <p className="text-xs text-slate-600">
+      <p className="text-xs text-ink-faint">
         調整每個 Tier 的每日訊息上限與每分鐘速率。<code>-1</code> 代表無限。
       </p>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -56,16 +56,9 @@ export default function AdminQuotaConfigs() {
           const minuteVal = e.per_minute_limit ?? c.per_minute_limit;
           const descVal = e.description ?? (c.description || "");
           return (
-            <div
-              key={c.tier}
-              className="rounded-xl p-5"
-              style={{
-                background: "var(--card-bg)",
-                border: "1px solid var(--border)",
-              }}
-            >
+            <div key={c.tier} className="card p-5">
               <div className="flex items-center justify-between mb-3">
-                <h3 className="text-sm font-bold text-slate-100 uppercase">
+                <h3 className="text-sm font-bold text-ink-strong uppercase">
                   {c.tier}
                 </h3>
                 {savedTier === c.tier && (
@@ -80,8 +73,7 @@ export default function AdminQuotaConfigs() {
                     onChange={(ev) =>
                       updateEdit(c.tier, "daily_limit", ev.target.value)
                     }
-                    className="w-full px-3 py-1.5 rounded-lg text-sm bg-transparent text-slate-200"
-                    style={{ border: "1px solid var(--border)" }}
+                    className="w-full px-3 py-1.5 rounded-lg text-sm bg-transparent text-ink border border-line-subtle"
                   />
                 </Row>
                 <Row label="每分鐘上限">
@@ -91,8 +83,7 @@ export default function AdminQuotaConfigs() {
                     onChange={(ev) =>
                       updateEdit(c.tier, "per_minute_limit", ev.target.value)
                     }
-                    className="w-full px-3 py-1.5 rounded-lg text-sm bg-transparent text-slate-200"
-                    style={{ border: "1px solid var(--border)" }}
+                    className="w-full px-3 py-1.5 rounded-lg text-sm bg-transparent text-ink border border-line-subtle"
                   />
                 </Row>
                 <Row label="描述">
@@ -101,18 +92,14 @@ export default function AdminQuotaConfigs() {
                     onChange={(ev) =>
                       updateEdit(c.tier, "description", ev.target.value)
                     }
-                    className="w-full px-3 py-1.5 rounded-lg text-sm bg-transparent text-slate-200"
-                    style={{ border: "1px solid var(--border)" }}
+                    className="w-full px-3 py-1.5 rounded-lg text-sm bg-transparent text-ink border border-line-subtle"
                   />
                 </Row>
               </div>
               <button
                 onClick={() => save(c.tier)}
                 disabled={!dirty}
-                className="mt-4 w-full px-3 py-2 rounded-lg text-xs text-white disabled:opacity-30"
-                style={{
-                  background: "linear-gradient(135deg,#6366f1,#8b5cf6)",
-                }}
+                className="btn btn-primary rounded-lg mt-4 w-full px-3 py-2 text-xs disabled:opacity-30"
               >
                 儲存
               </button>
@@ -133,7 +120,7 @@ function Row({
 }) {
   return (
     <label className="block">
-      <span className="text-[11px] text-slate-600 mb-1 block">{label}</span>
+      <span className="text-[11px] text-ink-faint mb-1 block">{label}</span>
       {children}
     </label>
   );

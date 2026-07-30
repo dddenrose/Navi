@@ -1,7 +1,8 @@
-import { useMemo } from "react";
+import { useId, useMemo } from "react";
 import {
-  LineChart,
+  ComposedChart,
   Line,
+  Area,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -9,6 +10,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { useThemeStore } from "@/store/themeStore";
+import { useReducedMotion } from "@/lib/useReducedMotion";
 import type { PricePoint } from "@/types/stock";
 
 interface PriceChartProps {
@@ -27,7 +29,10 @@ export default function PriceChart({ history, isPositive }: PriceChartProps) {
   // `theme` is a deliberate dep so we re-read CSS vars when the theme switches;
   // `getComputedStyle` reads from DOM, not from `theme` directly, hence disable.
   const { theme } = useThemeStore();
-  const { grid, tick, tooltipBg, tooltipBorder } = useMemo(() => {
+  const reducedMotion = useReducedMotion();
+  const gradientId = useId();
+
+  const { grid, tick, tooltipBg, tooltipBorder, lineColor } = useMemo(() => {
     const root = getComputedStyle(document.documentElement);
     return {
       grid: root.getPropertyValue("--chart-grid").trim() || "#334155",
@@ -37,13 +42,23 @@ export default function PriceChart({ history, isPositive }: PriceChartProps) {
       tooltipBorder:
         root.getPropertyValue("--tooltip-border").trim() ||
         "rgba(255,255,255,0.08)",
+      lineColor:
+        root
+          .getPropertyValue(isPositive ? "--market-up" : "--market-down")
+          .trim() || (isPositive ? "#f26d6d" : "#3ecf8e"),
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [theme]);
+  }, [theme, isPositive]);
 
   return (
     <ResponsiveContainer width="100%" height="100%">
-      <LineChart data={history}>
+      <ComposedChart data={history}>
+        <defs>
+          <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={lineColor} stopOpacity={0.12} />
+            <stop offset="100%" stopColor={lineColor} stopOpacity={0} />
+          </linearGradient>
+        </defs>
         <CartesianGrid strokeDasharray="3 3" stroke={grid} />
         <XAxis
           dataKey="date"
@@ -67,20 +82,32 @@ export default function PriceChart({ history, isPositive }: PriceChartProps) {
             backdropFilter: "blur(12px)",
           }}
           labelStyle={{ color: tick, fontSize: "11px" }}
-          itemStyle={{ color: "#818cf8", fontSize: "12px" }}
+          itemStyle={{ color: "var(--accent)", fontSize: "12px" }}
           formatter={(value: number | undefined) => [
             value?.toFixed(2) ?? "—",
             "收盤",
           ]}
         />
+        <Area
+          type="monotone"
+          dataKey="close"
+          stroke="none"
+          fill={`url(#${gradientId})`}
+          isAnimationActive={!reducedMotion}
+          animationDuration={800}
+          animationEasing="ease-out"
+        />
         <Line
           type="monotone"
           dataKey="close"
-          stroke={isPositive ? "#f87171" : "#4ade80"}
+          stroke={lineColor}
           strokeWidth={2}
           dot={false}
+          isAnimationActive={!reducedMotion}
+          animationDuration={800}
+          animationEasing="ease-out"
         />
-      </LineChart>
+      </ComposedChart>
     </ResponsiveContainer>
   );
 }

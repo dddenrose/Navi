@@ -20,7 +20,7 @@ export default function FeatureGuard({
   if (isPending) {
     return (
       <div className="flex items-center justify-center h-full min-h-[50vh]">
-        <p className="text-sm text-slate-500">檢查功能權限中…</p>
+        <p className="text-sm text-ink-muted">檢查功能權限中…</p>
       </div>
     );
   }
@@ -75,16 +75,9 @@ function AccessPanel({
 }) {
   return (
     <div className="flex items-center justify-center h-full min-h-[60vh] px-4">
-      <div
-        className="w-full max-w-md rounded-xl p-6 text-center"
-        style={{
-          background: "var(--card-bg)",
-          border: "1px solid var(--border)",
-        }}
-      >
+      <div className="card w-full max-w-md p-6 text-center">
         <div
-          className="mx-auto mb-4 flex h-11 w-11 items-center justify-center rounded-xl text-slate-100"
-          style={{ background: "rgba(99,102,241,0.18)" }}
+          className="mx-auto mb-4 flex h-11 w-11 items-center justify-center rounded-xl text-accent bg-[var(--accent-soft)]"
           aria-hidden="true"
         >
           <svg viewBox="0 0 20 20" fill="currentColor" className="h-5 w-5">
@@ -95,14 +88,14 @@ function AccessPanel({
             />
           </svg>
         </div>
-        <h2 className="text-base font-bold text-slate-100">{title}</h2>
-        <p className="mt-2 text-sm leading-6 text-slate-500">{message}</p>
+        <h2 className="text-base font-bold text-ink-strong">{title}</h2>
+        <p className="mt-2 text-sm leading-6 text-ink-muted">{message}</p>
         {upgradeHint && (
           <p
-            className="mt-3 rounded-lg px-3 py-2 text-xs leading-5 text-indigo-300"
+            className="mt-3 rounded-lg px-3 py-2 text-xs leading-5 text-accent"
             style={{
-              background: "rgba(99,102,241,0.08)",
-              border: "1px solid rgba(99,102,241,0.2)",
+              background: "var(--accent-soft)",
+              border: "1px solid var(--border-strong)",
             }}
           >
             {upgradeHint}
@@ -110,8 +103,7 @@ function AccessPanel({
         )}
         <Link
           to="/dashboard"
-          className="mt-5 inline-flex items-center justify-center rounded-lg px-4 py-2 text-xs font-medium text-white"
-          style={{ background: "linear-gradient(135deg,#6366f1,#8b5cf6)" }}
+          className="btn btn-primary mt-5 inline-flex items-center justify-center rounded-lg px-4 py-2 text-xs"
         >
           {actionLabel}
         </Link>

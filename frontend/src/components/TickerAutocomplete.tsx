@@ -146,11 +146,7 @@ export default function TickerAutocomplete({
       />
       {open && suggestions.length > 0 && (
         <ul
-          className="absolute z-10 mt-1 max-h-60 w-full overflow-auto rounded-xl py-1 text-sm shadow-lg"
-          style={{
-            background: "var(--bg-surface)",
-            border: "1px solid var(--border)",
-          }}
+          className="absolute z-10 mt-1 max-h-60 w-full overflow-auto rounded-xl py-1 text-sm bg-surface border border-line shadow-[var(--shadow-pop)]"
           role="listbox"
         >
           {suggestions.map((s, i) => (
@@ -165,15 +161,14 @@ export default function TickerAutocomplete({
               onMouseEnter={() => setHighlight(i)}
               className="flex cursor-pointer items-center justify-between px-3 py-2"
               style={{
-                background:
-                  i === highlight ? "var(--overlay-bg)" : "transparent",
+                background: i === highlight ? "var(--surface-2)" : "transparent",
               }}
             >
-              <span className="truncate text-white">
+              <span className="truncate text-ink-strong">
                 {s.ticker}
-                <span className="ml-2 text-slate-400">{s.name}</span>
+                <span className="ml-2 text-ink-secondary">{s.name}</span>
               </span>
-              <span className="ml-2 shrink-0 text-xs text-slate-500">
+              <span className="ml-2 shrink-0 text-xs text-ink-muted">
                 {s.market}
               </span>
             </li>

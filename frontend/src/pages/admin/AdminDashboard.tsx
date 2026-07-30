@@ -3,7 +3,7 @@ import { useAdminUsageSummary } from "@/lib/queries/admin";
 export default function AdminDashboard() {
   const { data, isPending, error } = useAdminUsageSummary(30);
 
-  if (isPending) return <p className="text-sm text-slate-500">載入中…</p>;
+  if (isPending) return <p className="text-sm text-ink-muted">載入中…</p>;
   if (error) return <p className="text-sm text-rose-400">{String(error)}</p>;
   if (!data) return null;
 
@@ -36,15 +36,14 @@ export default function AdminDashboard() {
                 className="w-full rounded-t"
                 style={{
                   height: `${(d.count / maxCount) * 100}%`,
-                  background:
-                    "linear-gradient(180deg, rgba(99,102,241,0.9), rgba(139,92,246,0.5))",
+                  background: "var(--accent-strong)",
                   minHeight: d.count > 0 ? "4px" : "1px",
                 }}
               />
             </div>
           ))}
         </div>
-        <div className="flex justify-between text-[10px] text-slate-600 mt-2">
+        <div className="flex justify-between text-[10px] text-ink-faint mt-2">
           <span>{data.daily_breakdown[0]?.date}</span>
           <span>
             {data.daily_breakdown[data.daily_breakdown.length - 1]?.date}
@@ -54,20 +53,20 @@ export default function AdminDashboard() {
 
       <Card title="Top 10 使用者">
         {data.top_users.length === 0 ? (
-          <p className="text-xs text-slate-600">尚無資料</p>
+          <p className="text-xs text-ink-faint">尚無資料</p>
         ) : (
           <table className="w-full text-xs">
             <thead>
-              <tr className="text-slate-600">
+              <tr className="text-ink-faint">
                 <th className="text-left py-2">UID</th>
                 <th className="text-right py-2">訊息數</th>
               </tr>
             </thead>
             <tbody>
               {data.top_users.map((u) => (
-                <tr key={u.uid} className="border-t border-white/5">
-                  <td className="py-2 font-mono text-slate-300">{u.uid}</td>
-                  <td className="py-2 text-right text-slate-200">{u.count}</td>
+                <tr key={u.uid} className="border-t border-line-subtle">
+                  <td className="py-2 font-mono text-ink">{u.uid}</td>
+                  <td className="py-2 text-right text-ink">{u.count}</td>
                 </tr>
               ))}
             </tbody>
@@ -80,15 +79,9 @@ export default function AdminDashboard() {
 
 function Stat({ label, value }: { label: string; value: number }) {
   return (
-    <div
-      className="rounded-xl p-4"
-      style={{
-        background: "var(--card-bg)",
-        border: "1px solid var(--border)",
-      }}
-    >
-      <p className="text-xs text-slate-600 mb-1">{label}</p>
-      <p className="text-2xl font-bold text-slate-100">{value}</p>
+    <div className="card p-4">
+      <p className="text-xs text-ink-faint mb-1">{label}</p>
+      <p className="text-2xl font-bold text-ink-strong">{value}</p>
     </div>
   );
 }
@@ -101,14 +94,8 @@ function Card({
   children: React.ReactNode;
 }) {
   return (
-    <div
-      className="rounded-xl p-4"
-      style={{
-        background: "var(--card-bg)",
-        border: "1px solid var(--border)",
-      }}
-    >
-      <h3 className="text-sm font-semibold text-slate-200 mb-3">{title}</h3>
+    <div className="card p-4">
+      <h3 className="text-sm font-semibold text-ink mb-3">{title}</h3>
       {children}
     </div>
   );

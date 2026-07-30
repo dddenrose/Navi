@@ -1,4 +1,5 @@
 import { memo, useState } from "react";
+import { TriangleAlert } from "lucide-react";
 import type { Citation } from "@/lib/api";
 
 const TYPE_LABELS: Record<string, string> = {
@@ -50,7 +51,7 @@ export const CitationsList = memo(function CitationsList({
         <svg
           viewBox="0 0 16 16"
           fill="none"
-          className="w-3.5 h-3.5 text-slate-500"
+          className="w-3.5 h-3.5 text-ink-muted"
           aria-hidden="true"
         >
           <path
@@ -66,13 +67,13 @@ export const CitationsList = memo(function CitationsList({
             strokeLinecap="round"
           />
         </svg>
-        <span className="text-slate-500 group-hover:text-slate-300 transition-colors">
+        <span className="text-ink-muted group-hover:text-ink transition-colors">
           資料來源 · {citations.length} 筆
         </span>
         <svg
           viewBox="0 0 20 20"
           fill="currentColor"
-          className={`w-3 h-3 text-slate-600 group-hover:text-slate-400 transition-transform duration-200 ${expanded ? "rotate-90" : ""}`}
+          className={`w-3 h-3 text-ink-faint group-hover:text-ink-secondary transition-transform duration-200 ${expanded ? "rotate-90" : ""}`}
           aria-hidden="true"
         >
           <path
@@ -88,40 +89,45 @@ export const CitationsList = memo(function CitationsList({
           {citations.map((c) => (
             <li
               key={c.id}
-              className="flex gap-2 text-slate-400 leading-relaxed"
+              className="flex gap-2 text-ink-secondary leading-relaxed"
             >
-              <span className="flex-shrink-0 text-slate-600 tabular-nums">
+              <span className="flex-shrink-0 text-ink-faint tabular-nums">
                 [{c.id}]
               </span>
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-baseline gap-x-1.5">
-                  <span className="text-slate-500">{getTypeLabel(c.type)}</span>
+                  <span className="text-ink-muted">{getTypeLabel(c.type)}</span>
                   {c.url ? (
                     <a
                       href={c.url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-indigo-400 hover:text-indigo-300 hover:underline break-all"
+                      className="text-accent hover:underline break-all"
                     >
                       {c.title || c.source}
                     </a>
                   ) : (
-                    <span className="text-slate-300">
+                    <span className="text-ink">
                       {c.title || c.source}
                     </span>
                   )}
                   {c.title && c.source && (
-                    <span className="text-slate-600">· {c.source}</span>
+                    <span className="text-ink-faint">· {c.source}</span>
                   )}
                   {c.fetched_at && (
-                    <span className="text-slate-600 tabular-nums">
+                    <span className="text-ink-faint tabular-nums">
                       · 取得於 {formatFetchedAt(c.fetched_at)}
                     </span>
                   )}
                 </div>
                 {c.note && (
-                  <div className="text-slate-600 text-[11px] mt-0.5">
-                    ⚠️ {c.note}
+                  <div className="text-ink-faint text-[11px] mt-0.5 flex items-center gap-1">
+                    <TriangleAlert
+                      size={11}
+                      className="text-warn flex-shrink-0"
+                      aria-hidden="true"
+                    />
+                    {c.note}
                   </div>
                 )}
               </div>

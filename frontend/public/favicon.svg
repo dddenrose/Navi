@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
+  <defs>
+    <linearGradient id="naviFaviconGradient" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#3e7bfa" />
+      <stop offset="32%" stop-color="#27c0e8" />
+      <stop offset="66%" stop-color="#8f7bff" />
+      <stop offset="100%" stop-color="#ff7a85" />
+    </linearGradient>
+  </defs>
+  <path
+    d="M24 5 L28.5 19.5 L43 24 L28.5 28.5 L24 43 L19.5 28.5 L5 24 L19.5 19.5 Z"
+    fill="url(#naviFaviconGradient)"
+  />
+  <circle cx="24" cy="24" r="3.2" fill="#0a0b10" />
+</svg>

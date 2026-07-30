@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { Pencil, X, TriangleAlert, Briefcase } from "lucide-react";
 import {
   type HoldingWithPrice,
   type AddTransactionInput,
@@ -13,6 +14,7 @@ import {
   useUpdateHolding,
 } from "@/lib/queries/portfolio";
 import { fmt, pnlColor, pnlBg } from "@/lib/format";
+import { useCountUp } from "@/lib/useCountUp";
 import TickerAutocomplete from "@/components/TickerAutocomplete";
 import { usePrivacyStore } from "@/store/privacyStore";
 
@@ -60,7 +62,7 @@ function EyeGlyph({
 /**
  * 鎖定時顯示的一串圓點，取代真實數字。
  * - 保留幣別/百分比符號，維持「這裡有個金額被藏起來」的語意
- * - 色調中性 slate-500、tabular-nums 對齊、淡入、不可選取
+ * - 色調中性、tabular-nums 對齊、淡入、不可選取
  */
 function Masked({
   prefix = "",
@@ -73,7 +75,7 @@ function Masked({
 }) {
   return (
     <span
-      className="animate-fade-in select-none tabular-nums text-slate-500"
+      className="animate-fade-in select-none tabular-nums text-ink-muted"
       aria-label="金額已隱藏"
       title="已鎖定，點右上角眼睛顯示"
     >
@@ -152,12 +154,7 @@ function TransactionModal({
     }
   };
 
-  const inputCls =
-    "w-full rounded-xl px-4 py-2.5 text-sm text-white placeholder:text-slate-600 outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/40";
-  const inputStyle = {
-    background: "var(--overlay-bg)",
-    border: "1px solid var(--border)",
-  } as const;
+  const inputCls = "input-field rounded-xl px-4 py-2.5 text-sm";
 
   return (
     <div
@@ -169,13 +166,9 @@ function TransactionModal({
     >
       <form
         onSubmit={handleSubmit}
-        className="w-full max-w-md rounded-2xl p-6 space-y-4"
-        style={{
-          background: "var(--bg-surface)",
-          border: "1px solid var(--border)",
-        }}
+        className="card w-full max-w-md p-6 space-y-4"
       >
-        <h2 className="text-lg font-semibold text-white">記錄交易</h2>
+        <h2 className="text-lg font-semibold text-ink-strong">記錄交易</h2>
 
         <div className="flex gap-2">
           {(["buy", "sell"] as const).map((a) => (
@@ -184,7 +177,7 @@ function TransactionModal({
               type="button"
               onClick={() => setAction(a)}
               className={`flex-1 rounded-xl px-4 py-2.5 text-sm font-medium transition-colors ${
-                action === a ? "text-white" : "text-slate-500"
+                action === a ? "text-ink-strong" : "text-ink-muted"
               }`}
               style={{
                 background:
@@ -192,13 +185,13 @@ function TransactionModal({
                     ? a === "buy"
                       ? "rgba(248,113,113,0.2)"
                       : "rgba(52,211,153,0.2)"
-                    : "var(--overlay-bg)",
+                    : "var(--surface-1)",
                 border: `1px solid ${
                   action === a
                     ? a === "buy"
                       ? "rgba(248,113,113,0.4)"
                       : "rgba(52,211,153,0.4)"
-                    : "var(--border)"
+                    : "var(--border-subtle)"
                 }`,
               }}
             >
@@ -209,7 +202,7 @@ function TransactionModal({
 
         <div className="space-y-3">
           <div>
-            <label className="block text-xs text-slate-500 mb-1">
+            <label className="block text-xs text-ink-muted mb-1">
               股票代碼 *
             </label>
             <TickerAutocomplete
@@ -219,12 +212,11 @@ function TransactionModal({
               placeholder="輸入代碼或名稱，例如 2330 / 台積電"
               required
               className={inputCls}
-              style={inputStyle}
             />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs text-slate-500 mb-1">
+              <label className="block text-xs text-ink-muted mb-1">
                 股數 *
               </label>
               <input
@@ -236,11 +228,10 @@ function TransactionModal({
                 min="0"
                 step="any"
                 className={inputCls}
-                style={inputStyle}
               />
             </div>
             <div>
-              <label className="block text-xs text-slate-500 mb-1">
+              <label className="block text-xs text-ink-muted mb-1">
                 成交價 *
               </label>
               <input
@@ -252,24 +243,22 @@ function TransactionModal({
                 min="0"
                 step="any"
                 className={inputCls}
-                style={inputStyle}
               />
             </div>
           </div>
           <div>
-            <label className="block text-xs text-slate-500 mb-1">交易日</label>
+            <label className="block text-xs text-ink-muted mb-1">交易日</label>
             <input
               type="date"
               value={tradeDate}
               onChange={(e) => setTradeDate(e.target.value)}
               className={inputCls}
-              style={inputStyle}
             />
           </div>
         </div>
 
         {estimate && (estimate.fee > 0 || estimate.tax > 0) && (
-          <p className="text-xs text-slate-500">
+          <p className="text-xs text-ink-muted">
             預估手續費 ${fmt(estimate.fee, 2)}
             {estimate.tax > 0 && <>、證交稅 ${fmt(estimate.tax, 2)}</>}
             （台股牌告費率，將計入成本／損益）
@@ -282,18 +271,14 @@ function TransactionModal({
           <button
             type="button"
             onClick={onClose}
-            className="flex-1 rounded-xl px-4 py-2.5 text-sm text-slate-400 hover:text-white transition-colors"
-            style={inputStyle}
+            className="btn btn-ghost flex-1 justify-center rounded-xl px-4 py-2.5 text-sm"
           >
             取消
           </button>
           <button
             type="submit"
             disabled={loading || !ticker || !shares || !price}
-            className="flex-1 rounded-xl px-4 py-2.5 text-sm font-medium text-white disabled:opacity-40 transition-opacity"
-            style={{
-              background: "linear-gradient(135deg, #6366f1, #8b5cf6)",
-            }}
+            className="btn btn-primary flex-1 justify-center rounded-xl px-4 py-2.5 text-sm disabled:opacity-40 transition-opacity"
           >
             {loading ? "記錄中…" : action === "buy" ? "記錄買入" : "記錄賣出"}
           </button>
@@ -347,6 +332,8 @@ function AddHoldingModal({
     }
   };
 
+  const inputCls = "input-field rounded-xl px-4 py-2.5 text-sm";
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
@@ -357,17 +344,13 @@ function AddHoldingModal({
     >
       <form
         onSubmit={handleSubmit}
-        className="w-full max-w-md rounded-2xl p-6 space-y-4"
-        style={{
-          background: "var(--bg-surface)",
-          border: "1px solid var(--border)",
-        }}
+        className="card w-full max-w-md p-6 space-y-4"
       >
-        <h2 className="text-lg font-semibold text-white">新增持股</h2>
+        <h2 className="text-lg font-semibold text-ink-strong">新增持股</h2>
 
         <div className="space-y-3">
           <div>
-            <label className="block text-xs text-slate-500 mb-1">
+            <label className="block text-xs text-ink-muted mb-1">
               股票代碼 *
             </label>
             <TickerAutocomplete
@@ -379,16 +362,12 @@ function AddHoldingModal({
               }}
               placeholder="輸入代碼或名稱，例如 2330 / 台積電"
               required
-              className="w-full rounded-xl px-4 py-2.5 text-sm text-white placeholder:text-slate-600 outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/40"
-              style={{
-                background: "var(--overlay-bg)",
-                border: "1px solid var(--border)",
-              }}
+              className={inputCls}
             />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs text-slate-500 mb-1">
+              <label className="block text-xs text-ink-muted mb-1">
                 股數 *
               </label>
               <input
@@ -399,15 +378,11 @@ function AddHoldingModal({
                 required
                 min="0"
                 step="any"
-                className="w-full rounded-xl px-4 py-2.5 text-sm text-white placeholder:text-slate-600 outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/40"
-                style={{
-                  background: "var(--overlay-bg)",
-                  border: "1px solid var(--border)",
-                }}
+                className={inputCls}
               />
             </div>
             <div>
-              <label className="block text-xs text-slate-500 mb-1">
+              <label className="block text-xs text-ink-muted mb-1">
                 平均成本 *
               </label>
               <input
@@ -418,40 +393,28 @@ function AddHoldingModal({
                 required
                 min="0"
                 step="any"
-                className="w-full rounded-xl px-4 py-2.5 text-sm text-white placeholder:text-slate-600 outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/40"
-                style={{
-                  background: "var(--overlay-bg)",
-                  border: "1px solid var(--border)",
-                }}
+                className={inputCls}
               />
             </div>
           </div>
           <div>
-            <label className="block text-xs text-slate-500 mb-1">
+            <label className="block text-xs text-ink-muted mb-1">
               股票名稱
             </label>
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="選填，選擇代碼後自動帶入（如：台積電）"
-              className="w-full rounded-xl px-4 py-2.5 text-sm text-white placeholder:text-slate-600 outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/40"
-              style={{
-                background: "var(--overlay-bg)",
-                border: "1px solid var(--border)",
-              }}
+              className={inputCls}
             />
           </div>
           <div>
-            <label className="block text-xs text-slate-500 mb-1">備註</label>
+            <label className="block text-xs text-ink-muted mb-1">備註</label>
             <input
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               placeholder="長期投資"
-              className="w-full rounded-xl px-4 py-2.5 text-sm text-white placeholder:text-slate-600 outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/40"
-              style={{
-                background: "var(--overlay-bg)",
-                border: "1px solid var(--border)",
-              }}
+              className={inputCls}
             />
           </div>
         </div>
@@ -462,21 +425,14 @@ function AddHoldingModal({
           <button
             type="button"
             onClick={onClose}
-            className="flex-1 rounded-xl px-4 py-2.5 text-sm text-slate-400 hover:text-white transition-colors"
-            style={{
-              background: "var(--overlay-bg)",
-              border: "1px solid var(--border)",
-            }}
+            className="btn btn-ghost flex-1 justify-center rounded-xl px-4 py-2.5 text-sm"
           >
             取消
           </button>
           <button
             type="submit"
             disabled={loading || !ticker || !shares || !avgCost}
-            className="flex-1 rounded-xl px-4 py-2.5 text-sm font-medium text-white disabled:opacity-40 transition-opacity"
-            style={{
-              background: "linear-gradient(135deg, #6366f1, #8b5cf6)",
-            }}
+            className="btn btn-primary flex-1 justify-center rounded-xl px-4 py-2.5 text-sm disabled:opacity-40 transition-opacity"
           >
             {loading ? "新增中…" : "新增"}
           </button>
@@ -526,12 +482,7 @@ function EditHoldingModal({
     }
   };
 
-  const inputCls =
-    "w-full rounded-xl px-4 py-2.5 text-sm text-white placeholder:text-slate-600 outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/40";
-  const inputStyle = {
-    background: "var(--overlay-bg)",
-    border: "1px solid var(--border)",
-  } as const;
+  const inputCls = "input-field rounded-xl px-4 py-2.5 text-sm";
 
   return (
     <div
@@ -543,15 +494,11 @@ function EditHoldingModal({
     >
       <form
         onSubmit={handleSubmit}
-        className="w-full max-w-md rounded-2xl p-6 space-y-4"
-        style={{
-          background: "var(--bg-surface)",
-          border: "1px solid var(--border)",
-        }}
+        className="card w-full max-w-md p-6 space-y-4"
       >
         <div>
-          <h2 className="text-lg font-semibold text-white">編輯持股</h2>
-          <p className="text-sm text-slate-500 mt-0.5">
+          <h2 className="text-lg font-semibold text-ink-strong">編輯持股</h2>
+          <p className="text-sm text-ink-muted mt-0.5">
             {holding.ticker}
             {holding.name && <span className="ml-2">{holding.name}</span>}
           </p>
@@ -560,7 +507,7 @@ function EditHoldingModal({
         <div className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs text-slate-500 mb-1">
+              <label className="block text-xs text-ink-muted mb-1">
                 股數 *
               </label>
               <input
@@ -571,11 +518,10 @@ function EditHoldingModal({
                 min="0"
                 step="any"
                 className={inputCls}
-                style={inputStyle}
               />
             </div>
             <div>
-              <label className="block text-xs text-slate-500 mb-1">
+              <label className="block text-xs text-ink-muted mb-1">
                 平均成本 *
               </label>
               <input
@@ -586,21 +532,19 @@ function EditHoldingModal({
                 min="0"
                 step="any"
                 className={inputCls}
-                style={inputStyle}
               />
             </div>
           </div>
           <div>
-            <label className="block text-xs text-slate-500 mb-1">備註</label>
+            <label className="block text-xs text-ink-muted mb-1">備註</label>
             <input
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               placeholder="長期投資"
               className={inputCls}
-              style={inputStyle}
             />
           </div>
-          <p className="text-xs text-slate-600">
+          <p className="text-xs text-ink-faint">
             如需更換股票代碼，請刪除本筆後重新新增。
           </p>
         </div>
@@ -611,18 +555,14 @@ function EditHoldingModal({
           <button
             type="button"
             onClick={onClose}
-            className="flex-1 rounded-xl px-4 py-2.5 text-sm text-slate-400 hover:text-white transition-colors"
-            style={inputStyle}
+            className="btn btn-ghost flex-1 justify-center rounded-xl px-4 py-2.5 text-sm"
           >
             取消
           </button>
           <button
             type="submit"
             disabled={loading}
-            className="flex-1 rounded-xl px-4 py-2.5 text-sm font-medium text-white disabled:opacity-40 transition-opacity"
-            style={{
-              background: "linear-gradient(135deg, #6366f1, #8b5cf6)",
-            }}
+            className="btn btn-primary flex-1 justify-center rounded-xl px-4 py-2.5 text-sm disabled:opacity-40 transition-opacity"
           >
             {loading ? "更新中…" : "儲存"}
           </button>
@@ -650,37 +590,37 @@ function HoldingRow({
   const pct = totalValue > 0 ? (holding.market_value / totalValue) * 100 : 0;
 
   return (
-    <tr className="group" style={{ borderBottom: "1px solid var(--border)" }}>
+    <tr className="group border-b border-line-subtle">
       <td className="py-4 px-4">
         <div>
-          <span className="text-sm font-medium text-white">
+          <span className="text-sm font-medium text-ink-strong">
             {holding.ticker}
           </span>
           {holding.name && (
-            <span className="text-xs text-slate-600 ml-2">{holding.name}</span>
+            <span className="text-xs text-ink-faint ml-2">{holding.name}</span>
           )}
         </div>
       </td>
-      <td className="py-4 px-3 text-right text-sm text-slate-300 tabular-nums">
+      <td className="py-4 px-3 text-right text-sm text-ink tabular-nums">
         {locked ? <Masked count={4} /> : fmt(holding.shares)}
       </td>
-      <td className="py-4 px-3 text-right text-sm text-slate-400 tabular-nums">
+      <td className="py-4 px-3 text-right text-sm text-ink-secondary tabular-nums">
         {locked ? (
           <Masked prefix="$" count={5} />
         ) : (
           <>${fmt(holding.avg_cost, 2)}</>
         )}
       </td>
-      <td className="py-4 px-3 text-right text-sm text-slate-200 tabular-nums">
+      <td className="py-4 px-3 text-right text-sm text-ink tabular-nums">
         {holding.current_price != null
           ? `$${fmt(holding.current_price, 2)}`
           : "—"}
       </td>
-      <td className="py-4 px-3 text-right text-sm text-slate-300 tabular-nums">
+      <td className="py-4 px-3 text-right text-sm text-ink tabular-nums">
         {locked ? <Masked prefix="$" /> : <>${fmt(holding.market_value)}</>}
       </td>
       <td
-        className={`py-4 px-3 text-right text-sm tabular-nums ${locked ? "text-slate-500" : pnlColor(holding.pnl)}`}
+        className={`py-4 px-3 text-right text-sm tabular-nums ${locked ? "text-ink-muted" : pnlColor(holding.pnl)}`}
       >
         {locked ? (
           <Masked prefix="$" count={5} />
@@ -695,25 +635,25 @@ function HoldingRow({
           </>
         )}
       </td>
-      <td className="py-4 px-3 text-right text-sm text-slate-500 tabular-nums">
+      <td className="py-4 px-3 text-right text-sm text-ink-muted tabular-nums">
         {locked ? <Masked suffix="%" count={3} /> : <>{pct.toFixed(1)}%</>}
       </td>
       <td className="py-4 px-3 text-right whitespace-nowrap">
         <button
           onClick={() => onEdit(holding)}
-          className="opacity-100 md:opacity-0 md:group-hover:opacity-100 focus-visible:opacity-100 text-xs text-slate-600 hover:text-indigo-400 transition-opacity"
+          className="opacity-100 md:opacity-0 md:group-hover:opacity-100 focus-visible:opacity-100 text-xs text-ink-faint hover:text-accent transition-opacity"
           aria-label={`編輯 ${holding.ticker}`}
           title="編輯持股"
         >
-          ✎
+          <Pencil size={14} aria-hidden="true" />
         </button>
         <button
           onClick={() => onDelete(holding.id)}
-          className="ml-3 opacity-100 md:opacity-0 md:group-hover:opacity-100 focus-visible:opacity-100 text-xs text-slate-600 hover:text-red-400 transition-opacity"
+          className="ml-3 opacity-100 md:opacity-0 md:group-hover:opacity-100 focus-visible:opacity-100 text-xs text-ink-faint hover:text-red-400 transition-opacity"
           aria-label={`刪除 ${holding.ticker}`}
           title="刪除持股"
         >
-          ✕
+          <X size={14} aria-hidden="true" />
         </button>
       </td>
     </tr>
@@ -740,6 +680,18 @@ export default function Portfolio() {
   const addTransactionMutation = useAddTransaction();
   const updateHoldingMutation = useUpdateHolding();
   const deleteHoldingMutation = useDeleteHolding();
+
+  const summary = portfolioQuery.data;
+
+  // useCountUp 依 React hooks 規則必須在任何 early return 之前呼叫；
+  // loading/error 態下 summary 為 undefined，用 0 當 fallback（畫面本身
+  // 會先走下面的 isPending/error early return，不會顯示這兩個數字）。
+  const totalValueDisplay = useCountUp(summary?.total_value ?? 0, {
+    format: (v) => `$${fmt(v)}`,
+  });
+  const totalPnlDisplay = useCountUp(summary?.total_pnl ?? 0, {
+    format: (v) => `${v >= 0 ? "+" : ""}$${fmt(v)}`,
+  });
 
   const handleAdd = async (data: {
     ticker: string;
@@ -769,7 +721,7 @@ export default function Portfolio() {
   if (portfolioQuery.isPending) {
     return (
       <div className="flex items-center justify-center h-full min-h-[50vh]">
-        <p className="text-sm text-slate-500">載入投資組合中…</p>
+        <p className="text-sm text-ink-muted">載入投資組合中…</p>
       </div>
     );
   }
@@ -786,7 +738,6 @@ export default function Portfolio() {
     );
   }
 
-  const summary = portfolioQuery.data;
   const hasHoldings = summary && summary.holdings_count > 0;
 
   return (
@@ -794,18 +745,14 @@ export default function Portfolio() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8 md:mb-10">
         <div>
-          <h1 className="text-2xl font-semibold text-white">💼 投資組合</h1>
-          <p className="text-sm text-slate-500 mt-1">即時市值、損益追蹤</p>
+          <h1 className="text-2xl font-semibold text-ink-strong">投資組合</h1>
+          <p className="text-sm text-ink-muted mt-1">即時市值、損益追蹤</p>
         </div>
         <div className="flex gap-2">
           {hasHoldings && (
             <button
               onClick={toggleLock}
-              className="flex items-center gap-1.5 rounded-xl px-4 py-2.5 text-sm font-medium text-slate-300 transition-colors hover:text-white"
-              style={{
-                background: "var(--overlay-bg)",
-                border: "1px solid var(--border)",
-              }}
+              className="btn btn-ghost rounded-xl px-4 py-2.5 text-sm"
               title={pnlLocked ? "顯示損益與持股金額" : "隱藏損益與持股金額"}
               aria-pressed={pnlLocked}
             >
@@ -815,20 +762,13 @@ export default function Portfolio() {
           )}
           <button
             onClick={() => setShowTx(true)}
-            className="rounded-xl px-5 py-2.5 text-sm font-medium text-white transition-opacity hover:opacity-90"
-            style={{
-              background: "linear-gradient(135deg, #6366f1, #8b5cf6)",
-            }}
+            className="btn btn-primary rounded-xl px-5 py-2.5 text-sm transition-opacity hover:opacity-90"
           >
             + 記錄交易
           </button>
           <button
             onClick={() => setShowAdd(true)}
-            className="rounded-xl px-5 py-2.5 text-sm font-medium text-slate-300 transition-colors hover:text-white"
-            style={{
-              background: "var(--overlay-bg)",
-              border: "1px solid var(--border)",
-            }}
+            className="btn btn-ghost rounded-xl px-5 py-2.5 text-sm"
             title="不記交易明細，直接輸入現有持股與平均成本"
           >
             快速新增持股
@@ -840,60 +780,38 @@ export default function Portfolio() {
       {/* Summary cards */}
       {hasHoldings && summary && (
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4 mb-8 md:mb-10">
-          <div
-            className="rounded-2xl p-5"
-            style={{
-              background: "var(--card-bg)",
-              border: "1px solid var(--border)",
-            }}
-          >
-            <p className="text-xs text-slate-500 mb-2">總市值</p>
-            <p className="text-lg font-semibold text-white tabular-nums">
-              {pnlLocked ? <Masked prefix="$" /> : <>${fmt(summary.total_value)}</>}
+          <div className="card p-5">
+            <p className="text-xs text-ink-muted mb-2">總市值</p>
+            <p className="text-lg font-semibold text-ink-strong tabular-nums">
+              {pnlLocked ? <Masked prefix="$" /> : totalValueDisplay}
             </p>
           </div>
-          <div
-            className="rounded-2xl p-5"
-            style={{
-              background: "var(--card-bg)",
-              border: "1px solid var(--border)",
-            }}
-          >
-            <p className="text-xs text-slate-500 mb-2">總成本</p>
-            <p className="text-lg font-semibold text-slate-300 tabular-nums">
+          <div className="card p-5">
+            <p className="text-xs text-ink-muted mb-2">總成本</p>
+            <p className="text-lg font-semibold text-ink tabular-nums">
               {pnlLocked ? <Masked prefix="$" /> : <>${fmt(summary.total_cost)}</>}
             </p>
           </div>
           <div
-            className="rounded-2xl p-5"
-            style={{
-              background: pnlLocked ? "var(--card-bg)" : pnlBg(summary.total_pnl),
-              border: "1px solid var(--border)",
-            }}
+            className="card p-5"
+            style={!pnlLocked ? { background: pnlBg(summary.total_pnl) } : undefined}
           >
-            <p className="text-xs text-slate-500 mb-2">總損益</p>
+            <p className="text-xs text-ink-muted mb-2">總損益</p>
             <p
-              className={`text-lg font-semibold tabular-nums ${pnlLocked ? "text-slate-500" : pnlColor(summary.total_pnl)}`}
+              className={`text-lg font-semibold tabular-nums ${pnlLocked ? "text-ink-muted" : pnlColor(summary.total_pnl)}`}
             >
-              {pnlLocked ? (
-                <Masked prefix="$" />
-              ) : (
-                <>
-                  {summary.total_pnl >= 0 ? "+" : ""}${fmt(summary.total_pnl)}
-                </>
-              )}
+              {pnlLocked ? <Masked prefix="$" /> : totalPnlDisplay}
             </p>
           </div>
           <div
-            className="rounded-2xl p-5"
-            style={{
-              background: pnlLocked ? "var(--card-bg)" : pnlBg(summary.total_pnl),
-              border: "1px solid var(--border)",
-            }}
+            className="card p-5"
+            style={
+              !pnlLocked ? { background: pnlBg(summary.total_pnl) } : undefined
+            }
           >
-            <p className="text-xs text-slate-500 mb-2">報酬率</p>
+            <p className="text-xs text-ink-muted mb-2">報酬率</p>
             <p
-              className={`text-lg font-semibold tabular-nums ${pnlLocked ? "text-slate-500" : pnlColor(summary.total_pnl_percent)}`}
+              className={`text-lg font-semibold tabular-nums ${pnlLocked ? "text-ink-muted" : pnlColor(summary.total_pnl_percent)}`}
             >
               {pnlLocked ? (
                 <Masked suffix="%" count={4} />
@@ -906,17 +824,16 @@ export default function Portfolio() {
             </p>
           </div>
           <div
-            className="rounded-2xl p-5"
-            style={{
-              background: pnlLocked ? "var(--card-bg)" : pnlBg(summary.realized_pnl),
-              border: "1px solid var(--border)",
-            }}
+            className="card p-5"
+            style={
+              !pnlLocked ? { background: pnlBg(summary.realized_pnl) } : undefined
+            }
           >
-            <p className="text-xs text-slate-500 mb-2">
+            <p className="text-xs text-ink-muted mb-2">
               已實現損益（含費稅）
             </p>
             <p
-              className={`text-lg font-semibold tabular-nums ${pnlLocked ? "text-slate-500" : pnlColor(summary.realized_pnl)}`}
+              className={`text-lg font-semibold tabular-nums ${pnlLocked ? "text-ink-muted" : pnlColor(summary.realized_pnl)}`}
             >
               {pnlLocked ? (
                 <Masked prefix="$" />
@@ -933,28 +850,16 @@ export default function Portfolio() {
 
       {/* Holdings table */}
       {hasHoldings && summary ? (
-        <div
-          className="rounded-2xl overflow-hidden"
-          style={{
-            background: "var(--card-bg)",
-            border: "1px solid var(--border)",
-          }}
-        >
-          <div
-            className="px-6 py-4"
-            style={{ borderBottom: "1px solid var(--border)" }}
-          >
-            <h2 className="text-sm font-medium text-slate-300">
+        <div className="card overflow-hidden">
+          <div className="px-6 py-4 border-b border-line-subtle">
+            <h2 className="text-sm font-medium text-ink">
               持股明細（{summary.holdings_count} 檔）
             </h2>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
-                <tr
-                  className="text-xs text-slate-500"
-                  style={{ borderBottom: "1px solid var(--border)" }}
-                >
+                <tr className="text-xs text-ink-muted border-b border-line-subtle">
                   <th className="text-left py-3 px-4 font-medium">股票</th>
                   <th className="text-right py-3 px-3 font-medium">股數</th>
                   <th className="text-right py-3 px-3 font-medium">成本</th>
@@ -983,26 +888,21 @@ export default function Portfolio() {
           </div>
         </div>
       ) : (
-        <div
-          className="rounded-2xl p-16 text-center"
-          style={{
-            background: "var(--card-bg)",
-            border: "1px solid var(--border)",
-          }}
-        >
-          <div className="text-4xl mb-4">💼</div>
-          <h2 className="text-lg font-medium text-white mb-2">
+        <div className="card p-16 text-center">
+          <Briefcase
+            className="w-10 h-10 mx-auto mb-4 text-ink-faint"
+            strokeWidth={1.5}
+            aria-hidden="true"
+          />
+          <h2 className="text-lg font-medium text-ink-strong mb-2">
             開始建立你的投資組合
           </h2>
-          <p className="text-sm text-slate-500 mb-6">
+          <p className="text-sm text-ink-muted mb-6">
             新增持股後，即可追蹤即時市值與損益
           </p>
           <button
             onClick={() => setShowAdd(true)}
-            className="rounded-xl px-6 py-2.5 text-sm font-medium text-white transition-opacity hover:opacity-90"
-            style={{
-              background: "linear-gradient(135deg, #6366f1, #8b5cf6)",
-            }}
+            className="btn btn-primary rounded-xl px-6 py-2.5 text-sm transition-opacity hover:opacity-90"
           >
             + 新增第一筆持股
           </button>
@@ -1011,28 +911,16 @@ export default function Portfolio() {
 
       {/* Transactions history */}
       {transactions.length > 0 && (
-        <div
-          className="rounded-2xl overflow-hidden mt-8"
-          style={{
-            background: "var(--card-bg)",
-            border: "1px solid var(--border)",
-          }}
-        >
-          <div
-            className="px-6 py-4"
-            style={{ borderBottom: "1px solid var(--border)" }}
-          >
-            <h2 className="text-sm font-medium text-slate-300">
+        <div className="card overflow-hidden mt-8">
+          <div className="px-6 py-4 border-b border-line-subtle">
+            <h2 className="text-sm font-medium text-ink">
               交易紀錄（最近 {Math.min(transactions.length, 50)} 筆）
             </h2>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
-                <tr
-                  className="text-xs text-slate-500"
-                  style={{ borderBottom: "1px solid var(--border)" }}
-                >
+                <tr className="text-xs text-ink-muted border-b border-line-subtle">
                   <th className="text-left py-3 px-4 font-medium">日期</th>
                   <th className="text-left py-3 px-3 font-medium">股票</th>
                   <th className="text-left py-3 px-3 font-medium">動作</th>
@@ -1046,17 +934,14 @@ export default function Portfolio() {
               </thead>
               <tbody>
                 {transactions.slice(0, 50).map((t) => (
-                  <tr
-                    key={t.id}
-                    style={{ borderBottom: "1px solid var(--border)" }}
-                  >
-                    <td className="py-3 px-4 text-xs text-slate-400 tabular-nums">
+                  <tr key={t.id} className="border-b border-line-subtle">
+                    <td className="py-3 px-4 text-xs text-ink-secondary tabular-nums">
                       {t.trade_date}
                     </td>
-                    <td className="py-3 px-3 text-sm text-white">
+                    <td className="py-3 px-3 text-sm text-ink-strong">
                       {t.ticker}
                       {t.name && (
-                        <span className="text-xs text-slate-600 ml-1.5">
+                        <span className="text-xs text-ink-faint ml-1.5">
                           {t.name}
                         </span>
                       )}
@@ -1072,13 +957,13 @@ export default function Portfolio() {
                         {t.action === "buy" ? "買入" : "賣出"}
                       </span>
                     </td>
-                    <td className="py-3 px-3 text-right text-sm text-slate-300 tabular-nums">
+                    <td className="py-3 px-3 text-right text-sm text-ink tabular-nums">
                       {pnlLocked ? <Masked count={4} /> : fmt(t.shares)}
                     </td>
-                    <td className="py-3 px-3 text-right text-sm text-slate-300 tabular-nums">
+                    <td className="py-3 px-3 text-right text-sm text-ink tabular-nums">
                       ${fmt(t.price, 2)}
                     </td>
-                    <td className="py-3 px-3 text-right text-xs text-slate-500 tabular-nums">
+                    <td className="py-3 px-3 text-right text-xs text-ink-muted tabular-nums">
                       {pnlLocked ? (
                         <Masked prefix="$" count={4} />
                       ) : (
@@ -1088,10 +973,10 @@ export default function Portfolio() {
                     <td
                       className={`py-3 px-3 text-right text-sm tabular-nums ${
                         pnlLocked
-                          ? "text-slate-500"
+                          ? "text-ink-muted"
                           : t.action === "sell"
                             ? pnlColor(t.realized_pnl)
-                            : "text-slate-600"
+                            : "text-ink-faint"
                       }`}
                     >
                       {t.action === "sell" ? (
@@ -1112,9 +997,16 @@ export default function Portfolio() {
         </div>
       )}
 
-      <p className="text-xs text-slate-500 leading-relaxed mt-6">
-        ⚠️ 損益以台股牌告費率（手續費 0.1425%、賣出證交稅
-        0.3%）估算，未含券商折讓與股利；僅供參考，實際請以券商對帳單為準。
+      <p className="text-xs text-ink-muted leading-relaxed mt-6 flex items-start gap-1.5">
+        <TriangleAlert
+          size={14}
+          className="text-warn shrink-0 mt-0.5"
+          aria-hidden="true"
+        />
+        <span>
+          損益以台股牌告費率（手續費 0.1425%、賣出證交稅
+          0.3%）估算，未含券商折讓與股利；僅供參考，實際請以券商對帳單為準。
+        </span>
       </p>
 
       {/* Add holding modal */}

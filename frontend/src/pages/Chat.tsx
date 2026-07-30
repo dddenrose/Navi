@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useLocation, useNavigate } from "react-router-dom";
+import { TriangleAlert, X } from "lucide-react";
 import {
   streamChat,
   getConversations,
@@ -11,6 +12,7 @@ import { ThinkingPanel } from "@/components/ThinkingPanel";
 import { CitationsList } from "@/components/CitationsList";
 import { MarkdownRenderer } from "@/components/MarkdownRenderer";
 import { QuotaBadge } from "@/components/QuotaBadge";
+import NaviLogo from "@/components/NaviLogo";
 import { useQuotaStore } from "@/store/quotaStore";
 
 interface Message {
@@ -149,7 +151,7 @@ export default function Chat() {
           }
           updated.push({
             role: "assistant",
-            content: `⚠️ ${payload.message}`,
+            content: `注意：${payload.message}`,
             streaming: false,
           });
           return updated;
@@ -256,8 +258,8 @@ export default function Chat() {
           updated[updated.length - 1] = {
             ...last,
             content: partial
-              ? `${partial}\n\n⚠️ 連線中斷，以上回覆可能不完整，請重新提問。`
-              : "⚠️ 連線中斷，請檢查網路後重新送出。",
+              ? `${partial}\n\n注意：連線中斷，以上回覆可能不完整，請重新提問。`
+              : "注意：連線中斷，請檢查網路後重新送出。",
             streaming: false,
           };
         }
@@ -308,11 +310,7 @@ export default function Chat() {
       {/* Sidebar toggle button (mobile: fixed bottom-left, desktop: top of chat area) */}
       <button
         onClick={() => setChatSidebarOpen(!chatSidebarOpen)}
-        className="fixed bottom-24 left-4 z-30 md:hidden w-10 h-10 rounded-full flex items-center justify-center text-white shadow-lg"
-        style={{
-          background: "linear-gradient(135deg, #6366f1, #8b5cf6)",
-          boxShadow: "0 4px 16px rgba(99,102,241,0.4)",
-        }}
+        className="fixed bottom-24 left-4 z-30 md:hidden w-10 h-10 rounded-full flex items-center justify-center text-white shadow-lg bg-[var(--accent-strong)] hover:bg-[var(--accent)] transition-colors"
         aria-label="切換對話列表"
       >
         <svg
@@ -331,24 +329,16 @@ export default function Chat() {
 
       {/* Conversation history sidebar */}
       <div
-        className={`flex-col flex-shrink-0 transition-all duration-200 ease-out ${
+        className={`flex-col flex-shrink-0 transition-all duration-200 ease-out bg-surface ${
           chatSidebarOpen
-            ? "w-60 flex"
+            ? "w-60 flex border-r border-line-subtle"
             : "w-0 overflow-hidden hidden md:flex md:w-0"
         }`}
-        style={{
-          background: "var(--sidebar-bg)",
-          borderRight: chatSidebarOpen ? "1px solid var(--border)" : "none",
-        }}
       >
-        <div
-          className="p-4"
-          style={{ borderBottom: "1px solid var(--border)" }}
-        >
+        <div className="p-4 border-b border-line-subtle">
           <button
             onClick={startNewChat}
-            className="w-full flex items-center justify-center gap-2 rounded-xl py-3 text-xs font-medium text-white transition-opacity hover:opacity-90"
-            style={{ background: "linear-gradient(135deg, #6366f1, #8b5cf6)" }}
+            className="btn btn-primary w-full justify-center py-3 text-xs"
           >
             <svg
               viewBox="0 0 16 16"
@@ -363,11 +353,11 @@ export default function Chat() {
         </div>
         <div className="flex-1 overflow-y-auto p-3 space-y-2">
           {sidebarLoading ? (
-            <p className="text-xs text-slate-700 px-3 py-4 text-center">
+            <p className="text-xs text-ink-faint px-3 py-4 text-center">
               載入中…
             </p>
           ) : conversations.length === 0 ? (
-            <p className="text-xs text-slate-700 px-3 py-4 text-center">
+            <p className="text-xs text-ink-faint px-3 py-4 text-center">
               尚無對話記錄
             </p>
           ) : (
@@ -379,27 +369,23 @@ export default function Chat() {
                   setCurrentConvId(conv.conversation_id);
                   navigate(`/chat/${conv.conversation_id}`);
                 }}
-                className="group w-full flex items-center justify-between px-3 py-3.5 rounded-xl cursor-pointer transition-colors text-left"
-                style={
+                className={`group w-full flex items-center justify-between px-3 py-3.5 rounded-xl cursor-pointer transition-colors text-left border ${
                   currentConvId === conv.conversation_id
-                    ? {
-                        background: "rgba(99,102,241,0.12)",
-                        border: "1px solid rgba(99,102,241,0.2)",
-                      }
-                    : { border: "1px solid transparent" }
-                }
+                    ? "bg-[var(--accent-soft)] border-[var(--focus-ring)]"
+                    : "border-transparent"
+                }`}
               >
                 <div className="min-w-0 flex-1">
                   <p
                     className={`text-xs truncate leading-relaxed ${
                       currentConvId === conv.conversation_id
-                        ? "text-slate-300"
-                        : "text-slate-600 group-hover:text-slate-400"
+                        ? "text-ink"
+                        : "text-ink-faint group-hover:text-ink-secondary"
                     }`}
                   >
                     {conv.title || "對話記錄"}
                   </p>
-                  <p className="text-xs text-slate-700 mt-0.5">
+                  <p className="text-xs text-ink-faint mt-0.5">
                     {conv.message_count} 則訊息
                   </p>
                 </div>
@@ -409,9 +395,9 @@ export default function Chat() {
                     handleDeleteConversation(conv.conversation_id, e)
                   }
                   aria-label="刪除對話"
-                  className="opacity-100 md:opacity-0 md:group-hover:opacity-100 focus-visible:opacity-100 text-slate-700 hover:text-red-400 transition-opacity ml-1 flex-shrink-0 text-xs"
+                  className="opacity-100 md:opacity-0 md:group-hover:opacity-100 focus-visible:opacity-100 text-ink-faint hover:text-red-400 transition-opacity ml-1 flex-shrink-0"
                 >
-                  ✕
+                  <X size={12} aria-hidden="true" />
                 </button>
               </button>
             ))
@@ -422,13 +408,10 @@ export default function Chat() {
       {/* Main chat area */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Desktop sidebar toggle */}
-        <div
-          className="hidden md:flex items-center justify-between h-12 px-4 flex-shrink-0"
-          style={{ borderBottom: "1px solid var(--border)" }}
-        >
+        <div className="hidden md:flex items-center justify-between h-12 px-4 flex-shrink-0 border-b border-line-subtle">
           <button
             onClick={() => setChatSidebarOpen(!chatSidebarOpen)}
-            className="flex items-center gap-2 px-2.5 py-1.5 text-xs text-slate-500 hover:text-slate-200 rounded-lg transition-colors hover:bg-white/5"
+            className="flex items-center gap-2 px-2.5 py-1.5 text-xs text-ink-muted hover:text-ink rounded-lg transition-colors hover:bg-white/5"
             aria-label={chatSidebarOpen ? "隱藏對話記錄" : "顯示對話記錄"}
           >
             <svg
@@ -451,23 +434,16 @@ export default function Chat() {
         <div className="flex-1 overflow-y-auto px-4 py-6 md:px-8 md:py-8">
           {messages.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-center animate-fade-in">
-              <div
-                className="w-20 h-20 rounded-2xl flex items-center justify-center text-4xl mb-7"
-                style={{
-                  background:
-                    "linear-gradient(135deg, rgba(99,102,241,0.2), rgba(139,92,246,0.12))",
-                  border: "1px solid rgba(99,102,241,0.2)",
-                }}
-              >
-                🧭
+              <div className="w-20 h-20 rounded-2xl flex items-center justify-center mb-7 bg-[var(--accent-soft)] border border-[var(--focus-ring)]">
+                <NaviLogo size={40} />
               </div>
               <h2
-                className="text-xl font-semibold text-slate-200 mb-3"
+                className="text-xl font-semibold text-ink mb-3"
                 style={{ textWrap: "balance" }}
               >
                 Navi 投資助理
               </h2>
-              <p className="text-slate-500 text-sm max-w-xs leading-loose">
+              <p className="text-ink-muted text-sm max-w-xs leading-loose">
                 您好！我可以幫您分析股票、解釋技術指標，以及回答投資相關問題。
               </p>
             </div>
@@ -481,13 +457,10 @@ export default function Chat() {
               >
                 {msg.role === "assistant" && (
                   <div
-                    className="w-7 h-7 rounded-lg flex items-center justify-center text-sm flex-shrink-0 mt-0.5"
+                    className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5 bg-[var(--surface-1)]"
                     aria-hidden="true"
-                    style={{
-                      background: "linear-gradient(135deg, #6366f1, #8b5cf6)",
-                    }}
                   >
-                    🧭
+                    <NaviLogo size={16} />
                   </div>
                 )}
                 <div className="flex flex-col max-w-2xl min-w-0">
@@ -502,22 +475,9 @@ export default function Chat() {
                   <div
                     className={`px-5 py-4 rounded-2xl text-sm leading-8 break-words ${
                       msg.role === "user"
-                        ? "rounded-tr-sm whitespace-pre-wrap"
-                        : "rounded-tl-sm"
+                        ? "rounded-tr-sm whitespace-pre-wrap bg-[var(--accent-strong)] text-white"
+                        : "rounded-tl-sm bg-[var(--surface-1)] border border-line-subtle text-ink-secondary"
                     }`}
-                    style={
-                      msg.role === "user"
-                        ? {
-                            background:
-                              "linear-gradient(135deg, #6366f1, #7c3aed)",
-                            color: "white",
-                          }
-                        : {
-                            background: "var(--overlay-bg)",
-                            border: "1px solid var(--border)",
-                            color: "var(--text-link)",
-                          }
-                    }
                   >
                     {msg.role === "assistant" ? (
                       <MarkdownRenderer content={msg.content} />
@@ -525,7 +485,7 @@ export default function Chat() {
                       msg.content
                     )}
                     {msg.streaming && (
-                      <span className="cursor-blink inline-block w-0.5 h-4 bg-indigo-400 ml-0.5 align-text-bottom" />
+                      <span className="cursor-blink inline-block w-0.5 h-4 bg-[var(--accent)] ml-0.5 align-text-bottom" />
                     )}
                   </div>
                   {msg.role === "assistant" &&
@@ -541,31 +501,33 @@ export default function Chat() {
         </div>
 
         {/* Input area */}
-        <div
-          className="px-4 py-4 md:px-8 md:py-5"
-          style={{ borderTop: "1px solid var(--border)" }}
-        >
+        <div className="px-4 py-4 md:px-8 md:py-5 border-t border-line-subtle">
           {quotaExhausted && (
             <div
-              className="max-w-3xl mx-auto mb-3 px-4 py-3 rounded-xl text-xs"
+              className="max-w-3xl mx-auto mb-3 px-4 py-3 rounded-xl text-xs text-ink flex items-start gap-2"
               style={{
                 background: "rgba(244,114,182,0.08)",
                 border: "1px solid rgba(244,114,182,0.3)",
-                color: "var(--text-primary)",
               }}
             >
-              ⚠️ {quotaExhaustedMessage ?? "今日訊息額度已用完。"}
-              <span className="block mt-1 text-slate-500">
-                需要更多額度？升級方案可提高每日對話數並解鎖進階分析功能。
+              <TriangleAlert
+                size={14}
+                className="text-warn flex-shrink-0 mt-0.5"
+                aria-hidden="true"
+              />
+              <span>
+                {quotaExhaustedMessage ?? "今日訊息額度已用完。"}
+                <span className="block mt-1 text-ink-muted">
+                  需要更多額度？升級方案可提高每日對話數並解鎖進階分析功能。
+                </span>
               </span>
             </div>
           )}
           <div
-            className="flex gap-3 max-w-3xl mx-auto items-end rounded-2xl px-5 py-4 transition-[border-color,box-shadow]"
+            className="flex gap-3 max-w-3xl mx-auto items-end rounded-2xl px-5 py-4 transition-[border-color,box-shadow] bg-[var(--surface-1)]"
             style={{
-              background: "var(--overlay-bg)",
-              border: `1px solid ${streaming ? "rgba(99,102,241,0.3)" : "var(--border)"}`,
-              boxShadow: streaming ? "0 0 0 3px rgba(99,102,241,0.1)" : "none",
+              border: `1px solid ${streaming ? "var(--focus-ring)" : "var(--border-subtle)"}`,
+              boxShadow: streaming ? "0 0 0 3px var(--focus-ring)" : "none",
             }}
           >
             <label htmlFor="chat-input" className="sr-only">
@@ -584,30 +546,24 @@ export default function Chat() {
               }
               disabled={streaming || quotaExhausted}
               rows={1}
-              className="flex-1 bg-transparent text-sm text-slate-200 placeholder-slate-700 resize-none focus:outline-none focus-visible:outline-none disabled:opacity-40"
+              className="flex-1 bg-transparent text-sm text-ink placeholder-ink-faint resize-none focus:outline-none focus-visible:outline-none disabled:opacity-40"
               style={{ minHeight: "24px", maxHeight: "120px" }}
             />
             <button
               onClick={handleSend}
               disabled={!input.trim() || streaming || quotaExhausted}
               aria-label="發送訊息"
-              className="flex-shrink-0 w-8 h-8 rounded-xl flex items-center justify-center transition-opacity disabled:opacity-30 disabled:cursor-not-allowed"
-              style={{
-                background:
-                  !input.trim() || streaming || quotaExhausted
-                    ? "var(--overlay-subtle)"
-                    : "linear-gradient(135deg, #6366f1, #8b5cf6)",
-                boxShadow:
-                  !input.trim() || streaming || quotaExhausted
-                    ? "none"
-                    : "0 2px 12px rgba(99,102,241,0.4)",
-              }}
+              className={`flex-shrink-0 w-8 h-8 rounded-xl flex items-center justify-center transition-colors disabled:opacity-30 disabled:cursor-not-allowed ${
+                !input.trim() || streaming || quotaExhausted
+                  ? "bg-[var(--surface-2)]"
+                  : "bg-[var(--accent-strong)] hover:bg-[var(--accent)]"
+              }`}
             >
               {streaming ? (
                 <svg
                   viewBox="0 0 20 20"
                   fill="currentColor"
-                  className="w-3.5 h-3.5 text-slate-500"
+                  className="w-3.5 h-3.5 text-ink-muted"
                   aria-hidden="true"
                 >
                   <path
@@ -628,7 +584,7 @@ export default function Chat() {
               )}
             </button>
           </div>
-          <p className="text-xs text-slate-700 text-center mt-2.5">
+          <p className="text-xs text-ink-faint text-center mt-2.5">
             Navi 為 AI 分析工具，非合格投顧；所有內容僅供學習研究，不構成投資建議，且可能有誤，重要決策請自行驗證
           </p>
         </div>

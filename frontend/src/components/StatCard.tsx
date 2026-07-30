@@ -10,17 +10,11 @@ interface StatCardProps {
 const StatCard = memo(function StatCard({
   label,
   value,
-  valueColor = "text-slate-200",
+  valueColor = "text-ink",
 }: StatCardProps) {
   return (
-    <div
-      className="rounded-2xl p-5"
-      style={{
-        background: "var(--card-bg)",
-        border: "1px solid var(--border)",
-      }}
-    >
-      <p className="text-xs text-slate-500 mb-2">{label}</p>
+    <div className="card p-5">
+      <p className="text-xs text-ink-muted mb-2">{label}</p>
       <p className={`text-sm font-semibold tabular-nums ${valueColor}`}>
         {value}
       </p>

@@ -11,7 +11,7 @@ const TIER_LABEL: Record<string, string> = {
 
 const TIER_COLOR: Record<string, string> = {
   free: "rgba(148,163,184,0.2)",
-  pro: "rgba(99,102,241,0.25)",
+  pro: "var(--accent-soft)",
   unlimited: "rgba(34,197,94,0.25)",
   admin: "rgba(244,114,182,0.25)",
 };
@@ -65,16 +65,15 @@ export function QuotaBadge({ loadOnMount = true }: Props) {
 
   return (
     <div
-      className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs"
+      className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs text-ink-strong"
       style={{
         background: bg,
         border: "1px solid rgba(255,255,255,0.08)",
-        color: "var(--text-primary)",
       }}
       title={`重置時間：${formatReset(quota.reset_at)}`}
     >
       <span className="font-semibold">{tierLabel}</span>
-      <span style={{ color: "var(--text-secondary)" }}>·</span>
+      <span className="text-ink-secondary">·</span>
       {unlimited ? (
         <span className="text-emerald-300">無限額度</span>
       ) : (

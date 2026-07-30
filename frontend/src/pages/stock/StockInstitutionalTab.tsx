@@ -39,29 +39,22 @@ export default function StockInstitutionalTab({
                 value: institutionalData.total_net,
               },
             ].map(({ label, value, extra }) => (
-              <div
-                key={label}
-                className="rounded-2xl p-5"
-                style={{
-                  background: "var(--card-bg)",
-                  border: "1px solid var(--border)",
-                }}
-              >
-                <p className="text-xs text-slate-500 mb-2">{label}</p>
+              <div key={label} className="card p-5">
+                <p className="text-xs text-ink-muted mb-2">{label}</p>
                 <p
                   className={`text-base font-bold tabular-nums ${
                     value > 0
-                      ? "text-red-400"
+                      ? "text-up"
                       : value < 0
-                        ? "text-green-400"
-                        : "text-slate-300"
+                        ? "text-down"
+                        : "text-ink"
                   }`}
                 >
                   {value > 0 ? "+" : ""}
                   {value.toLocaleString()} 張
                 </p>
                 {extra && (
-                  <p className="text-xs text-slate-500 mt-1">{extra}</p>
+                  <p className="text-xs text-ink-muted mt-1">{extra}</p>
                 )}
               </div>
             ))}
@@ -69,20 +62,14 @@ export default function StockInstitutionalTab({
 
           {/* 逐日明細 */}
           {institutionalData.records.length > 0 && (
-            <div
-              className="rounded-2xl overflow-hidden"
-              style={{
-                background: "var(--card-bg)",
-                border: "1px solid var(--border)",
-              }}
-            >
-              <p className="text-sm text-slate-400 px-6 pt-5 pb-3">
+            <div className="card overflow-hidden">
+              <p className="text-sm text-ink-secondary px-6 pt-5 pb-3">
                 法人逐日買賣超（張）
               </p>
               <div className="overflow-x-auto">
                 <table className="w-full text-xs">
                   <thead>
-                    <tr className="text-slate-500 border-b border-white/5">
+                    <tr className="text-ink-muted border-b border-line-subtle">
                       <th className="text-left px-4 py-2.5 font-medium">
                         日期
                       </th>
@@ -104,9 +91,9 @@ export default function StockInstitutionalTab({
                     {institutionalData.records.map((r) => (
                       <tr
                         key={r.date}
-                        className="border-b border-white/5 hover:bg-white/[0.02]"
+                        className="border-b border-line-subtle hover:bg-[var(--surface-1)]"
                       >
-                        <td className="px-4 py-2.5 text-slate-400">{r.date}</td>
+                        <td className="px-4 py-2.5 text-ink-secondary">{r.date}</td>
                         {[
                           r.foreign_net,
                           r.investment_trust_net,
@@ -117,10 +104,10 @@ export default function StockInstitutionalTab({
                             key={i}
                             className={`px-4 py-2.5 text-right tabular-nums font-medium ${
                               v > 0
-                                ? "text-red-400"
+                                ? "text-up"
                                 : v < 0
-                                  ? "text-green-400"
-                                  : "text-slate-500"
+                                  ? "text-down"
+                                  : "text-ink-muted"
                             }`}
                           >
                             {v > 0 ? "+" : ""}
@@ -136,24 +123,12 @@ export default function StockInstitutionalTab({
           )}
         </>
       ) : institutionalData?.error ? (
-        <div
-          className="rounded-2xl p-6 text-center"
-          style={{
-            background: "var(--card-bg)",
-            border: "1px solid var(--border)",
-          }}
-        >
-          <p className="text-sm text-slate-500">{institutionalData.error}</p>
+        <div className="card p-6 text-center">
+          <p className="text-sm text-ink-muted">{institutionalData.error}</p>
         </div>
       ) : !isTW ? (
-        <div
-          className="rounded-2xl p-6 text-center"
-          style={{
-            background: "var(--card-bg)",
-            border: "1px solid var(--border)",
-          }}
-        >
-          <p className="text-sm text-slate-500">
+        <div className="card p-6 text-center">
+          <p className="text-sm text-ink-muted">
             籌碼面資料僅支援台股（上市/上櫃）
           </p>
         </div>
@@ -162,14 +137,8 @@ export default function StockInstitutionalTab({
       {/* 融資融券 */}
       {marginData && !marginData.error ? (
         <>
-          <div
-            className="rounded-2xl p-6"
-            style={{
-              background: "var(--card-bg)",
-              border: "1px solid var(--border)",
-            }}
-          >
-            <p className="text-sm text-slate-400 mb-4">融資融券概況</p>
+          <div className="card p-6">
+            <p className="text-sm text-ink-secondary mb-4">融資融券概況</p>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {[
                 {
@@ -198,16 +167,16 @@ export default function StockInstitutionalTab({
                 },
               ].map(({ label, value, suffix, colored }) => (
                 <div key={label}>
-                  <p className="text-xs text-slate-500">{label}</p>
+                  <p className="text-xs text-ink-muted">{label}</p>
                   <p
                     className={`text-sm font-semibold mt-2 tabular-nums ${
                       colored
                         ? (value ?? 0) > 0
-                          ? "text-red-400"
+                          ? "text-up"
                           : (value ?? 0) < 0
-                            ? "text-green-400"
-                            : "text-slate-300"
-                        : "text-slate-100"
+                            ? "text-down"
+                            : "text-ink"
+                        : "text-ink-strong"
                     }`}
                   >
                     {value != null
@@ -220,14 +189,14 @@ export default function StockInstitutionalTab({
             {marginData.latest?.margin_utilization != null && (
               <div className="mt-5">
                 <div className="flex justify-between text-xs mb-2">
-                  <span className="text-slate-500">融資使用率</span>
-                  <span className="text-slate-300 font-medium">
+                  <span className="text-ink-muted">融資使用率</span>
+                  <span className="text-ink font-medium">
                     {marginData.latest.margin_utilization.toFixed(1)}%
                   </span>
                 </div>
-                <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
+                <div className="h-2 bg-[var(--surface-3)] rounded-full overflow-hidden">
                   <div
-                    className="h-full rounded-full bg-amber-400 transition-[width]"
+                    className="h-full rounded-full bg-warn transition-[width]"
                     style={{
                       width: `${Math.min(marginData.latest.margin_utilization, 100)}%`,
                     }}
@@ -239,20 +208,14 @@ export default function StockInstitutionalTab({
 
           {/* 融資融券逐日明細 */}
           {marginData.records.length > 0 && (
-            <div
-              className="rounded-2xl overflow-hidden"
-              style={{
-                background: "var(--card-bg)",
-                border: "1px solid var(--border)",
-              }}
-            >
-              <p className="text-sm text-slate-400 px-6 pt-5 pb-3">
+            <div className="card overflow-hidden">
+              <p className="text-sm text-ink-secondary px-6 pt-5 pb-3">
                 融資融券逐日明細
               </p>
               <div className="overflow-x-auto">
                 <table className="w-full text-xs">
                   <thead>
-                    <tr className="text-slate-500 border-b border-white/5">
+                    <tr className="text-ink-muted border-b border-line-subtle">
                       <th className="text-left px-4 py-2.5 font-medium">
                         日期
                       </th>
@@ -283,28 +246,28 @@ export default function StockInstitutionalTab({
                     {marginData.records.map((r) => (
                       <tr
                         key={r.date}
-                        className="border-b border-white/5 hover:bg-white/[0.02]"
+                        className="border-b border-line-subtle hover:bg-[var(--surface-1)]"
                       >
-                        <td className="px-4 py-2.5 text-slate-400">{r.date}</td>
-                        <td className="px-4 py-2.5 text-right tabular-nums text-slate-300">
+                        <td className="px-4 py-2.5 text-ink-secondary">{r.date}</td>
+                        <td className="px-4 py-2.5 text-right tabular-nums text-ink">
                           {r.margin_buy.toLocaleString()}
                         </td>
-                        <td className="px-4 py-2.5 text-right tabular-nums text-slate-300">
+                        <td className="px-4 py-2.5 text-right tabular-nums text-ink">
                           {r.margin_sell.toLocaleString()}
                         </td>
-                        <td className="px-4 py-2.5 text-right tabular-nums text-slate-100 font-medium">
+                        <td className="px-4 py-2.5 text-right tabular-nums text-ink-strong font-medium">
                           {r.margin_balance.toLocaleString()}
                         </td>
-                        <td className="px-4 py-2.5 text-right tabular-nums text-slate-300">
+                        <td className="px-4 py-2.5 text-right tabular-nums text-ink">
                           {r.short_sell.toLocaleString()}
                         </td>
-                        <td className="px-4 py-2.5 text-right tabular-nums text-slate-300">
+                        <td className="px-4 py-2.5 text-right tabular-nums text-ink">
                           {r.short_buy.toLocaleString()}
                         </td>
-                        <td className="px-4 py-2.5 text-right tabular-nums text-slate-100 font-medium">
+                        <td className="px-4 py-2.5 text-right tabular-nums text-ink-strong font-medium">
                           {r.short_balance.toLocaleString()}
                         </td>
-                        <td className="px-4 py-2.5 text-right tabular-nums text-slate-400">
+                        <td className="px-4 py-2.5 text-right tabular-nums text-ink-secondary">
                           {r.offset.toLocaleString()}
                         </td>
                       </tr>
@@ -316,14 +279,8 @@ export default function StockInstitutionalTab({
           )}
         </>
       ) : marginData?.error ? (
-        <div
-          className="rounded-2xl p-6 text-center"
-          style={{
-            background: "var(--card-bg)",
-            border: "1px solid var(--border)",
-          }}
-        >
-          <p className="text-sm text-slate-500">{marginData.error}</p>
+        <div className="card p-6 text-center">
+          <p className="text-sm text-ink-muted">{marginData.error}</p>
         </div>
       ) : null}
     </div>

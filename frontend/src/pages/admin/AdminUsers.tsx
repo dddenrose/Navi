@@ -38,8 +38,7 @@ export default function AdminUsers() {
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="搜尋 email…"
-          className="px-3 py-1.5 rounded-lg text-xs bg-transparent text-slate-200 placeholder-slate-700 focus:outline-none"
-          style={{ border: "1px solid var(--border)" }}
+          className="px-3 py-1.5 rounded-lg text-xs bg-transparent text-ink placeholder:text-ink-faint border border-line-subtle focus:outline-none"
         />
         <Select
           value={tier}
@@ -53,27 +52,17 @@ export default function AdminUsers() {
           options={STATUSES}
           placeholder="全部狀態"
         />
-        <button
-          onClick={load}
-          className="px-3 py-1.5 rounded-lg text-xs text-white"
-          style={{ background: "linear-gradient(135deg,#6366f1,#8b5cf6)" }}
-        >
+        <button onClick={load} className="btn btn-primary rounded-lg px-3 py-1.5 text-xs">
           搜尋
         </button>
       </div>
 
       {error && <p className="text-xs text-rose-400">{String(error)}</p>}
 
-      <div
-        className="rounded-xl overflow-hidden"
-        style={{
-          background: "var(--card-bg)",
-          border: "1px solid var(--border)",
-        }}
-      >
+      <div className="card overflow-hidden">
         <table className="w-full text-xs">
           <thead>
-            <tr className="text-slate-600 text-left">
+            <tr className="text-ink-faint text-left">
               <th className="px-4 py-3">Email</th>
               <th className="px-4 py-3">Tier</th>
               <th className="px-4 py-3">狀態</th>
@@ -86,7 +75,7 @@ export default function AdminUsers() {
             {loading ? (
               <tr>
                 <td
-                  className="px-4 py-6 text-center text-slate-600"
+                  className="px-4 py-6 text-center text-ink-faint"
                   colSpan={6}
                 >
                   載入中…
@@ -95,7 +84,7 @@ export default function AdminUsers() {
             ) : users.length === 0 ? (
               <tr>
                 <td
-                  className="px-4 py-6 text-center text-slate-600"
+                  className="px-4 py-6 text-center text-ink-faint"
                   colSpan={6}
                 >
                   無資料
@@ -103,8 +92,8 @@ export default function AdminUsers() {
               </tr>
             ) : (
               users.map((u) => (
-                <tr key={u.uid} className="border-t border-white/5">
-                  <td className="px-4 py-3 text-slate-200">{u.email || "—"}</td>
+                <tr key={u.uid} className="border-t border-line-subtle">
+                  <td className="px-4 py-3 text-ink">{u.email || "—"}</td>
                   <td className="px-4 py-3">
                     <TierBadge tier={u.tier} />
                   </td>
@@ -119,7 +108,7 @@ export default function AdminUsers() {
                       {u.status}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-slate-300">
+                  <td className="px-4 py-3 text-ink">
                     {u.custom_daily_limit === null ||
                     u.custom_daily_limit === undefined
                       ? "—"
@@ -127,7 +116,7 @@ export default function AdminUsers() {
                         ? "∞"
                         : u.custom_daily_limit}
                   </td>
-                  <td className="px-4 py-3 text-slate-500">
+                  <td className="px-4 py-3 text-ink-muted">
                     {u.last_active_at
                       ? new Date(u.last_active_at).toLocaleDateString("zh-TW")
                       : "—"}
@@ -135,7 +124,7 @@ export default function AdminUsers() {
                   <td className="px-4 py-3 text-right">
                     <Link
                       to={`/admin/users/${u.uid}`}
-                      className="text-indigo-400 hover:text-indigo-300"
+                      className="text-accent hover:text-[var(--accent-strong)]"
                     >
                       編輯 →
                     </Link>
@@ -165,11 +154,10 @@ function Select({
     <select
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className="px-3 py-1.5 rounded-lg text-xs bg-transparent text-slate-200 focus:outline-none"
-      style={{ border: "1px solid var(--border)" }}
+      className="px-3 py-1.5 rounded-lg text-xs bg-transparent text-ink border border-line-subtle focus:outline-none"
     >
       {options.map((o) => (
-        <option key={o} value={o} style={{ background: "#0f172a" }}>
+        <option key={o} value={o} style={{ background: "var(--bg-surface)" }}>
           {o || placeholder}
         </option>
       ))}
@@ -180,13 +168,13 @@ function Select({
 export function TierBadge({ tier }: { tier: string }) {
   const colors: Record<string, string> = {
     free: "rgba(148,163,184,0.25)",
-    pro: "rgba(99,102,241,0.3)",
+    pro: "var(--accent-soft)",
     unlimited: "rgba(34,197,94,0.3)",
     admin: "rgba(244,114,182,0.3)",
   };
   return (
     <span
-      className="px-2 py-0.5 rounded text-[10px] font-semibold text-slate-100"
+      className="px-2 py-0.5 rounded text-[10px] font-semibold text-ink-strong"
       style={{ background: colors[tier] || "rgba(148,163,184,0.2)" }}
     >
       {tier}

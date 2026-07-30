@@ -151,7 +151,7 @@ export const ThinkingPanel = memo(function ThinkingPanel({
         className="group flex items-center gap-1.5 py-1.5 text-left transition-colors"
       >
         {/* Animated indicator */}
-        <span className="flex-shrink-0 w-4 h-4 text-slate-500">
+        <span className="flex-shrink-0 w-4 h-4 text-ink-muted">
           {isActive ? (
             <SpinnerIcon className="w-4 h-4" />
           ) : (
@@ -159,14 +159,14 @@ export const ThinkingPanel = memo(function ThinkingPanel({
           )}
         </span>
 
-        <span className="text-slate-500 group-hover:text-slate-300 transition-colors">
+        <span className="text-ink-muted group-hover:text-ink transition-colors">
           {summaryText}
         </span>
 
         <svg
           viewBox="0 0 20 20"
           fill="currentColor"
-          className={`w-3 h-3 text-slate-600 group-hover:text-slate-400 transition-transform duration-200 ${expanded ? "rotate-90" : ""}`}
+          className={`w-3 h-3 text-ink-faint group-hover:text-ink-secondary transition-transform duration-200 ${expanded ? "rotate-90" : ""}`}
           aria-hidden="true"
         >
           <path
@@ -191,42 +191,42 @@ export const ThinkingPanel = memo(function ThinkingPanel({
                     !steps.some(
                       (e) => e.type === "tool_end" && e.tool === step.tool,
                     )
-                      ? "border-slate-400 bg-transparent"
-                      : "border-slate-500 bg-slate-500"
+                      ? "border-ink-secondary bg-transparent"
+                      : "border-ink-muted bg-ink-muted"
                   } ${isLast && isActive ? "animate-pulse" : ""}`}
                 />
 
                 {step.type === "intent" && (
-                  <span className="text-slate-400 flex items-center gap-1.5">
-                    <IntentIcon className="w-3 h-3 text-slate-500 flex-shrink-0" />
-                    <span className="text-slate-500">意圖</span>
-                    <span className="text-slate-300">
+                  <span className="text-ink-secondary flex items-center gap-1.5">
+                    <IntentIcon className="w-3 h-3 text-ink-muted flex-shrink-0" />
+                    <span className="text-ink-muted">意圖</span>
+                    <span className="text-ink">
                       {getIntentName(step.intent)}
                     </span>
                     {step.ticker &&
                       step.ticker !== "null" &&
                       step.ticker !== "None" && (
-                        <span className="text-slate-500">{step.ticker}</span>
+                        <span className="text-ink-muted">{step.ticker}</span>
                       )}
                   </span>
                 )}
 
                 {step.type === "tool_start" && (
-                  <span className="text-slate-400 flex items-center gap-1.5">
+                  <span className="text-ink-secondary flex items-center gap-1.5">
                     {steps.some(
                       (e) => e.type === "tool_end" && e.tool === step.tool,
                     ) ? (
                       <CheckIcon className="w-3 h-3 text-emerald-500/70 flex-shrink-0" />
                     ) : (
-                      <SpinnerIcon className="w-3 h-3 text-slate-400 flex-shrink-0" />
+                      <SpinnerIcon className="w-3 h-3 text-ink-secondary flex-shrink-0" />
                     )}
-                    <span className="text-slate-300">
+                    <span className="text-ink">
                       {getToolName(step.tool)}
                     </span>
                     {(() => {
                       const t = step.input?.ticker;
                       return typeof t === "string" && t ? (
-                        <span className="text-slate-500">{t}</span>
+                        <span className="text-ink-muted">{t}</span>
                       ) : null;
                     })()}
                   </span>

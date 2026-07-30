@@ -9,6 +9,12 @@ const items = [
   { to: "/admin/logs", label: "Audit Log" },
 ];
 
+// nav active 態統一用 accent-soft + border-strong，與 Layout.tsx 側欄一致
+const activeNavStyle = {
+  background: "var(--accent-soft)",
+  border: "1px solid var(--border-strong)",
+};
+
 export default function AdminLayout() {
   const claims = useTokenClaims();
   const location = useLocation();
@@ -16,7 +22,7 @@ export default function AdminLayout() {
   if (!claims.loaded) {
     return (
       <div className="flex items-center justify-center h-full min-h-[40vh]">
-        <p className="text-sm text-slate-500">載入中…</p>
+        <p className="text-sm text-ink-muted">載入中…</p>
       </div>
     );
   }
@@ -26,13 +32,10 @@ export default function AdminLayout() {
 
   return (
     <div className="flex flex-col h-full">
-      <div
-        className="px-6 py-4 flex items-center gap-6 flex-shrink-0"
-        style={{ borderBottom: "1px solid var(--border)" }}
-      >
+      <div className="px-6 py-4 flex items-center gap-6 flex-shrink-0 border-b border-line-subtle">
         <div>
-          <h1 className="text-lg font-bold gradient-text">Navi 後台</h1>
-          <p className="text-[11px] text-slate-600">使用者額度與權限管理</p>
+          <h1 className="text-lg font-bold text-ink-strong">Navi 後台</h1>
+          <p className="text-[11px] text-ink-faint">使用者額度與權限管理</p>
         </div>
         <nav className="flex items-center gap-1 ml-auto">
           {items.map((it) => (
@@ -43,19 +46,11 @@ export default function AdminLayout() {
               className={({ isActive }) =>
                 `px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
                   isActive
-                    ? "text-white"
-                    : "text-slate-500 hover:text-slate-200 hover:bg-white/5"
+                    ? "text-ink-strong"
+                    : "text-ink-muted hover:text-ink hover:bg-[var(--surface-2)]"
                 }`
               }
-              style={({ isActive }) =>
-                isActive
-                  ? {
-                      background:
-                        "linear-gradient(135deg, rgba(99,102,241,0.25), rgba(139,92,246,0.15))",
-                      border: "1px solid rgba(99,102,241,0.3)",
-                    }
-                  : {}
-              }
+              style={({ isActive }) => (isActive ? activeNavStyle : {})}
             >
               {it.label}
             </NavLink>

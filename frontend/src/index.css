@@ -1,95 +1,160 @@
 @import "tailwindcss";
 
+/* ═══════════════════════════════════════════════════════
+   Navi Design Tokens — 正典色碼取自視覺樣稿
+   (scratchpad/navi-ui-mockup.html)，原樣採用。
+   ═══════════════════════════════════════════════════════ */
 :root {
-  --bg-base: #080e1f;
-  --bg-surface: #0d1424;
-  --bg-elevated: #111827;
-  --border: rgba(255, 255, 255, 0.07);
-  --border-light: rgba(255, 255, 255, 0.12);
-  --primary: #6366f1;
-  --primary-light: #818cf8;
-  --glow: rgba(99, 102, 241, 0.25);
+  /* Backgrounds — 低飽和近黑，層級越高表面越亮 */
+  --bg-base: #0a0b10;
+  --bg-surface: #0e1016;
+  --surface-1: rgba(255, 255, 255, 0.025);
+  --surface-2: rgba(255, 255, 255, 0.05);
+  --surface-3: rgba(255, 255, 255, 0.08);
 
-  /* Text */
-  --text-primary: #f1f5f9;
-  --text-heading: #ffffff;
-  --text-secondary: #cbd5e1;
-  --text-muted: #64748b;
-  --text-dim: #475569;
-  --text-link: #e2e8f0;
+  /* Borders — Linear 式三層邊框，取代陰影做層次 */
+  --border-subtle: rgba(255, 255, 255, 0.06);
+  --border-default: rgba(255, 255, 255, 0.1);
+  --border-strong: rgba(255, 255, 255, 0.16);
 
-  /* Surfaces */
-  --card-bg: rgba(255, 255, 255, 0.03);
-  --card-bg-hover: rgba(255, 255, 255, 0.05);
-  --overlay-bg: rgba(255, 255, 255, 0.04);
-  --overlay-subtle: rgba(255, 255, 255, 0.06);
-  --sidebar-bg: rgba(255, 255, 255, 0.015);
+  /* Ink — 文字五級 */
+  --ink-strong: #ffffff;
+  --ink: #eef1f6;
+  --ink-secondary: #b6bfcd;
+  --ink-muted: #7d8697;
+  --ink-faint: #4d5566;
 
-  /* Scrollbar */
-  --scrollbar-thumb: rgba(255, 255, 255, 0.1);
-  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.2);
+  /* Accent — luminous blue (replaces the legacy indigo accent) */
+  --accent: #8ab4ff;
+  --accent-strong: #5b8def;
+  --accent-ink: #0a0b10;
+  --accent-soft: rgba(138, 180, 255, 0.12);
+  --focus-ring: rgba(138, 180, 255, 0.35);
+
+  /* Signature gradient — 全站僅限 3 處：logo mark、
+     Dashboard 問候名字、Login 卡頂 hairline */
+  --gradient-signature: linear-gradient(
+    100deg,
+    #3e7bfa 0%,
+    #27c0e8 32%,
+    #8f7bff 66%,
+    #ff7a85 100%
+  );
+
+  /* Market — 台股紅漲綠跌（必附 ▲▼ 與正負號，色彩不作為唯一通道） */
+  --market-up: #f26d6d;
+  --market-down: #3ecf8e;
+  --warn: #f5b74e;
+  --danger: #ef5f6b;
+
+  /* Shadows — 疊層陰影 + 頂緣 1px 內光 */
+  --shadow-card:
+    0 1px 2px rgba(0, 0, 0, 0.4),
+    0 8px 24px -16px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  --shadow-pop:
+    0 4px 12px rgba(0, 0, 0, 0.45),
+    0 24px 48px -24px rgba(0, 0, 0, 0.6),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
 
   /* Charts */
-  --tooltip-bg: rgba(13, 20, 36, 0.95);
-  --tooltip-border: rgba(255, 255, 255, 0.08);
-  --chart-grid: #334155;
-  --chart-tick: #64748b;
+  --chart-grid: rgba(255, 255, 255, 0.06);
+  --chart-tick: var(--ink-muted);
+  --tooltip-bg: rgba(14, 16, 22, 0.92);
+  --tooltip-border: rgba(255, 255, 255, 0.1);
 
-  /* Login */
-  --login-bg: linear-gradient(135deg, #080e1f 0%, #0d1424 50%, #0a0f1e 100%);
-  --login-orb1: rgba(99, 102, 241, 0.18);
-  --login-orb2: rgba(139, 92, 246, 0.14);
+  --radius-card: 16px;
+  --radius-field: 12px;
+  --radius-chip: 10px;
 
-  /* Misc */
-  --divider: rgba(255, 255, 255, 0.07);
+  --noise-opacity: 0.035;
   --modal-overlay: rgba(0, 0, 0, 0.6);
   --color-scheme: dark;
+
+  --scrollbar-thumb: rgba(255, 255, 255, 0.1);
+  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.2);
 }
 
 [data-theme="light"] {
-  --bg-base: #f8fafc;
+  --bg-base: #f7f8fa;
   --bg-surface: #ffffff;
-  --bg-elevated: #f1f5f9;
-  --border: rgba(0, 0, 0, 0.08);
-  --border-light: rgba(0, 0, 0, 0.13);
-  --primary: #6366f1;
-  --primary-light: #818cf8;
-  --glow: rgba(99, 102, 241, 0.2);
-
-  /* Text */
-  --text-primary: #0f172a;
-  --text-heading: #0f172a;
-  --text-secondary: #334155;
-  --text-muted: #64748b;
-  --text-dim: #94a3b8;
-  --text-link: #334155;
-
-  /* Surfaces */
-  --card-bg: rgba(0, 0, 0, 0.02);
-  --card-bg-hover: rgba(0, 0, 0, 0.04);
-  --overlay-bg: rgba(0, 0, 0, 0.03);
-  --overlay-subtle: rgba(0, 0, 0, 0.05);
-  --sidebar-bg: rgba(0, 0, 0, 0.015);
-
-  /* Scrollbar */
-  --scrollbar-thumb: rgba(0, 0, 0, 0.12);
-  --scrollbar-thumb-hover: rgba(0, 0, 0, 0.25);
-
-  /* Charts */
+  --surface-1: #ffffff;
+  --surface-2: #f2f4f8;
+  --surface-3: #e9edf3;
+  --border-subtle: rgba(15, 23, 42, 0.06);
+  --border-default: rgba(15, 23, 42, 0.1);
+  --border-strong: rgba(15, 23, 42, 0.18);
+  --ink-strong: #0d1220;
+  --ink: #171c26;
+  --ink-secondary: #414b5c;
+  --ink-muted: #5d6778;
+  --ink-faint: #98a1b0;
+  --accent: #2f6bff;
+  --accent-strong: #2453cc;
+  --accent-ink: #ffffff;
+  --accent-soft: rgba(47, 107, 255, 0.1);
+  --focus-ring: rgba(47, 107, 255, 0.3);
+  --gradient-signature: linear-gradient(
+    100deg,
+    #2f6bff 0%,
+    #189bbd 32%,
+    #7a63f0 66%,
+    #e85d75 100%
+  );
+  --market-up: #d94f4f;
+  --market-down: #0a8055;
+  --danger: #d7455b;
+  --shadow-card:
+    0 1px 2px rgba(16, 24, 40, 0.06),
+    0 8px 24px -16px rgba(16, 24, 40, 0.1);
+  --shadow-pop:
+    0 8px 24px rgba(16, 24, 40, 0.1),
+    0 24px 48px -24px rgba(16, 24, 40, 0.16);
+  --chart-grid: rgba(15, 23, 42, 0.07);
   --tooltip-bg: rgba(255, 255, 255, 0.96);
-  --tooltip-border: rgba(0, 0, 0, 0.1);
-  --chart-grid: #e2e8f0;
-  --chart-tick: #94a3b8;
-
-  /* Login */
-  --login-bg: linear-gradient(135deg, #e0e7ff 0%, #f0f0ff 50%, #ede9fe 100%);
-  --login-orb1: rgba(99, 102, 241, 0.12);
-  --login-orb2: rgba(139, 92, 246, 0.1);
-
-  /* Misc */
-  --divider: rgba(0, 0, 0, 0.07);
+  --tooltip-border: rgba(15, 23, 42, 0.1);
+  --noise-opacity: 0.022;
   --modal-overlay: rgba(0, 0, 0, 0.3);
   --color-scheme: light;
+
+  --scrollbar-thumb: rgba(0, 0, 0, 0.12);
+  --scrollbar-thumb-hover: rgba(0, 0, 0, 0.25);
+}
+
+/* ═══════════════════════════════════════════════════════
+   Tailwind v4 語意 utility 映射 — `inline` 讓產生的 utility
+   持續引用 CSS var，而非在 build time 內聯字面值，這樣切換
+   data-theme 才能即時生效。元件層只寫這些 utility：
+   bg-base/bg-surface、text-ink(-strong/-secondary/-muted/-faint)、
+   text-accent/bg-accent/border-accent、border-line(-subtle/-strong)、
+   text-up/text-down/text-warn、font-sans/font-mono、
+   rounded-card/rounded-field/rounded-chip。
+   ═══════════════════════════════════════════════════════ */
+@theme inline {
+  --color-base: var(--bg-base);
+  --color-surface: var(--bg-surface);
+  --color-ink: var(--ink);
+  --color-ink-strong: var(--ink-strong);
+  --color-ink-secondary: var(--ink-secondary);
+  --color-ink-muted: var(--ink-muted);
+  --color-ink-faint: var(--ink-faint);
+  --color-accent: var(--accent);
+  --color-line: var(--border-default);
+  --color-line-subtle: var(--border-subtle);
+  --color-line-strong: var(--border-strong);
+  --color-up: var(--market-up);
+  --color-down: var(--market-down);
+  --color-warn: var(--warn);
+  --color-danger: var(--danger);
+
+  --font-sans:
+    "Plus Jakarta Sans", "Noto Sans TC", "PingFang TC", "Microsoft JhengHei",
+    system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+
+  --radius-card: 16px;
+  --radius-field: 12px;
+  --radius-chip: 10px;
 }
 
 @layer base {
@@ -106,16 +171,20 @@
 
 body {
   background-color: var(--bg-base);
-  color: var(--text-primary);
+  color: var(--ink);
   color-scheme: var(--color-scheme);
-  font-family:
-    "Plus Jakarta Sans",
-    system-ui,
-    -apple-system,
-    sans-serif;
+  font-family: var(--font-sans);
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* 全站預設 focus ring（a11y 底線）；.btn/.input-field/a 另有更精緻的
+   glow ring，見下方 @layer components，但這條保底不能刪——沒套用
+   元件配方的原生 <button>/<div tabIndex> 都靠這條維持可見焦點框。 */
+:focus-visible {
+  outline: 2px solid var(--accent-strong);
+  outline-offset: 2px;
 }
 
 /* ── Scrollbar ────────────────────────────────────── */
@@ -134,7 +203,16 @@ body {
   background: var(--scrollbar-thumb-hover);
 }
 
-/* ── Animations ───────────────────────────────────── */
+/* ═══════════════════════════════════════════════════════
+   Animations — 動效參數正典（全站唯一節奏，第二波起套用）
+   - 進場 reveal：480ms cubic-bezier(.16,1,.3,1)，translateY 12px，
+     stagger 70ms／delay 上限 400ms（.reveal 已用 min() 內建封頂）
+   - hover / focus：150–180ms ease-out，只變 border / surface /
+     translateY(-1px)，不做 scale
+   - 數字 count-up：700ms easeOutCubic，僅首次進場
+   - 圖表 draw-in：800ms ease-out，僅首次載入
+   - 粒子：ambient 漂移 ±0.15px/frame，pointer 聚合半徑 140px，lerp 0.04
+   ═══════════════════════════════════════════════════════ */
 @keyframes fadeUp {
   from {
     opacity: 0;
@@ -162,22 +240,10 @@ body {
     opacity: 0;
   }
 }
-@keyframes orb-float-1 {
-  0%,
-  100% {
-    transform: translate(0, 0) scale(1);
-  }
-  50% {
-    transform: translate(30px, -20px) scale(1.05);
-  }
-}
-@keyframes orb-float-2 {
-  0%,
-  100% {
-    transform: translate(0, 0) scale(1);
-  }
-  50% {
-    transform: translate(-20px, 30px) scale(1.08);
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
   }
 }
 
@@ -190,97 +256,178 @@ body {
 .cursor-blink {
   animation: cursorBlink 0.8s ease infinite;
 }
-.orb-1 {
-  animation: orb-float-1 8s ease-in-out infinite;
-}
-.orb-2 {
-  animation: orb-float-2 10s ease-in-out infinite;
+.reveal {
+  animation: rise 0.48s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: min(calc(var(--reveal-i, 0) * 70ms), 400ms);
 }
 
 @media (prefers-reduced-motion: reduce) {
   .animate-fade-up,
   .animate-fade-in,
   .cursor-blink,
-  .orb-1,
-  .orb-2 {
+  .reveal {
     animation: none;
   }
 }
 
-/* ── Glass card ───────────────────────────────────── */
-.glass {
-  background: var(--card-bg);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid var(--border);
+/* ═══ @layer components — 元件配方，照樣稿 ═══ */
+@layer components {
+  .card {
+    background: var(--surface-1);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow-card);
+  }
+  .card-hover {
+    transition:
+      border-color 0.18s ease-out,
+      background 0.18s ease-out,
+      transform 0.18s ease-out;
+  }
+  .card-hover:hover {
+    border-color: var(--border-strong);
+    background: var(--surface-2);
+    transform: translateY(-1px);
+  }
+  .card-spotlight {
+    position: relative;
+    overflow: hidden;
+  }
+  .card-spotlight::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    background: radial-gradient(
+      240px circle at var(--mx, 50%) var(--my, 50%),
+      var(--accent-soft),
+      transparent 70%
+    );
+    transition: opacity 0.25s ease-out;
+    pointer-events: none;
+  }
+  .card-spotlight:hover::before {
+    opacity: 1;
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 18px;
+    font: inherit;
+    font-weight: 600;
+    font-size: 13.5px;
+    border-radius: var(--radius-field);
+    cursor: pointer;
+    transition:
+      background 0.15s ease-out,
+      border-color 0.15s ease-out,
+      color 0.15s ease-out;
+  }
+  .btn-primary {
+    background: var(--accent-strong);
+    color: #fff;
+    border: 1px solid transparent;
+  }
+  .btn-primary:hover {
+    background: var(--accent);
+    color: var(--accent-ink);
+  }
+  [data-theme="light"] .btn-primary:hover {
+    color: #fff;
+  }
+  .btn-ghost {
+    background: transparent;
+    border: 1px solid var(--border-default);
+    color: var(--ink-secondary);
+  }
+  .btn-ghost:hover {
+    border-color: var(--border-strong);
+    color: var(--ink-strong);
+    background: var(--surface-2);
+  }
+  .btn:focus-visible,
+  .input-field:focus-visible,
+  a:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px var(--focus-ring);
+  }
+
+  .input-field {
+    width: 100%;
+    padding: 10px 14px;
+    font: inherit;
+    font-size: 13.5px;
+    background: var(--surface-1);
+    color: var(--ink);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-field);
+    transition:
+      border-color 0.18s,
+      box-shadow 0.18s;
+  }
+  .input-field::placeholder {
+    color: var(--ink-faint);
+  }
+  .input-field:focus-visible {
+    border-color: var(--accent);
+  }
+
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 12px;
+    font-size: 12.5px;
+    font-weight: 500;
+    background: var(--surface-2);
+    color: var(--ink-secondary);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-chip);
+    transition:
+      border-color 0.18s,
+      color 0.18s;
+  }
+  .chip:hover {
+    border-color: var(--border-strong);
+    color: var(--ink-strong);
+  }
+
+  .text-signature {
+    background: var(--gradient-signature);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
+  }
 }
+
+/* ── Noise overlay ─────────────────────────────────
+   SVG feTurbulence 會被 rasterize 成 140px tile 平鋪，非 live
+   filter，效能安全；同時打破漸層 banding 與塑膠感。 */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  pointer-events: none;
+  mix-blend-mode: overlay;
+  opacity: var(--noise-opacity);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* ── Glass card（全站僅 Login 頁一處使用）────────── */
 .glass-md {
-  background: var(--card-bg-hover);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid var(--border-light);
+  background: var(--surface-2);
+  backdrop-filter: blur(16px) saturate(160%);
+  -webkit-backdrop-filter: blur(16px) saturate(160%);
+  border: 1px solid var(--border-default);
 }
 
 [data-theme="light"] .glass-md {
   background: rgba(255, 255, 255, 0.8);
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06);
-}
-
-/* ── Gradient text ────────────────────────────────── */
-.gradient-text {
-  background: linear-gradient(135deg, #818cf8 0%, #a78bfa 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-
-[data-theme="light"] .gradient-text {
-  background: linear-gradient(135deg, #6366f1 0%, #7c3aed 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-
-/* ── Input with focus glow ────────────────────────── */
-.input-field {
-  background: var(--overlay-bg);
-  border: 1px solid var(--border);
-  color: var(--text-primary);
-  transition:
-    border-color 0.2s,
-    box-shadow 0.2s;
-}
-
-[data-theme="light"] .input-field {
-  background: rgba(255, 255, 255, 0.8);
-}
-
-[data-theme="light"] .input-field::placeholder {
-  color: var(--text-dim);
-}
-.input-field:focus-visible {
-  outline: none;
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px var(--glow);
-}
-
-/* ── Global focus ring ────────────────────────────── */
-:focus-visible {
-  outline: 2px solid var(--primary);
-  outline-offset: 2px;
-}
-
-/* ── Stock chip hover (replaces JS onMouseEnter/Leave) */
-.stock-chip {
-  transition:
-    border-color 0.2s,
-    box-shadow 0.2s,
-    color 0.2s,
-    transform 0.15s;
-}
-.stock-chip:hover {
-  border-color: rgba(99, 102, 241, 0.4) !important;
-  box-shadow: 0 0 12px rgba(99, 102, 241, 0.15);
 }
 
 /* ── Stock search input focus ─────────────────────── */
@@ -291,13 +438,13 @@ body {
 }
 .stock-search-input:focus-visible {
   outline: none;
-  border-color: rgba(99, 102, 241, 0.5);
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--focus-ring);
 }
 
 /* ── Tabular numbers (JetBrains Mono for data) ───── */
 .tabular-nums {
-  font-family: "JetBrains Mono", monospace;
+  font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.01em;
 }
@@ -322,105 +469,6 @@ body {
   }
 }
 
-/* ── Light theme color overrides ──────────────────── */
-[data-theme="light"] {
-  /* Tailwind slate text → darker for light bg */
-  & .text-slate-100 {
-    color: #0f172a;
-  }
-  & .text-slate-200 {
-    color: #1e293b;
-  }
-  & .text-slate-300 {
-    color: #334155;
-  }
-  & .text-slate-400 {
-    color: #475569;
-  }
-  & .text-slate-500 {
-    color: #64748b;
-  }
-  & .text-slate-600 {
-    color: #94a3b8;
-  }
-  & .text-slate-700 {
-    color: #94a3b8;
-  }
-  & .text-white {
-    color: #0f172a;
-  }
-  & .placeholder-slate-600::placeholder {
-    color: #94a3b8;
-  }
-  & .placeholder-slate-700::placeholder {
-    color: #94a3b8;
-  }
-  & .hover\:text-slate-200:hover {
-    color: #1e293b;
-  }
-  & .hover\:text-slate-100:hover {
-    color: #0f172a;
-  }
-  & .hover\:text-slate-400:hover {
-    color: #334155;
-  }
-  & .hover\:text-slate-500:hover {
-    color: #475569;
-  }
-  & .hover\:text-white:hover {
-    color: #0f172a;
-  }
-  & .group:hover .group-hover\:text-slate-400 {
-    color: #334155;
-  }
-  & .group:hover .group-hover\:text-slate-500 {
-    color: #475569;
-  }
-  & .group:hover .group-hover\:text-indigo-400 {
-    color: #4f46e5;
-  }
-  & .hover\:bg-white\/5:hover {
-    background: rgba(0, 0, 0, 0.04);
-  }
-  & .bg-indigo-400 {
-    background-color: #6366f1;
-  }
-  & .bg-indigo-500\/10 {
-    background-color: rgba(99, 102, 241, 0.1);
-  }
-  & .bg-indigo-500\/20 {
-    background-color: rgba(99, 102, 241, 0.15);
-  }
-  & .ring-white\/10 {
-    --tw-ring-color: rgba(0, 0, 0, 0.06);
-  }
-
-  /* Stock chip */
-  & .stock-chip {
-    background: rgba(0, 0, 0, 0.03) !important;
-    color: #475569;
-  }
-  & .stock-chip:hover {
-    color: #1e293b;
-  }
-
-  /* Progress bars & bg colors */
-  & .bg-slate-700 {
-    background-color: #e2e8f0;
-  }
-  & .text-indigo-400\/60 {
-    color: rgba(79, 70, 229, 0.6);
-  }
-  & .group:hover .group-hover\:text-indigo-400 {
-    color: #4f46e5;
-  }
-
-  /* Scrollbar for light */
-  & ::-webkit-scrollbar-track {
-    background: transparent;
-  }
-}
-
 /* ── Markdown content ─────────────────────────────── */
 .md-content {
   line-height: 1.75;
@@ -438,7 +486,7 @@ body {
 .md-content h2,
 .md-content h3,
 .md-content h4 {
-  color: var(--text-heading);
+  color: var(--ink-strong);
   font-weight: 600;
   margin-top: 1.25em;
   margin-bottom: 0.5em;
@@ -480,13 +528,13 @@ body {
 
 /* Inline code */
 .md-inline-code {
-  background: rgba(99, 102, 241, 0.12);
-  border: 1px solid rgba(99, 102, 241, 0.15);
-  color: var(--primary-light);
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-soft);
+  color: var(--accent);
   padding: 0.15em 0.4em;
   border-radius: 0.3em;
   font-size: 0.88em;
-  font-family: "Fira Code", "JetBrains Mono", ui-monospace, monospace;
+  font-family: "Fira Code", var(--font-mono);
 }
 
 /* Code blocks */
@@ -495,14 +543,14 @@ body {
   border-radius: 0.75em;
   overflow: hidden;
   background: rgba(0, 0, 0, 0.25);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-subtle);
 }
 .md-code-lang {
   font-size: 0.7em;
   padding: 0.35em 0.85em;
-  color: var(--text-muted);
+  color: var(--ink-muted);
   background: rgba(255, 255, 255, 0.03);
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--border-subtle);
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
@@ -512,20 +560,20 @@ body {
   overflow-x: auto;
 }
 .md-code-block code {
-  font-family: "Fira Code", "JetBrains Mono", ui-monospace, monospace;
+  font-family: "Fira Code", var(--font-mono);
   font-size: 0.85em;
   line-height: 1.6;
-  color: var(--text-secondary);
+  color: var(--ink-secondary);
 }
 
 /* Blockquote */
 .md-content blockquote {
   margin: 0.65em 0;
   padding: 0.5em 1em;
-  border-left: 3px solid var(--primary);
-  background: rgba(99, 102, 241, 0.06);
+  border-left: 3px solid var(--accent);
+  background: var(--accent-soft);
   border-radius: 0 0.5em 0.5em 0;
-  color: var(--text-secondary);
+  color: var(--ink-secondary);
 }
 .md-content blockquote p {
   margin: 0.25em 0;
@@ -535,7 +583,7 @@ body {
 .md-content hr {
   margin: 1em 0;
   border: none;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--border-subtle);
 }
 
 /* Table */
@@ -543,7 +591,7 @@ body {
   margin: 0.75em 0;
   overflow-x: auto;
   border-radius: 0.5em;
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-subtle);
 }
 .md-content table {
   width: 100%;
@@ -555,12 +603,12 @@ body {
   font-weight: 600;
   text-align: left;
   padding: 0.5em 0.75em;
-  border-bottom: 1px solid var(--border);
-  color: var(--text-heading);
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--ink-strong);
 }
 .md-content td {
   padding: 0.45em 0.75em;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--border-subtle);
 }
 .md-content tr:last-child td {
   border-bottom: none;
@@ -568,18 +616,18 @@ body {
 
 /* Links */
 .md-content a {
-  color: var(--primary-light);
+  color: var(--accent);
   text-decoration: underline;
   text-underline-offset: 2px;
   transition: color 0.15s;
 }
 .md-content a:hover {
-  color: #a5b4fc;
+  color: var(--accent-strong);
 }
 
 /* Strong & emphasis */
 .md-content strong {
-  color: var(--text-heading);
+  color: var(--ink-strong);
   font-weight: 600;
 }
 
@@ -592,14 +640,4 @@ body {
 /* Light theme overrides */
 [data-theme="light"] .md-code-block {
   background: rgba(0, 0, 0, 0.04);
-}
-[data-theme="light"] .md-inline-code {
-  background: rgba(99, 102, 241, 0.08);
-  color: #4f46e5;
-}
-[data-theme="light"] .md-content blockquote {
-  background: rgba(99, 102, 241, 0.04);
-}
-[data-theme="light"] .md-content a:hover {
-  color: #4338ca;
 }

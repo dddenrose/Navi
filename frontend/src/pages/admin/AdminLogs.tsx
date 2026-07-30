@@ -31,29 +31,26 @@ export default function AdminLogs() {
           value={uid}
           onChange={(e) => setUid(e.target.value)}
           placeholder="Filter by UID…"
-          className="px-3 py-1.5 rounded-lg text-xs bg-transparent text-slate-200 placeholder-slate-700 focus:outline-none"
-          style={{ border: "1px solid var(--border)" }}
+          className="px-3 py-1.5 rounded-lg text-xs bg-transparent text-ink placeholder:text-ink-faint border border-line-subtle focus:outline-none"
         />
         <select
           value={blocked}
           onChange={(e) => setBlocked(e.target.value as "" | "true" | "false")}
-          className="px-3 py-1.5 rounded-lg text-xs bg-transparent text-slate-200 focus:outline-none"
-          style={{ border: "1px solid var(--border)" }}
+          className="px-3 py-1.5 rounded-lg text-xs bg-transparent text-ink border border-line-subtle focus:outline-none"
         >
-          <option value="" style={{ background: "#0f172a" }}>
+          <option value="" style={{ background: "var(--bg-surface)" }}>
             全部
           </option>
-          <option value="false" style={{ background: "#0f172a" }}>
+          <option value="false" style={{ background: "var(--bg-surface)" }}>
             已通過
           </option>
-          <option value="true" style={{ background: "#0f172a" }}>
+          <option value="true" style={{ background: "var(--bg-surface)" }}>
             已被擋
           </option>
         </select>
         <button
           onClick={search}
-          className="px-3 py-1.5 rounded-lg text-xs text-white"
-          style={{ background: "linear-gradient(135deg,#6366f1,#8b5cf6)" }}
+          className="btn btn-primary rounded-lg px-3 py-1.5 text-xs"
         >
           重新查詢
         </button>
@@ -61,16 +58,10 @@ export default function AdminLogs() {
 
       {error && <p className="text-xs text-rose-400">{String(error)}</p>}
 
-      <div
-        className="rounded-xl overflow-hidden"
-        style={{
-          background: "var(--card-bg)",
-          border: "1px solid var(--border)",
-        }}
-      >
+      <div className="card overflow-hidden">
         <table className="w-full text-xs">
           <thead>
-            <tr className="text-slate-600 text-left">
+            <tr className="text-ink-faint text-left">
               <th className="px-4 py-3">時間</th>
               <th className="px-4 py-3">Email / UID</th>
               <th className="px-4 py-3">Tier</th>
@@ -82,7 +73,7 @@ export default function AdminLogs() {
             {loading ? (
               <tr>
                 <td
-                  className="px-4 py-6 text-center text-slate-600"
+                  className="px-4 py-6 text-center text-ink-faint"
                   colSpan={5}
                 >
                   載入中…
@@ -91,7 +82,7 @@ export default function AdminLogs() {
             ) : logs.length === 0 ? (
               <tr>
                 <td
-                  className="px-4 py-6 text-center text-slate-600"
+                  className="px-4 py-6 text-center text-ink-faint"
                   colSpan={5}
                 >
                   無資料
@@ -99,20 +90,20 @@ export default function AdminLogs() {
               </tr>
             ) : (
               logs.map((l) => (
-                <tr key={l.id} className="border-t border-white/5">
-                  <td className="px-4 py-3 text-slate-500 whitespace-nowrap">
+                <tr key={l.id} className="border-t border-line-subtle">
+                  <td className="px-4 py-3 text-ink-muted whitespace-nowrap">
                     {l.timestamp
                       ? new Date(l.timestamp).toLocaleString("zh-TW")
                       : "—"}
                   </td>
                   <td className="px-4 py-3">
-                    <div className="text-slate-200">{l.email || "—"}</div>
-                    <div className="text-[10px] font-mono text-slate-700">
+                    <div className="text-ink">{l.email || "—"}</div>
+                    <div className="text-[10px] font-mono text-ink-faint">
                       {l.uid}
                     </div>
                   </td>
-                  <td className="px-4 py-3 text-slate-300">{l.tier}</td>
-                  <td className="px-4 py-3 text-slate-400 max-w-md truncate">
+                  <td className="px-4 py-3 text-ink">{l.tier}</td>
+                  <td className="px-4 py-3 text-ink-secondary max-w-md truncate">
                     {l.question_preview || "—"}
                   </td>
                   <td className="px-4 py-3">

@@ -31,14 +31,9 @@ export default function StockNewsTab({ ticker }: StockNewsTabProps) {
       : "";
   const loading = isLoading;
 
-  const cardStyle = {
-    background: "var(--card-bg)",
-    border: "1px solid var(--border)",
-  };
-
   if (loading) {
     return (
-      <div className="rounded-2xl p-8 text-center text-sm text-slate-500" style={cardStyle}>
+      <div className="card p-8 text-center text-sm text-ink-muted">
         新聞載入中…
       </div>
     );
@@ -46,26 +41,26 @@ export default function StockNewsTab({ ticker }: StockNewsTabProps) {
 
   if (articles.length === 0) {
     return (
-      <div className="rounded-2xl p-8 text-center text-sm text-slate-500" style={cardStyle}>
+      <div className="card p-8 text-center text-sm text-ink-muted">
         {error || "暫無相關新聞"}
       </div>
     );
   }
 
   return (
-    <div className="rounded-2xl overflow-hidden" style={cardStyle}>
-      <ul className="divide-y divide-white/5">
+    <div className="card overflow-hidden">
+      <ul className="divide-y divide-line-subtle">
         {articles.map((a, i) => (
           <li key={i} className="px-6 py-4">
             <a
               href={a.link}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-sm text-slate-200 hover:text-indigo-400 transition-colors leading-relaxed"
+              className="text-sm text-ink hover:text-accent transition-colors leading-relaxed"
             >
               {a.title}
             </a>
-            <div className="flex items-center gap-2 mt-2 text-xs text-slate-500">
+            <div className="flex items-center gap-2 mt-2 text-xs text-ink-muted">
               {a.source && <span>{a.source}</span>}
               {a.source && a.published && <span>·</span>}
               {a.published && <span>{relativeTime(a.published)}</span>}

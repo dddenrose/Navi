@@ -54,13 +54,13 @@ export default function AdminFeatureAccess() {
     void applyPatch(config.feature_key, { allowed_tiers: nextTiers });
   };
 
-  if (isPending) return <p className="text-sm text-slate-500">載入中…</p>;
+  if (isPending) return <p className="text-sm text-ink-muted">載入中…</p>;
 
   return (
     <div className="space-y-4 max-w-5xl">
       <div>
-        <h2 className="text-sm font-bold text-slate-100">功能權限</h2>
-        <p className="mt-1 text-xs text-slate-600">
+        <h2 className="text-sm font-bold text-ink-strong">功能權限</h2>
+        <p className="mt-1 text-xs text-ink-faint">
           設定各功能可使用的 Tier。後端 API 會同步套用，因此直接呼叫 endpoint
           也會被權限檢查擋下。
         </p>
@@ -72,30 +72,23 @@ export default function AdminFeatureAccess() {
         {configs.map((config) => {
           const saving = savingKey === config.feature_key;
           return (
-            <section
-              key={config.feature_key}
-              className="rounded-xl p-5"
-              style={{
-                background: "var(--card-bg)",
-                border: "1px solid var(--border)",
-              }}
-            >
+            <section key={config.feature_key} className="card p-5">
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <div className="flex items-center gap-2">
-                    <h3 className="text-sm font-bold text-slate-100">
+                    <h3 className="text-sm font-bold text-ink-strong">
                       {config.display_name}
                     </h3>
-                    <span className="rounded bg-white/5 px-2 py-0.5 text-[10px] font-mono text-slate-500">
+                    <span className="rounded bg-[var(--surface-2)] px-2 py-0.5 text-[10px] font-mono text-ink-muted">
                       {config.feature_key}
                     </span>
                   </div>
-                  <p className="mt-1 text-xs leading-5 text-slate-600">
+                  <p className="mt-1 text-xs leading-5 text-ink-faint">
                     {config.description}
                   </p>
                 </div>
 
-                <label className="inline-flex cursor-pointer items-center gap-2 text-xs text-slate-300">
+                <label className="inline-flex cursor-pointer items-center gap-2 text-xs text-ink">
                   <span>{config.enabled ? "啟用" : "停用"}</span>
                   <input
                     type="checkbox"
@@ -110,7 +103,9 @@ export default function AdminFeatureAccess() {
                   />
                   <span
                     className={`relative h-6 w-11 rounded-full transition-colors ${
-                      config.enabled ? "bg-indigo-500/80" : "bg-slate-700"
+                      config.enabled
+                        ? "bg-[var(--accent-strong)]"
+                        : "bg-[var(--surface-3)]"
                     }`}
                     aria-hidden="true"
                   >
@@ -129,26 +124,18 @@ export default function AdminFeatureAccess() {
                   return (
                     <label
                       key={tier}
-                      className={`flex cursor-pointer items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-medium transition-colors ${
+                      className={`flex cursor-pointer items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-medium transition-colors border ${
                         checked
-                          ? "text-white"
-                          : "text-slate-500 hover:text-slate-300"
+                          ? "text-ink-strong bg-[var(--accent-soft)] border-transparent"
+                          : "text-ink-muted hover:text-ink bg-[var(--surface-1)] border-line-subtle"
                       }`}
-                      style={{
-                        background: checked
-                          ? "rgba(99,102,241,0.22)"
-                          : "rgba(255,255,255,0.03)",
-                        border: checked
-                          ? "1px solid rgba(99,102,241,0.45)"
-                          : "1px solid var(--border)",
-                      }}
                     >
                       <input
                         type="checkbox"
                         checked={checked}
                         disabled={saving}
                         onChange={() => toggleTier(config, tier)}
-                        className="h-3.5 w-3.5 rounded border-slate-600 bg-transparent accent-indigo-500"
+                        className="h-3.5 w-3.5 rounded border-line bg-transparent accent-[var(--accent-strong)]"
                       />
                       <span className="uppercase">{tier}</span>
                     </label>
@@ -157,14 +144,14 @@ export default function AdminFeatureAccess() {
               </div>
 
               <div className="mt-4 flex items-center justify-between text-[11px]">
-                <span className="text-slate-700">
+                <span className="text-ink-faint">
                   {saving
                     ? "儲存中…"
                     : savedKey === config.feature_key
                       ? "已儲存"
                       : "自動儲存"}
                 </span>
-                <span className="text-slate-700">
+                <span className="text-ink-faint">
                   {config.updated_by
                     ? `更新者：${config.updated_by}`
                     : "尚未寫入設定"}

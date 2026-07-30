@@ -31,30 +31,51 @@ export default function StockFundamentalTab({
   const monthlyRevenue = useStockMonthlyRevenue(ticker).data ?? null;
   const industryPe = useStockIndustryPe(ticker).data ?? null;
 
+  const valuationBands = [
+    {
+      label: "便宜價",
+      dot: "var(--market-down)",
+      value:
+        fundamentalData.cheap_price != null
+          ? fmtPrice(fundamentalData.cheap_price, currency)
+          : "-",
+      color: "text-down",
+    },
+    {
+      label: "合理價",
+      dot: "var(--warn)",
+      value: fmtPrice(fundamentalData.fair_price, currency),
+      color: "text-warn",
+    },
+    {
+      label: "昂貴價",
+      dot: "var(--market-up)",
+      value:
+        fundamentalData.expensive_price != null
+          ? fmtPrice(fundamentalData.expensive_price, currency)
+          : "-",
+      color: "text-up",
+    },
+  ];
+
   return (
     <div className="space-y-6">
       {/* 公司簡介 */}
       {fundamentalData.description && (
-        <div
-          className="rounded-2xl p-6"
-          style={{
-            background: "var(--card-bg)",
-            border: "1px solid var(--border)",
-          }}
-        >
-          <p className="text-xs text-slate-500 mb-3">公司簡介</p>
-          <p className="text-sm text-slate-300 leading-loose line-clamp-4">
+        <div className="card p-6">
+          <p className="text-xs text-ink-muted mb-3">公司簡介</p>
+          <p className="text-sm text-ink leading-loose line-clamp-4">
             {fundamentalData.description}
           </p>
           {(fundamentalData.sector || fundamentalData.industry) && (
             <div className="flex gap-3 mt-5">
               {fundamentalData.sector && (
-                <span className="px-3 py-1.5 bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-xs rounded-full">
+                <span className="px-3 py-1.5 bg-accent/10 border border-accent/20 text-accent text-xs rounded-full">
                   {fundamentalData.sector}
                 </span>
               )}
               {fundamentalData.industry && (
-                <span className="px-3 py-1.5 bg-slate-700 text-slate-400 text-xs rounded-full">
+                <span className="px-3 py-1.5 bg-[var(--surface-3)] text-ink-secondary text-xs rounded-full">
                   {fundamentalData.industry}
                 </span>
               )}
@@ -95,40 +116,29 @@ export default function StockFundamentalTab({
           { label: "營收成長", value: fmtPct(fundamentalData.revenue_growth) },
           { label: "獲利成長", value: fmtPct(fundamentalData.earnings_growth) },
         ].map(({ label, value }) => (
-          <StatCard
-            key={label}
-            label={label}
-            value={value}
-            valueColor="text-slate-100"
-          />
+          <StatCard key={label} label={label} value={value} valueColor="text-ink-strong" />
         ))}
       </div>
 
       {/* 最新月營收快照（僅上市股票有資料；查無資料整塊靜默隱藏） */}
       {monthlyRevenue && (
-        <div
-          className="rounded-2xl p-6"
-          style={{
-            background: "var(--card-bg)",
-            border: "1px solid var(--border)",
-          }}
-        >
-          <p className="text-xs text-slate-500 mb-4">最新月營收</p>
+        <div className="card p-6">
+          <p className="text-xs text-ink-muted mb-4">最新月營收</p>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-5">
             <StatCard
               label="當月營收"
               value={fmtRevenue(monthlyRevenue.revenue)}
-              valueColor="text-slate-100"
+              valueColor="text-ink-strong"
             />
             <StatCard
               label="年增率 (YoY)"
               value={fmtPct(monthlyRevenue.yoy)}
               valueColor={
                 (monthlyRevenue.yoy ?? 0) > 0
-                  ? "text-red-400"
+                  ? "text-up"
                   : (monthlyRevenue.yoy ?? 0) < 0
-                    ? "text-green-400"
-                    : "text-slate-100"
+                    ? "text-down"
+                    : "text-ink-strong"
               }
             />
             <StatCard
@@ -136,10 +146,10 @@ export default function StockFundamentalTab({
               value={fmtPct(monthlyRevenue.mom)}
               valueColor={
                 (monthlyRevenue.mom ?? 0) > 0
-                  ? "text-red-400"
+                  ? "text-up"
                   : (monthlyRevenue.mom ?? 0) < 0
-                    ? "text-green-400"
-                    : "text-slate-100"
+                    ? "text-down"
+                    : "text-ink-strong"
               }
             />
             <StatCard
@@ -147,15 +157,15 @@ export default function StockFundamentalTab({
               value={fmtPct(monthlyRevenue.yoy_acc)}
               valueColor={
                 (monthlyRevenue.yoy_acc ?? 0) > 0
-                  ? "text-red-400"
+                  ? "text-up"
                   : (monthlyRevenue.yoy_acc ?? 0) < 0
-                    ? "text-green-400"
-                    : "text-slate-100"
+                    ? "text-down"
+                    : "text-ink-strong"
               }
             />
           </div>
           {monthlyRevenue.label && (
-            <p className="text-xs text-slate-600 mt-4">
+            <p className="text-xs text-ink-faint mt-4">
               資料期間：{monthlyRevenue.label}（TWSE 公開資訊觀測站）
             </p>
           )}
@@ -164,51 +174,30 @@ export default function StockFundamentalTab({
 
       {/* 合理價位估算 */}
       {fundamentalData.fair_price != null && (
-        <div
-          className="rounded-2xl p-6"
-          style={{
-            background: "var(--card-bg)",
-            border: "1px solid var(--border)",
-          }}
-        >
-          <p className="text-xs text-slate-500 mb-4">合理價位估算（PE 法）</p>
+        <div className="card p-6">
+          <p className="text-xs text-ink-muted mb-4">合理價位估算（PE 法）</p>
           <div className="grid grid-cols-3 gap-4">
-            {[
-              {
-                label: "🟢 便宜價",
-                value:
-                  fundamentalData.cheap_price != null
-                    ? fmtPrice(fundamentalData.cheap_price, currency)
-                    : "-",
-                color: "text-green-400",
-              },
-              {
-                label: "🟡 合理價",
-                value: fmtPrice(fundamentalData.fair_price, currency),
-                color: "text-yellow-400",
-              },
-              {
-                label: "🔴 昂貴價",
-                value:
-                  fundamentalData.expensive_price != null
-                    ? fmtPrice(fundamentalData.expensive_price, currency)
-                    : "-",
-                color: "text-red-400",
-              },
-            ].map(({ label, value, color }) => (
+            {valuationBands.map(({ label, dot, value, color }) => (
               <div key={label} className="text-center">
-                <p className="text-xs text-slate-500 mb-2">{label}</p>
+                <p className="text-xs text-ink-muted mb-2 inline-flex items-center justify-center gap-1.5 w-full">
+                  <span
+                    className="inline-block w-2 h-2 rounded-full shrink-0"
+                    style={{ background: dot }}
+                    aria-hidden="true"
+                  />
+                  {label}
+                </p>
                 <p className={`text-base font-bold ${color}`}>{value}</p>
               </div>
             ))}
           </div>
           {fundamentalData.valuation_note && (
-            <p className="text-xs text-slate-600 mt-4 leading-relaxed">
+            <p className="text-xs text-ink-faint mt-4 leading-relaxed">
               {fundamentalData.valuation_note}
             </p>
           )}
           {industryPe && (
-            <p className="text-xs text-slate-500 mt-2 leading-relaxed">
+            <p className="text-xs text-ink-muted mt-2 leading-relaxed">
               PE 位於同產業（{industryPe.industry}）第 {industryPe.percentile.toFixed(0)}{" "}
               百分位（樣本 {industryPe.sample_size} 檔）
             </p>

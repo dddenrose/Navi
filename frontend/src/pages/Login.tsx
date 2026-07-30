@@ -5,8 +5,11 @@ import {
   signInWithEmailAndPassword,
   signInAnonymously,
 } from "firebase/auth";
+import { Eye } from "lucide-react";
 import { auth, googleProvider } from "@/lib/firebase";
 import { useAuthStore } from "@/store/authStore";
+import NaviLogo from "@/components/NaviLogo";
+import ParticleField from "@/components/ParticleField";
 
 /** Firebase 錯誤碼 → 中文可行動訊息（原始英文錯誤碼對散戶不可讀） */
 function authErrorMessage(e: unknown): string {
@@ -87,53 +90,49 @@ export default function Login() {
   };
 
   return (
-    <div
-      className="relative min-h-screen flex items-center justify-center px-4 overflow-hidden"
-      style={{
-        background: "var(--login-bg)",
-      }}
-    >
-      {/* Ambient orbs */}
+    <div className="relative min-h-screen flex items-center justify-center px-4 overflow-hidden bg-base">
+      {/* 靜態低 alpha 的 radial accent 底，不動畫，與粒子背景疊加出層次 */}
       <div
-        className="orb-1 absolute top-1/4 -left-32 w-80 h-80 rounded-full pointer-events-none"
+        aria-hidden="true"
+        className="absolute inset-0 pointer-events-none"
         style={{
-          background: `radial-gradient(circle, var(--login-orb1) 0%, transparent 70%)`,
+          background:
+            "radial-gradient(circle at 30% 20%, var(--accent-soft), transparent 60%)",
         }}
       />
-      <div
-        className="orb-2 absolute bottom-1/4 -right-32 w-96 h-96 rounded-full pointer-events-none"
-        style={{
-          background: `radial-gradient(circle, var(--login-orb2) 0%, transparent 70%)`,
-        }}
-      />
+      <ParticleField interactive className="absolute inset-0" />
 
       <div className="relative w-full max-w-sm animate-fade-up">
         {/* Logo */}
         <div className="text-center mb-8">
-          <div
-            className="inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-5"
-            style={{
-              background: "linear-gradient(135deg, #6366f1, #8b5cf6)",
-              boxShadow: "0 0 32px rgba(99,102,241,0.4)",
-            }}
-          >
-            <span className="text-3xl">🧭</span>
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-5 bg-[var(--surface-2)] border border-[var(--border-default)]">
+            <NaviLogo size={32} />
           </div>
           <h1
-            className="text-2xl font-bold gradient-text"
+            className="text-2xl font-bold text-ink-strong"
             style={{ textWrap: "balance" }}
           >
             Navi
           </h1>
-          <p className="text-slate-500 text-sm mt-2.5 tracking-wide">
+          <p className="text-ink-muted text-sm mt-2.5 tracking-wide">
             AI 投資分析助理
           </p>
         </div>
 
         {/* Card */}
-        <div className="glass-md rounded-2xl p-8 shadow-2xl">
+        <div
+          className="relative glass-md rounded-2xl p-8 overflow-hidden"
+          style={{ boxShadow: "var(--shadow-pop)" }}
+        >
+          {/* Signature hairline — 全站 signature 漸層限定 3 處之一 */}
+          <div
+            aria-hidden="true"
+            className="absolute top-0 left-0 right-0 h-[2px]"
+            style={{ background: "var(--gradient-signature)" }}
+          />
+
           <h2
-            className="text-base font-semibold text-slate-200 mb-6"
+            className="text-base font-semibold text-ink mb-6"
             style={{ textWrap: "balance" }}
           >
             登入帳號
@@ -169,7 +168,7 @@ export default function Login() {
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="電子郵件（例：user@example.com）…"
                 required
-                className="input-field w-full rounded-xl px-4 py-3.5 text-sm text-slate-100 placeholder-slate-600 color-scheme-dark"
+                className="input-field rounded-xl px-4 py-3.5 text-sm"
               />
             </div>
             <div>
@@ -185,19 +184,13 @@ export default function Login() {
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="密碼…"
                 required
-                className="input-field w-full rounded-xl px-4 py-3.5 text-sm text-slate-100 placeholder-slate-600"
+                className="input-field rounded-xl px-4 py-3.5 text-sm"
               />
             </div>
             <button
               type="submit"
               disabled={submitting}
-              className="w-full rounded-xl py-3.5 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed"
-              style={{
-                background: "linear-gradient(135deg, #6366f1, #8b5cf6)",
-                boxShadow: submitting
-                  ? "none"
-                  : "0 4px 20px rgba(99,102,241,0.35)",
-              }}
+              className="btn btn-primary w-full justify-center rounded-xl py-3.5 text-sm disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {submitting ? "登入中…" : "登入"}
             </button>
@@ -205,26 +198,16 @@ export default function Login() {
 
           {/* Divider */}
           <div className="flex items-center gap-3 my-6">
-            <div
-              className="flex-1 h-px"
-              style={{ background: "var(--divider)" }}
-            />
-            <span className="text-xs text-slate-600">或</span>
-            <div
-              className="flex-1 h-px"
-              style={{ background: "var(--divider)" }}
-            />
+            <div className="flex-1 h-px bg-line-subtle" />
+            <span className="text-xs text-ink-faint">或</span>
+            <div className="flex-1 h-px bg-line-subtle" />
           </div>
 
           {/* Google */}
           <button
             onClick={handleGoogleSignIn}
             disabled={submitting}
-            className="w-full flex items-center justify-center gap-2.5 rounded-xl py-2.5 text-sm font-medium text-slate-200 transition-opacity hover:opacity-80 disabled:opacity-40"
-            style={{
-              background: "var(--overlay-subtle)",
-              border: "1px solid var(--border-light)",
-            }}
+            className="btn btn-ghost w-full justify-center rounded-xl py-2.5 text-sm disabled:opacity-40"
           >
             <svg viewBox="0 0 24 24" className="w-4 h-4" aria-hidden="true">
               <path
@@ -251,14 +234,13 @@ export default function Login() {
           <button
             onClick={handleGuestSignIn}
             disabled={submitting}
-            className="w-full flex items-center justify-center gap-2 rounded-xl py-2.5 mt-3 text-sm font-medium text-slate-400 transition-opacity hover:opacity-80 disabled:opacity-40"
-            style={{
-              border: "1px dashed var(--border-light)",
-            }}
+            className="btn btn-ghost w-full justify-center rounded-xl py-2.5 mt-3 text-sm disabled:opacity-40"
+            style={{ borderStyle: "dashed" }}
           >
-            👀 以訪客身分體驗（免註冊）
+            <Eye className="w-4 h-4" aria-hidden="true" />
+            以訪客身分體驗（免註冊）
           </button>
-          <p className="text-[11px] text-slate-600 text-center mt-2.5">
+          <p className="text-[11px] text-ink-faint text-center mt-2.5">
             每日 10 則 AI 對話・訪客資料不長期保留
           </p>
         </div>

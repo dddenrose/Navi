@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef, lazy, Suspense } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
+import { TrendingUp, TriangleAlert } from "lucide-react";
 import { type StockSuggestion } from "@/lib/api";
 import {
   usePopularStocks,
@@ -11,6 +12,7 @@ import {
   useStockTechnicals,
 } from "@/lib/queries/stock";
 import { fmtPrice } from "@/lib/format";
+import { useCountUp } from "@/lib/useCountUp";
 import type { Tab, ChartPeriod } from "@/types/stock";
 import {
   CHART_PERIODS,
@@ -83,6 +85,13 @@ export default function Stock() {
     ? "無法取得股票資料，請確認代碼是否正確"
     : "";
 
+  const currency = priceData?.currency ?? "";
+  // 現價 count-up：700ms easeOutCubic，依賴 currency 做格式化；priceData 為
+  // null 時 target 為 0，但此時對應區塊未渲染（見下方 {priceData && (...)}）。
+  const priceDisplay = useCountUp(priceData?.price ?? 0, {
+    format: (v) => fmtPrice(v, currency),
+  });
+
   // 回到卡片頁（網址沒有 symbol）：個股資料隨 query key 變動自然消失，
   // 這裡只需要收掉搜尋框殘留的 UI 狀態。
   // 用 React 官方的「render 期間調整 state」寫法而不是 useEffect：effect 版
@@ -152,7 +161,6 @@ export default function Stock() {
   };
 
   const isPositive = (priceData?.change ?? 0) >= 0;
-  const currency = priceData?.currency ?? "";
   const isTW =
     priceData?.ticker?.endsWith(".TW") ||
     priceData?.ticker?.endsWith(".TWO") ||
@@ -166,7 +174,7 @@ export default function Stock() {
           <svg
             viewBox="0 0 20 20"
             fill="currentColor"
-            className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-600 pointer-events-none"
+            className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-faint pointer-events-none"
             aria-hidden="true"
           >
             <path
@@ -192,11 +200,7 @@ export default function Stock() {
             }}
             onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
             placeholder="輸入股票代號或名稱（例：2330、台積電）…"
-            className="stock-search-input w-full rounded-2xl pl-11 pr-11 py-4 text-sm text-slate-200 placeholder-slate-700"
-            style={{
-              background: "var(--overlay-bg)",
-              border: "1px solid var(--border)",
-            }}
+            className="stock-search-input w-full rounded-2xl pl-11 pr-11 py-4 text-sm text-ink placeholder-ink-faint bg-surface border border-line"
           />
           {/* 清空＝回到熱門標的：此頁的「初始狀態」就是卡片頁，只清文字會停在個股頁上 */}
           {searchInput && (
@@ -204,7 +208,7 @@ export default function Stock() {
               type="button"
               onClick={backToPopular}
               aria-label="清除搜尋並返回熱門標的"
-              className="absolute right-3.5 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center rounded-full text-slate-600 hover:text-slate-300 transition-colors"
+              className="absolute right-3.5 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center rounded-full text-ink-faint hover:text-ink transition-colors"
             >
               <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
                 <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
@@ -215,11 +219,7 @@ export default function Stock() {
           {showSuggestions && suggestions.length > 0 && (
             <ul
               role="listbox"
-              className="absolute z-50 left-0 right-0 top-full mt-1.5 rounded-2xl overflow-hidden shadow-2xl"
-              style={{
-                background: "var(--card-bg)",
-                border: "1px solid var(--border)",
-              }}
+              className="card absolute z-50 left-0 right-0 top-full mt-1.5 overflow-hidden"
             >
               {suggestions.map((s) => (
                 <li
@@ -230,22 +230,15 @@ export default function Stock() {
                     e.preventDefault();
                     handleSelectSuggestion(s);
                   }}
-                  className="flex items-center justify-between px-4 py-3 cursor-pointer transition-colors hover:bg-white/5"
+                  className="flex items-center justify-between px-4 py-3 cursor-pointer transition-colors hover:bg-[var(--surface-2)]"
                 >
-                  <span className="text-sm text-slate-200">
-                    <span className="font-mono font-semibold text-indigo-400 mr-2">
+                  <span className="text-sm text-ink">
+                    <span className="font-mono font-semibold text-accent mr-2">
                       {s.code}
                     </span>
                     {s.name}
                   </span>
-                  <span
-                    className="text-xs px-2 py-0.5 rounded-full shrink-0"
-                    style={{
-                      background: "rgba(99,102,241,0.12)",
-                      color: "#818cf8",
-                      border: "1px solid rgba(99,102,241,0.2)",
-                    }}
-                  >
+                  <span className="text-xs px-2 py-0.5 rounded-full shrink-0 bg-[var(--accent-soft)] text-accent border border-[var(--accent-soft)]">
                     {s.market}
                   </span>
                 </li>
@@ -256,11 +249,7 @@ export default function Stock() {
         <button
           type="submit"
           disabled={loading}
-          className="rounded-2xl px-5 md:px-7 py-3 md:py-4 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-40 whitespace-nowrap"
-          style={{
-            background: "linear-gradient(135deg, #6366f1, #8b5cf6)",
-            boxShadow: loading ? "none" : "0 4px 16px rgba(99,102,241,0.3)",
-          }}
+          className="btn btn-primary rounded-2xl px-5 md:px-7 py-3 md:py-4 text-sm whitespace-nowrap disabled:opacity-40"
         >
           {loading ? "查詢中…" : "查詢"}
         </button>
@@ -269,8 +258,7 @@ export default function Stock() {
       {symbol && (
         <button
           onClick={backToPopular}
-          className="inline-flex items-center gap-1.5 mb-6 -mt-2 px-3 py-1.5 rounded-xl text-xs font-medium transition-colors hover:text-slate-200"
-          style={{ color: "var(--text-dim)", background: "var(--overlay-bg)" }}
+          className="inline-flex items-center gap-1.5 mb-6 -mt-2 px-3 py-1.5 rounded-xl text-xs font-medium transition-colors text-ink-faint hover:text-ink bg-[var(--surface-2)]"
         >
           <svg
             viewBox="0 0 20 20"
@@ -292,10 +280,10 @@ export default function Stock() {
         <div
           role="alert"
           aria-live="polite"
-          className="mb-8 px-5 py-4 rounded-2xl text-sm text-red-300"
+          className="mb-8 px-5 py-4 rounded-card text-sm text-danger"
           style={{
-            background: "rgba(239,68,68,0.08)",
-            border: "1px solid rgba(239,68,68,0.15)",
+            background: "color-mix(in srgb, var(--danger) 8%, transparent)",
+            border: "1px solid color-mix(in srgb, var(--danger) 15%, transparent)",
           }}
         >
           {error}
@@ -307,16 +295,10 @@ export default function Stock() {
           <PopularStocks data={popularQuery.data} onSelect={goToSymbol} />
         ) : (
           <div className="flex flex-col items-center justify-center py-24 text-center animate-fade-in">
-            <div
-              className="w-16 h-16 rounded-2xl flex items-center justify-center text-3xl mb-5"
-              style={{
-                background: "var(--overlay-bg)",
-                border: "1px solid var(--border)",
-              }}
-            >
-              📈
+            <div className="w-16 h-16 rounded-2xl flex items-center justify-center mb-5 bg-[var(--surface-2)] border border-line">
+              <TrendingUp size={16} className="text-ink-muted" aria-hidden="true" />
             </div>
-            <p className="text-slate-600 text-sm">輸入股票代號或公司名稱開始查詢</p>
+            <p className="text-ink-faint text-sm">輸入股票代號或公司名稱開始查詢</p>
           </div>
         )
       )}
@@ -324,48 +306,38 @@ export default function Stock() {
       {priceData && (
         <>
           {/* Price header */}
-          <div
-            className="rounded-2xl p-7 mb-8"
-            style={{ background: "var(--card-bg)", border: "1px solid var(--border)" }}
-          >
+          <div className="card p-7 mb-8">
             <div className="flex items-start justify-between flex-wrap gap-4">
               <div>
                 <div className="flex items-center gap-3 mb-2">
                   <h1
-                    className="text-xl font-bold text-white"
+                    className="text-xl font-bold text-ink-strong"
                     style={{ textWrap: "balance" }}
                   >
                     {isTW
                       ? priceData.ticker.replace(/\.(TW|TWO)$/, "")
                       : priceData.ticker}
                   </h1>
-                  <span
-                    className="text-xs px-2 py-0.5 rounded-full font-medium"
-                    style={{
-                      background: "rgba(99,102,241,0.15)",
-                      color: "#818cf8",
-                      border: "1px solid rgba(99,102,241,0.2)",
-                    }}
-                  >
+                  <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-[var(--accent-soft)] text-accent border border-[var(--accent-soft)]">
                     {marketLabel(priceData.exchange, priceData.ticker)}
                   </span>
                 </div>
-                <p className="text-slate-400 text-sm mt-1">{priceData.name}</p>
+                <p className="text-ink-secondary text-sm mt-1">{priceData.name}</p>
               </div>
               <div className="text-right">
-                <div className="text-2xl md:text-3xl font-bold text-white tracking-tight tabular-nums">
-                  {fmtPrice(priceData.price, currency)}
+                <div className="text-2xl md:text-3xl font-bold text-ink-strong tracking-tight tabular-nums">
+                  {priceDisplay}
                 </div>
                 <div
                   className={`text-sm font-medium tabular-nums mt-2 ${
-                    isPositive ? "text-red-400" : "text-emerald-400"
+                    isPositive ? "text-up" : "text-down"
                   }`}
                 >
                   {isPositive ? "▲" : "▼"}{" "}
                   {Math.abs(priceData.change ?? 0).toFixed(2)} (
                   {Math.abs(priceData.change_percent ?? 0).toFixed(2)}%)
                 </div>
-                <p className="text-[11px] text-slate-500 mt-1.5 tabular-nums">
+                <p className="text-[11px] text-ink-muted mt-1.5 tabular-nums">
                   {priceData.is_intraday ? "盤中報價（可能延遲）" : "收盤資料"}
                   {priceData.as_of_date ? ` · 截至 ${priceData.as_of_date}` : ""}
                   {priceData.data_source ? ` · 來源 ${priceData.data_source}` : ""}
@@ -376,38 +348,28 @@ export default function Stock() {
             {/* Price chart */}
             <div className="mt-6">
               <div className="flex items-center justify-between gap-3 mb-2 flex-wrap">
-                <span className="text-[11px] font-semibold tracking-wide text-slate-500">
+                <span className="text-[11px] font-semibold tracking-wide text-ink-muted">
                   收盤走勢
                   {/* 長期間會降頻，不標示的話使用者會把月線誤讀成日線 */}
                   {technicalData &&
                     technicalData.history_interval !== "1d" &&
                     `（${INTERVAL_LABELS[technicalData.history_interval] ?? technicalData.history_interval}）`}
                 </span>
-                <div
-                  className="flex gap-0.5 p-1 rounded-xl overflow-x-auto max-w-full"
-                  style={{
-                    background: "var(--overlay-bg)",
-                    border: "1px solid var(--border)",
-                  }}
-                >
+                <div className="flex gap-0.5 p-1 rounded-xl overflow-x-auto max-w-full bg-[var(--surface-2)] border border-line-subtle">
                   {CHART_PERIODS.map((p) => (
                     <button
                       key={p}
                       onClick={() => setChartPeriod(p)}
                       aria-pressed={chartPeriod === p}
-                      className="shrink-0 whitespace-nowrap px-2.5 py-1 rounded-lg text-[11px] font-semibold tracking-wide transition-colors"
+                      className={`shrink-0 whitespace-nowrap px-2.5 py-1 rounded-lg text-[11px] font-semibold tracking-wide transition-colors ${
+                        chartPeriod === p
+                          ? "text-ink border border-line-strong"
+                          : "text-ink-faint border border-transparent"
+                      }`}
                       style={
                         chartPeriod === p
-                          ? {
-                              background:
-                                "linear-gradient(135deg, rgba(99,102,241,0.3), rgba(139,92,246,0.2))",
-                              border: "1px solid rgba(99,102,241,0.3)",
-                              color: "var(--text-secondary)",
-                            }
-                          : {
-                              color: "var(--text-dim)",
-                              border: "1px solid transparent",
-                            }
+                          ? { background: "var(--accent-soft)" }
+                          : undefined
                       }
                     >
                       {CHART_PERIOD_LABELS[p]}
@@ -422,7 +384,7 @@ export default function Stock() {
                 {technicalData && technicalData.history.length > 0 ? (
                   <Suspense
                     fallback={
-                      <div className="flex items-center justify-center h-full text-xs text-slate-600">
+                      <div className="flex items-center justify-center h-full text-xs text-ink-faint">
                         圖表載入中…
                       </div>
                     }
@@ -433,7 +395,7 @@ export default function Stock() {
                     />
                   </Suspense>
                 ) : (
-                  <div className="flex items-center justify-center h-full text-xs text-slate-600">
+                  <div className="flex items-center justify-center h-full text-xs text-ink-faint">
                     {chartLoading ? "圖表載入中…" : "查無歷史價格資料"}
                   </div>
                 )}
@@ -442,13 +404,7 @@ export default function Stock() {
           </div>
 
           {/* Tabs */}
-          <div
-            className="stock-tabs-wrap flex gap-1 mb-7 p-1.5 w-fit max-w-full rounded-2xl"
-            style={{
-              background: "var(--overlay-bg)",
-              border: "1px solid var(--border)",
-            }}
-          >
+          <div className="stock-tabs-wrap flex gap-1 mb-7 p-1.5 w-fit max-w-full rounded-2xl bg-[var(--surface-2)] border border-line-subtle">
             {(
               ["overview", "technical", "fundamental", "institutional", "news"] as Tab[]
             ).map(
@@ -456,19 +412,15 @@ export default function Stock() {
                 <button
                   key={tab}
                   onClick={() => setActiveTab(tab)}
-                  className="shrink-0 whitespace-nowrap px-6 py-2.5 rounded-xl text-xs font-semibold tracking-wide transition-colors"
+                  className={`shrink-0 whitespace-nowrap px-6 py-2.5 rounded-xl text-xs font-semibold tracking-wide transition-colors ${
+                    activeTab === tab
+                      ? "text-ink border border-line-strong"
+                      : "text-ink-faint border border-transparent"
+                  }`}
                   style={
                     activeTab === tab
-                      ? {
-                          background:
-                            "linear-gradient(135deg, rgba(99,102,241,0.3), rgba(139,92,246,0.2))",
-                          border: "1px solid rgba(99,102,241,0.3)",
-                          color: "var(--text-secondary)",
-                        }
-                      : {
-                          color: "var(--text-dim)",
-                          border: "1px solid transparent",
-                        }
+                      ? { background: "var(--accent-soft)" }
+                      : undefined
                   }
                 >
                   {TAB_LABELS[tab]}
@@ -498,21 +450,21 @@ export default function Stock() {
             <StockNewsTab ticker={priceData.ticker} />
           ) : (
             // 該分頁資料載入失敗時不能靜默空白，要給可行動的訊息
-            <div
-              role="alert"
-              className="rounded-2xl p-8 text-center text-sm text-slate-400"
-              style={{
-                background: "var(--card-bg)",
-                border: "1px solid var(--border)",
-              }}
-            >
+            <div role="alert" className="card p-8 text-center text-sm text-ink-secondary">
               此分頁資料暫時無法取得，可能是資料來源異常或該股票不支援此分析。
               請稍後重試，或改查其他分頁。
             </div>
           )}
 
-          <p className="text-xs text-slate-500 leading-relaxed mt-6">
-            ⚠️ 本頁數據與估值僅供學習與研究用途，不構成投資建議；「便宜／合理／昂貴」為統計估算的估值帶，非目標價。資料可能延遲，交易前請以券商報價為準。
+          <p className="flex items-start gap-1.5 text-xs text-ink-muted leading-relaxed mt-6">
+            <TriangleAlert
+              size={14}
+              className="text-warn shrink-0 mt-0.5"
+              aria-hidden="true"
+            />
+            <span>
+              本頁數據與估值僅供學習與研究用途，不構成投資建議；「便宜／合理／昂貴」為統計估算的估值帶，非目標價。資料可能延遲，交易前請以券商報價為準。
+            </span>
           </p>
         </>
       )}
