@@ -12,6 +12,9 @@ const TOOL_DISPLAY_NAMES: Record<string, string> = {
   search_knowledge: "知識庫搜尋",
   run_strategy_backtest: "策略回測",
   get_portfolio: "投資組合",
+  get_market_overview: "大盤指數",
+  get_market_institutional_flows: "法人資金流向",
+  get_market_futures_positions: "期貨未平倉",
 };
 
 const INTENT_DISPLAY_NAMES: Record<string, string> = {
@@ -25,6 +28,7 @@ const INTENT_DISPLAY_NAMES: Record<string, string> = {
   portfolio: "投資組合",
   backtest: "策略回測",
   knowledge: "知識查詢",
+  macro_overview: "大盤總覽",
   general: "一般對話",
 };
 
