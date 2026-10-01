@@ -53,6 +53,15 @@ class Settings(BaseSettings):
     # TW 股價來源：'mis'（MIS 即時報價，T-0）或 'openapi'（TWSE/TPEx Open API，T-1 收盤）
     tw_quote_provider: str = "mis"
 
+    # LINE Messaging API — channel secret 為空時 webhook 回 503（視為未啟用）。
+    # 只有 access token 為空時走 dry-run：只 log 要送的內容、不呼叫 LINE。
+    line_channel_secret: str = ""
+    line_channel_access_token: str = ""
+    # Cloud Tasks queue：webhook 先回 200，再由 task 另起 request 跑 agent
+    # （Cloud Run 回完 response 後 CPU 會被降速）。留空 = 本機開發，改在行程內處理。
+    line_tasks_queue: str = ""
+    line_tasks_location: str = "asia-east1"
+
 
 settings = Settings()
 

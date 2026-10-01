@@ -53,7 +53,7 @@ gcloud run deploy "${SERVICE}" \
   --cpu=1 \
   --timeout=300 \
   --max-instances=3 \
-  --set-env-vars="GOOGLE_CLOUD_PROJECT=${PROJECT_ID},AUTH_REQUIRED=true,DEBUG=false,CORS_ORIGINS=https://navi-stock-analyzer.web.app" \
+  --set-env-vars="GOOGLE_CLOUD_PROJECT=${PROJECT_ID},AUTH_REQUIRED=true,DEBUG=false,CORS_ORIGINS=https://navi-stock-analyzer.web.app,LINE_TASKS_QUEUE=line-events" \
   --project="${PROJECT_ID}"
 
 # 5. Get URL

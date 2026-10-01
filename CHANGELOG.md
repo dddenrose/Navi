@@ -9,6 +9,20 @@
 
 ## [Unreleased]
 
+### Added（2026-10-01 LINE 問答）
+
+- **可以在 LINE 一對一聊天向 Navi 提問**：LINE 是既有 Agent 的第二個前端，額度、tier、持股與對話記錄都沿用綁定的 Navi 帳號（LINE 上的對話也會出現在網頁的對話列表），`services/agent_service.py` 完全沒動。
+  - 新增 `POST /api/line/webhook` 與 `POST /api/line/process`。LINE 要求 webhook 約 2 秒內回 200，而一題要跑數十秒，且 Cloud Run 回完 response 後 CPU 會被降速；所以 webhook 只驗簽並為每個事件建一個 Cloud Task，由 Cloud Tasks 另起 request 打 `/process` 跑 Agent。
+  - **`/process` 不需要額外金鑰**：task 帶著原始 webhook body 與 LINE 簽章，`/process` 重新驗簽，只接受 LINE 簽過的內容，信任邊界與公開的 webhook 相同。
+  - **去重靠 Firestore `line_events/{webhookEventId}`** 的 `create()` 佔位，同時擋 LINE 重送與 Cloud Tasks 重試；不用 Cloud Tasks 的具名 task（去重窗口約 1 小時、且會拖慢建立 task，而 LINE 的重送時程未公開）。
+  - 回覆優先用免費的 reply；reply token 失效（約一分鐘，冷啟動約 30 秒時很容易發生）才改用計入每月則數的 push。未綁定的人只會收到 reply，不為陌生人花 push 則數。
+  - **只服務 `line_links/{LINE userId}` 內已綁定的人**，其他人會收到「尚未開放」並附上自己的 LINE ID；以 `backend/scripts/link_line.py <email-or-uid> <line-user-id>` 綁定。
+  - LINE 沒有「新對話」按鈕：沿用上一個對話，閒置超過 6 小時或輸入「新對話」／`/new` 才重開。
+  - LINE 不渲染 Markdown，`services/line/formatting.py` 會去掉粗體／標題／表格等符號，並依段落切成最多 5 則（單則上限以 UTF-16 計，emoji 算 2）。
+  - 未設定 `LINE_CHANNEL_SECRET` 時兩個端點回 503；未設定 `LINE_CHANNEL_ACCESS_TOKEN` 時走 dry-run，只 log 不送出。本機把 `LINE_TASKS_QUEUE` 留空會改在行程內處理；同樣的設定若出現在 Cloud Run 上則回 503，避免靜默掉進會卡住的路徑。
+  - 新增 `scripts/setup_line_bot.sh`（Cloud Tasks queue、IAM、Secret Manager、`line_events` 的 TTL）；`cloudbuild.yaml` 與 `scripts/deploy.sh` 補上 `LINE_TASKS_QUEUE=line-events`；新增相依套件 `google-cloud-tasks`。
+  - **已知限制**：queue 以 `max-concurrent-dispatches=1` 序列化處理，因為 `save_history` 是讀後寫、沒有 transaction，同一人連發兩則若同時處理會互蓋。只開放單一使用者時足夠，開放多人前需重新設計。
+
 ### Added（2026-07-29 熱門標的與長期歷史）
 
 - **個股頁空狀態改為熱門標的圖卡**：原本只有一個 📈 圖示與「輸入股票代號」提示，現在直接呈現三個排行榜（成交值／漲幅／跌幅，各 8 檔，可切換），每張卡有代碼、名稱、現價、漲跌幅、成交值與近一個月 sparkline，點擊即查詢該股。

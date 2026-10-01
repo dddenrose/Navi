@@ -835,6 +835,23 @@ wheels = [
 ]
 
 [[package]]
+name = "google-cloud-tasks"
+version = "2.25.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "google-api-core", extra = ["grpc"] },
+    { name = "google-auth" },
+    { name = "grpc-google-iam-v1" },
+    { name = "grpcio" },
+    { name = "proto-plus" },
+    { name = "protobuf" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/b8/89/1cfc3ce962b6c41e288084709e9871bd358c06059629809cc807ef562f49/google_cloud_tasks-2.25.0.tar.gz", hash = "sha256:51e1b91818925124c3ef728019b140f0d4a5068d871f0f27a17c6da80332f1e4", size = 390441, upload-time = "2026-09-24T23:20:19.107Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/2d/03/8b14ff237640b8576ff5a2650a34bf4b6fdf3de353f7e55d943d0c90a68c/google_cloud_tasks-2.25.0-py3-none-any.whl", hash = "sha256:8f078ec92d4974bcdc1763a3d1496efabccbf33924afaec0e823a11491fd7a02", size = 325073, upload-time = "2026-09-24T23:19:53.93Z" },
+]
+
+[[package]]
 name = "google-crc32c"
 version = "1.8.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1605,6 +1622,7 @@ dependencies = [
     { name = "firebase-admin" },
     { name = "google-cloud-aiplatform" },
     { name = "google-cloud-firestore" },
+    { name = "google-cloud-tasks" },
     { name = "langchain" },
     { name = "langchain-community" },
     { name = "langchain-google-genai" },
@@ -1635,6 +1653,7 @@ requires-dist = [
     { name = "firebase-admin", specifier = ">=6.5.0" },
     { name = "google-cloud-aiplatform", specifier = ">=1.60.0" },
     { name = "google-cloud-firestore", specifier = ">=2.19.0" },
+    { name = "google-cloud-tasks", specifier = ">=2.16.0" },
     { name = "langchain", specifier = ">=0.3.0,<0.4.0" },
     { name = "langchain-community", specifier = ">=0.3.0,<0.4.0" },
     { name = "langchain-google-genai", specifier = ">=2.0.0,<3.0.0" },
