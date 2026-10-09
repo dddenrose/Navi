@@ -9,6 +9,10 @@
 
 ## [Unreleased]
 
+### Fixed（2026-10-09 logging）
+
+- **`services.*`／`api.*` 的 log 在線上全部印成 `--- Logging error ---` traceback**（`Formatting field not found in record: 'request_id'`，過去兩週每天約 50 筆，主要來自 screener）。補 `request_id` 的 filter 原本掛在 root *logger* 上，但 logger 層的 filter 只套用在直接打到它的 record，子 logger propagate 上來的會跳過它直接進 handler。改掛到 root 的每個 handler 上，並補 `tests/test_logging_request_id.py` 重現（舊測試抓不到是因為 pytest 先在 root 掛了自己的 handler，`basicConfig` 變成 no-op）。
+
 ### Added（2026-10-01 LINE 問答）
 
 - **可以在 LINE 一對一聊天向 Navi 提問**：LINE 是既有 Agent 的第二個前端，額度、tier、持股與對話記錄都沿用綁定的 Navi 帳號（LINE 上的對話也會出現在網頁的對話列表），`services/agent_service.py` 完全沒動。

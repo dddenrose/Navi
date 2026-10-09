@@ -8,14 +8,16 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from api.routes import chat, features, knowledge, line, portfolio, screener, stock
 from api.routes import admin as admin_route
+from api.routes import chat, features, knowledge, line, portfolio, screener, stock
 from config import settings
 
 # 結構化 logging：交由 root logger 輸出 stdout，便於 Cloud Run 收集
+LOG_FORMAT = "%(asctime)s %(levelname)s %(name)s [%(request_id)s]: %(message)s"
+
 logging.basicConfig(
     level=logging.DEBUG if settings.debug else logging.INFO,
-    format="%(asctime)s %(levelname)s %(name)s [%(request_id)s]: %(message)s",
+    format=LOG_FORMAT,
 )
 
 
@@ -27,7 +29,20 @@ class _RequestIdFilter(logging.Filter):
         return True
 
 
-logging.getLogger().addFilter(_RequestIdFilter())
+def _install_request_id_filter(root: logging.Logger) -> None:
+    """把 filter 掛在 root 的每個 handler 上，而不是 root logger 本身。
+
+    logger 層的 filter 只套用在直接打到該 logger 的 record；子 logger（services.*、
+    api.*）propagate 上來的 record 會跳過它直接進 handler，formatter 就會因為缺
+    request_id 噴 ``Formatting field not found``。handler 層的 filter 則每筆都過。
+    """
+    request_id_filter = _RequestIdFilter()
+    for handler in root.handlers:
+        if not any(isinstance(f, _RequestIdFilter) for f in handler.filters):
+            handler.addFilter(request_id_filter)
+
+
+_install_request_id_filter(logging.getLogger())
 
 # 降低第三方 logger 噪音
 for noisy in ("urllib3", "yfinance", "google.auth", "google.api_core"):
