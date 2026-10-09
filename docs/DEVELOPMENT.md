@@ -76,6 +76,10 @@ CI runs the same suite on every push and pull request against `main`
 | `SENDGRID_API_KEY`               | SendGrid key for screener email digests (optional)          | —                                     |
 | `EMAIL_FROM_ADDRESS`             | Sender address for digest emails                            | `notify@navi-stock.app`               |
 | `EMAIL_FROM_NAME`                | Sender display name for digest emails                       | `Navi 智能選股`                       |
+| `LINE_CHANNEL_SECRET`            | LINE channel secret; empty disables the LINE endpoints      | —                                     |
+| `LINE_CHANNEL_ACCESS_TOKEN`      | LINE access token; empty = dry-run (log instead of send)    | —                                     |
+| `LINE_TASKS_QUEUE`               | Cloud Tasks queue for LINE events; empty = in-process (dev) | —                                     |
+| `LINE_TASKS_LOCATION`            | Region of the Cloud Tasks queue                             | `asia-east1`                          |
 
 ## Project Structure
 
@@ -90,6 +94,7 @@ navi/
 │   │   ├── stock.py             #   Stock data & analysis (search, technical, fundamental, chips)
 │   │   ├── portfolio.py         #   Portfolio + transactions (fees/tax, realized P/L)
 │   │   ├── screener.py          #   AI screener: run / reports / tracking / subscriptions
+│   │   ├── line.py              #   LINE Messaging API webhook + Cloud Tasks target
 │   │   ├── features.py          #   Feature-access discovery
 │   │   ├── admin.py             #   Admin console API (users, quota, flags, logs)
 │   │   └── knowledge.py         #   Knowledge base management
@@ -108,6 +113,7 @@ navi/
 │   │   ├── feature_access_service.py # Tier-based feature gating
 │   │   ├── twse_parsers.py      #   Shared TWSE field-parsing layer (T86 / MI_MARGN)
 │   │   ├── screener/            #   Screener pipeline (rules, scoring, valuation, AI, email, tracking)
+│   │   ├── line/                #   LINE chat channel (client, event handler, formatting, task enqueue)
 │   │   └── firestore_client.py  #   Firestore client singleton
 │   ├── tools/                   # LangChain / LangGraph Agent Tools (12 tools)
 │   ├── models/                  # Pydantic Schemas (schemas.py)
@@ -121,7 +127,7 @@ navi/
 │   │   ├── compliance/          #   Disclaimers & risk warnings
 │   │   └── tool_interpretation/ #   How to read backtest / analysis outputs
 │   ├── data_pipeline/           # Knowledge ingestion pipeline
-│   ├── scripts/                 # Ops scripts (seed configs, set admin/tier, local screener run)
+│   ├── scripts/                 # Ops scripts (seed configs, set admin/tier, link LINE user, local screener run)
 │   └── tests/                   # Pytest tests (services, screener, parsers, RAG, quota …)
 ├── frontend/
 │   ├── src/
@@ -136,6 +142,7 @@ navi/
 └── scripts/
     ├── deploy.sh                # Manual deploy script (Artifact Registry → Cloud Run)
     ├── setup_screener_scheduler.sh # Cloud Scheduler jobs (run / track / notify)
+    ├── setup_line_bot.sh        # Cloud Tasks queue + LINE secrets for the LINE chat channel
     └── setup_trigger.sh         # Cloud Build trigger setup
 ```
 
@@ -145,3 +152,51 @@ navi/
 - **Frontend** — `npm run build` then `firebase deploy --only hosting`.
 - **Screener schedule** — `scripts/setup_screener_scheduler.sh` creates the
   Cloud Scheduler jobs for `run` / `track` / `notify`.
+- **LINE bot** — see [LINE Bot](#line-bot) below.
+
+## LINE Bot
+
+Users can chat with Navi in a one-on-one LINE chat. LINE is a second front end
+over the same agent: quota, tier, portfolio and conversation history are those
+of the linked Navi account, and LINE conversations show up in the web UI.
+
+```
+LINE ── POST /api/line/webhook ──▶ verify signature → one Cloud Task per event → 200
+Cloud Tasks ── POST /api/line/process ──▶ verify signature again → run agent → reply
+```
+
+The webhook must answer within about 2 seconds while an answer takes tens of
+seconds, and Cloud Run throttles CPU once a response is sent, so the agent runs
+in a second request made by Cloud Tasks. Answers are sent with the free reply
+API; if the reply token has expired (about a minute) they fall back to push,
+which counts against the LINE plan's monthly message quota.
+
+Only LINE users present in the `line_links` Firestore collection are served;
+everyone else gets a "not open yet" reply that includes their LINE user ID.
+
+**One-time setup**
+
+1. Create a LINE Official Account, enable the Messaging API, and copy the
+   channel secret and a long-lived channel access token from the LINE Developers
+   Console.
+2. `./scripts/setup_line_bot.sh --secrets` — enables Cloud Tasks, creates the
+   `line-events` queue, stores both secrets in Secret Manager, and prints the
+   `gcloud run services update --update-secrets=...` command to run once.
+3. Deploy the backend, then set the webhook URL to
+   `<Cloud Run URL>/api/line/webhook`. Turn on **Use webhook** and **Webhook
+   redelivery**; turn off auto-reply messages in LINE Official Account Manager.
+   The service cold-starts in roughly 30 seconds, so hit `/health` first or the
+   console's **Verify** button will time out.
+4. Message the bot, copy the LINE user ID from its reply, and link it:
+   `cd backend && uv run python scripts/link_line.py <email-or-uid> <line-user-id>`.
+
+**Local development** — leave `LINE_TASKS_QUEUE` and `LINE_CHANNEL_ACCESS_TOKEN`
+empty and set `LINE_CHANNEL_SECRET` to any value. Events are then handled
+in-process and outgoing messages are only logged, so a signed request is enough
+to exercise the whole flow:
+
+```bash
+BODY='{"events":[{"type":"message","webhookEventId":"TEST0001","replyToken":"dummy","source":{"type":"user","userId":"U00000000000000000000000000000001"},"message":{"type":"text","id":"1","text":"台積電現在多少"}}]}'
+SIG=$(printf '%s' "$BODY" | openssl dgst -sha256 -hmac "$LINE_CHANNEL_SECRET" -binary | base64)
+curl -i localhost:8000/api/line/webhook -H "X-Line-Signature: $SIG" --data-binary "$BODY"
+```

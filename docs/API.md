@@ -4,7 +4,7 @@ REST API for the Navi backend (FastAPI on Cloud Run). Interactive Swagger UI is
 available at `/docs` when `DEBUG=true`.
 
 `Auth` column: ✓ = Firebase JWT · **Admin** = admin role · **Token** = Cloud
-Scheduler shared secret · ✗ = public.
+Scheduler shared secret · **LINE** = LINE signature (`X-Line-Signature`) · ✗ = public.
 
 ## Chat
 
@@ -57,6 +57,18 @@ Scheduler shared secret · ✗ = public.
 | `/api/screener/subscriptions`               | GET/PUT | Get / update email subscription           | ✓     |
 | `/api/screener/notify`                      | POST    | Email latest report to subscribers        | Token |
 | `/api/screener/unsubscribe`                 | GET     | One-click unsubscribe (HMAC token)        | ✗     |
+
+## LINE
+
+| Path                | Method | Description                                                    | Auth |
+| ------------------- | ------ | -------------------------------------------------------------- | ---- |
+| `/api/line/webhook` | POST   | LINE Messaging API webhook — enqueues one Cloud Task per event | LINE |
+| `/api/line/process` | POST   | Cloud Tasks target — runs the agent for one event and replies  | LINE |
+
+Both endpoints verify the LINE signature over the raw body; `/process` receives
+the original webhook body and signature forwarded by the task, plus an
+`X-Line-Event-Id` header naming the event to handle. They return 503 until
+`LINE_CHANNEL_SECRET` is set.
 
 ## Features & Admin
 
