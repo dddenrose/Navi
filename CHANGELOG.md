@@ -9,6 +9,13 @@
 
 ## [Unreleased]
 
+### Changed（2026-10-10 LINE 開放給親友）
+
+- **只用 LINE 的親友也能用**：`backend/scripts/link_line.py --create <LINE user ID> [顯示名稱]` 會建一個 LINE 專用帳號再綁定。uid 為 `line_<LINE user ID>`，沒有 email、無法登入網頁，預設 free 層；顯示名稱未給時從 LINE profile 抓。Firebase Auth 也建一筆，`set_tier.py` 等既有腳本照常可用。重跑會沿用既有帳號，已綁定的 LINE ID 不會被改。
+- **同一人同時只處理一題，不同人不再排隊**：取代原本「整個 queue 序列化」的做法。`line_links/{LINE userId}.inflight_until` 在 Firestore transaction 內佔位，租約 5 分鐘，行程中途當掉也會自動解開；第二題直接以免費 reply 回「上一題還在處理中」，不計額度、不用 push。queue 並行數由 1 提高到 3。
+- **未綁定的人改收到邀請制說明**，LINE ID 單獨一則，手機上長按即可複製。
+- **push 用量量測**：reply token 過期改走 push 後，查 LINE 當月用量寫進 log（`LINE push usage this month: 用量/上限`），達上限 80% 時升為 WARNING。冷啟動約 38 秒加 Agent 約 20 秒，閒置後的第一題可能超過 reply token 約一分鐘的期限；先看實際用量，再決定要不要處理冷啟動。
+
 ### Fixed（2026-10-09 logging）
 
 - **`services.*`／`api.*` 的 log 在線上全部印成 `--- Logging error ---` traceback**（`Formatting field not found in record: 'request_id'`，過去兩週每天約 50 筆，主要來自 screener）。補 `request_id` 的 filter 原本掛在 root *logger* 上，但 logger 層的 filter 只套用在直接打到它的 record，子 logger propagate 上來的會跳過它直接進 handler。改掛到 root 的每個 handler 上，並補 `tests/test_logging_request_id.py` 重現（舊測試抓不到是因為 pytest 先在 root 掛了自己的 handler，`basicConfig` 變成 no-op）。
@@ -25,7 +32,7 @@
   - LINE 不渲染 Markdown，`services/line/formatting.py` 會去掉粗體／標題／表格等符號，並依段落切成最多 5 則（單則上限以 UTF-16 計，emoji 算 2）。
   - 未設定 `LINE_CHANNEL_SECRET` 時兩個端點回 503；未設定 `LINE_CHANNEL_ACCESS_TOKEN` 時走 dry-run，只 log 不送出。本機把 `LINE_TASKS_QUEUE` 留空會改在行程內處理；同樣的設定若出現在 Cloud Run 上則回 503，避免靜默掉進會卡住的路徑。
   - 新增 `scripts/setup_line_bot.sh`（Cloud Tasks queue、IAM、Secret Manager、`line_events` 的 TTL）；`cloudbuild.yaml` 與 `scripts/deploy.sh` 補上 `LINE_TASKS_QUEUE=line-events`；新增相依套件 `google-cloud-tasks`。
-  - **已知限制**：queue 以 `max-concurrent-dispatches=1` 序列化處理，因為 `save_history` 是讀後寫、沒有 transaction，同一人連發兩則若同時處理會互蓋。只開放單一使用者時足夠，開放多人前需重新設計。
+  - **已知限制（2026-10-10 已解除，見上方）**：queue 以 `max-concurrent-dispatches=1` 序列化處理，因為 `save_history` 是讀後寫、沒有 transaction，同一人連發兩則若同時處理會互蓋。只開放單一使用者時足夠，開放多人前需重新設計。
 
 ### Added（2026-07-29 熱門標的與長期歷史）
 

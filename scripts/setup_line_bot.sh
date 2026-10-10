@@ -35,14 +35,15 @@ echo ""
 echo "▶ 啟用 Cloud Tasks API"
 gcloud services enable cloudtasks.googleapis.com --project="${PROJECT_ID}" --quiet
 
-# max-concurrent-dispatches=1：對話記錄是讀後寫、沒有 transaction，同一人連發兩則
-#   若同時處理會互蓋。只開放單一使用者時序列化處理即可；開放多人前需重新設計。
+# max-concurrent-dispatches=3：不同人的問題可以同時處理。同一人連發兩題時，
+#   handler 以 line_links.inflight_until 佔位擋下第二題，對話記錄不會互蓋。
+#   一題約 20 秒、多半在等 LLM 與外部 API，3 題同時跑一個實例就吃得下。
 # max-attempts=3：只救「request 還沒進到 handler 就失敗」的情況；
 #   已開始處理的事件有 webhookEventId 去重，不會重跑。
 QUEUE_FLAGS=(
   --location="${REGION}"
   --project="${PROJECT_ID}"
-  --max-concurrent-dispatches=1
+  --max-concurrent-dispatches=3
   --max-attempts=3
   --min-backoff=2s
   --max-backoff=10s
@@ -127,3 +128,4 @@ echo "       ${SERVICE_URL:-<Cloud Run URL>}/api/line/webhook"
 echo "     並開啟 Use webhook 與 Webhook redelivery；"
 echo "     LINE Official Account Manager 關閉「自動回應訊息」"
 echo "  4. 綁定帳號：cd backend && uv run python scripts/link_line.py <email> <LINE user ID>"
+echo "     只用 LINE 的親友：uv run python scripts/link_line.py --create <LINE user ID> [顯示名稱]"

@@ -172,7 +172,18 @@ API; if the reply token has expired (about a minute) they fall back to push,
 which counts against the LINE plan's monthly message quota.
 
 Only LINE users present in the `line_links` Firestore collection are served;
-everyone else gets a "not open yet" reply that includes their LINE user ID.
+everyone else gets an invite-only notice followed by their LINE user ID as a
+separate message, so it can be copied with a long press.
+
+Each user has at most one question in progress. A second question that arrives
+while the first is running gets "still working on your last question" instead
+of running concurrently, because conversation history is read-then-written
+without a transaction. The lock is `inflight_until` on the user's `line_links`
+document, taken in a Firestore transaction with a 5-minute lease. Different
+users run in parallel, up to the queue's 3 concurrent dispatches.
+
+Every push logs the month's push usage against the plan limit
+(`LINE push usage this month`), at WARNING once it reaches 80%.
 
 **One-time setup**
 
@@ -189,6 +200,21 @@ everyone else gets a "not open yet" reply that includes their LINE user ID.
    console's **Verify** button will time out.
 4. Message the bot, copy the LINE user ID from its reply, and link it:
    `cd backend && uv run python scripts/link_line.py <email-or-uid> <line-user-id>`.
+
+**Adding friends who only use LINE** — they have no Navi account, so create a
+LINE-only one (uid `line_<line-user-id>`, no email, free tier) and link it in
+one step. The friend adds the bot, sends any message, and forwards you the ID
+it replies with:
+
+```bash
+cd backend
+LINE_CHANNEL_ACCESS_TOKEN=$(gcloud secrets versions access latest --secret=line-channel-access-token) \
+  uv run python scripts/link_line.py --create <line-user-id>   # display name read from LINE
+uv run python scripts/link_line.py --create <line-user-id> 阿明  # or give one explicitly
+```
+
+Change their tier or daily limit in the admin console, or with
+`scripts/set_tier.py line_<line-user-id> <tier>`.
 
 **Local development** — leave `LINE_TASKS_QUEUE` and `LINE_CHANNEL_ACCESS_TOKEN`
 empty and set `LINE_CHANNEL_SECRET` to any value. Events are then handled
