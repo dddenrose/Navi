@@ -17,11 +17,16 @@ class Settings(BaseSettings):
     google_application_credentials: str = ""
 
     # Gemini LLM — 依 tier 分層控制成本：
-    # 付費層用 Flash（US$0.30/$2.50 每 1M tokens），免費層用最便宜的 Flash-Lite
-    # （US$0.10/$0.40）。意圖分類沿用同一 tier 模型。
-    # 註：Gemini 3 家族目前本專案無存取權（preview 需 allowlist），待開放後再升級付費層。
-    gemini_model_name: str = "gemini-2.5-flash"  # pro/unlimited/admin 層
-    gemini_model_name_free: str = "gemini-2.5-flash-lite"  # free 層
+    # 付費層用 3.8 Flash（US$0.75/$3.75 每 1M tokens，2027-01-01 起翻倍），免費層用
+    # 3.5 Flash-Lite（US$0.30/$2.50，預設 minimal thinking）。意圖分類沿用同一 tier 模型。
+    # Gemini 2.5 全系列 2026-10-20 在 Vertex AI 退場；Gemini 3 的 PayGo 只開在 global/us/eu
+    # 端點，所以 ChatVertexAI 必須明確給 location（vertexai.init 預設的 us-central1 會 404）。
+    gemini_model_name: str = "gemini-3.8-flash"  # pro/unlimited/admin 層
+    gemini_model_name_free: str = "gemini-3.5-flash-lite"  # free 層
+    gemini_location: str = "global"
+    # 付費層每次呼叫的 thinking 上限。3.8 Flash 預設 MEDIUM，一句話問題實測就燒 ~380 tokens，
+    # ReAct 多步工具呼叫會放大延遲；SDK 2.1.x 沒有 thinking_level，用 budget 封頂近似 LOW。
+    gemini_thinking_budget: int = 1024
 
     # Embedding
     embedding_model_name: str = "text-embedding-004"
@@ -40,9 +45,9 @@ class Settings(BaseSettings):
 
     # Screener — shared-secret token for Cloud Scheduler /api/screener/run
     screener_runner_token: str = ""
-    # Screener Stage 3 LLM — 解讀層是「翻譯」而非深度推理，用最便宜的 Flash-Lite 即可。
-    # 實測 Pro 每檔約 US$0.03（76% 是 thinking tokens），Flash-Lite US$0.10/$0.40 每 1M tokens。
-    screener_llm_model: str = "gemini-2.5-flash-lite"
+    # Screener Stage 3 LLM — 解讀層是「翻譯」而非深度推理，用 Flash-Lite 即可。
+    # 實測 Pro 每檔約 US$0.03（76% 是 thinking tokens）；3.5 Flash-Lite 預設不思考。
+    screener_llm_model: str = "gemini-3.5-flash-lite"
     # Screener email (optional)
     sendgrid_api_key: str = ""
     email_from_address: str = "notify@navi-stock.app"

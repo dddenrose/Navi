@@ -9,6 +9,15 @@
 
 ## [Unreleased]
 
+### Changed（2026-10-10 Gemini 2.5 退場前換模型）
+
+- **LLM 全面換到 Gemini 3**：Vertex AI 上的 Gemini 2.5 Flash／Flash-Lite／Pro 於 2026-10-20 退場，之後呼叫會 404。付費層改 `gemini-3.8-flash`（US$0.75/$3.75 每 1M tokens，2027-01-01 起翻倍），免費層與 screener Stage 3 改 `gemini-3.5-flash-lite`（US$0.30/$2.50，預設 minimal thinking）。近 30 天實際用量約 170 次呼叫、月費約 US$0.25，換模型後仍在 US$0.5 以下。
+  - **端點改 `global`**（新增 `GEMINI_LOCATION`）：Gemini 3 的 PayGo 只開在 `global`／`us`／`eu`，`vertexai.init` 預設的 us-central1 會 404；embedding（text-embedding-004，2027-04-01 才退場）仍走 us-central1。
+  - **付費層 thinking 封頂 1024 tokens／次**（新增 `GEMINI_THINKING_BUDGET`）：3.8 Flash 預設 MEDIUM thinking，一句話問題實測燒約 380 個 reasoning tokens，多步工具呼叫會放大延遲；SDK 2.1.x 沒有 Gemini 3 的 `thinking_level`，用 `thinking_budget` 封頂近似 LOW。免費層的 Flash-Lite 不設。
+  - 本機熱機實測：3.5 Flash-Lite 技術面 4.8 秒、八工具綜合分析 8.2 秒；3.8 Flash 分別 9.9 秒、13.2 秒。原本 2.5 Flash 在線上熱機約 20–30 秒。
+  - LLM 意圖分類 fallback：Gemini 3 會把「沒有 ticker」輸出成字串 `"null"`，現在視為無 ticker，避免帶著 `"null"` 進 prefetch 模式。
+  - screener Stage 3 只把因子結果翻成文字，不在回測／evidence 範圍內，不需重跑。
+
 ### Changed（2026-10-10 LINE 開放給親友）
 
 - **加好友就能用**：第一次互動（加好友或傳訊息）時自動建立 LINE 專用帳號並綁定（`services/line/accounts.py`）。uid 為 `line_<LINE user ID>`，沒有 email、無法登入網頁，預設 free 層，顯示名稱取自 LINE profile；Firebase Auth 也建一筆，管理後台改 tier 時才能同步 custom claims。綁定用 `create()`，同一人的兩個事件同時建帳號、或腳本同時綁定時不會互蓋。

@@ -58,6 +58,7 @@ def _build_llm(model_name: str | None = None) -> ChatVertexAI:
         model_name=model_name or settings.screener_llm_model,
         temperature=0.2,
         project=settings.google_cloud_project,
+        location=settings.gemini_location,
     )
 
 
