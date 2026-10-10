@@ -9,6 +9,12 @@
 
 ## [Unreleased]
 
+### Fixed（2026-10-10 冷啟動）
+
+- **每次冷啟動都在重編一萬多個 Python 檔**：線上 image 的 site-packages 有 11,053 個 `.py`、0 個 `.pyc`。uv 預設不編 bytecode，`.dockerignore` 又排除了 `.pyc`，而執行期的 `appuser` 寫不進 root 擁有的 site-packages，所以每個新實例都從原始碼重編、編完也存不下來。LINE 上閒置後的第一題因此要等 36–43 秒容器才開始處理。
+  - builder 設 `UV_COMPILE_BYTECODE=1`，runtime 對 `/app` 跑 `compileall`。同一台 1 vCPU 機器上對照：`import main` 22.6 秒 → 7.3 秒（各跑 3 次，誤差 < 0.2 秒）。image 從 853 MB 變 1.06 GB。
+  - 函式內延遲 import 的模組（yfinance、Cloud Tasks、firebase auth 等）原本在第一題才編，同樣受惠；這部分沒有單獨量測。
+
 ### Changed（2026-10-10 Gemini 2.5 退場前換模型）
 
 - **LLM 全面換到 Gemini 3**：Vertex AI 上的 Gemini 2.5 Flash／Flash-Lite／Pro 於 2026-10-20 退場，之後呼叫會 404。付費層改 `gemini-3.8-flash`（US$0.75/$3.75 每 1M tokens，2027-01-01 起翻倍），免費層與 screener Stage 3 改 `gemini-3.5-flash-lite`（US$0.30/$2.50，預設 minimal thinking）。近 30 天實際用量約 170 次呼叫、月費約 US$0.25，換模型後仍在 US$0.5 以下。
