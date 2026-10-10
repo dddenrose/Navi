@@ -12,7 +12,7 @@ Usage examples:
 
   # Stage 3 小量驗證：全市場取 3 檔 + Flash model + 不寫 Firestore
   uv run python scripts/run_screener_local.py --total 3 \
-      --model gemini-2.5-flash --no-persist --tickers 2330.TW,2317.TW,2454.TW
+      --model gemini-3.1-flash-lite --no-persist --tickers 2330.TW,2317.TW,2454.TW
 """
 
 from __future__ import annotations
@@ -33,7 +33,11 @@ def main() -> None:
     parser.add_argument("--frequency", choices=["daily", "weekly"], default="weekly")
     parser.add_argument("--total", type=int, default=10, help="全市場取前 N 檔送 Stage 3")
     parser.add_argument("--max-per-industry", type=int, default=2, help="單一產業上限")
-    parser.add_argument("--model", default=None, help="覆寫 LLM model 名稱（如 gemini-2.5-flash）")
+    parser.add_argument(
+        "--model",
+        default=None,
+        help="覆寫 LLM model 名稱（如 gemini-3.1-flash-lite）",
+    )
     parser.add_argument("--skip-stage3", action="store_true", help="只跑 Stage 1+2 (零 LLM 成本)")
     parser.add_argument("--no-chips", action="store_true", help="關閉 Stage 2 chips 因子（TWSE bulk fetch）")
     parser.add_argument("--no-persist", action="store_true", help="不寫入 Firestore")

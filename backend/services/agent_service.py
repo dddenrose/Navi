@@ -535,11 +535,19 @@ _AGENT_FORMAT_INSTRUCTIONS: dict[str, str] = {
 
 
 def _build_llm(model_name: str | None = None) -> ChatVertexAI:
+    # vertexai.init 不給 location：embedding 仍走預設的 us-central1
     vertexai.init(project=settings.google_cloud_project)
+    name = model_name or settings.gemini_model_name
+    extra: dict[str, Any] = {}
+    # 只封頂付費層；Flash-Lite 預設 minimal thinking，不需要
+    if name == settings.gemini_model_name:
+        extra["thinking_budget"] = settings.gemini_thinking_budget
     return ChatVertexAI(
-        model_name=model_name or settings.gemini_model_name,
+        model_name=name,
         temperature=0.3,
         project=settings.google_cloud_project,
+        location=settings.gemini_location,
+        **extra,
     )
 
 
@@ -899,7 +907,11 @@ async def _llm_classify_intent(
             return "general", None, 0.0
         if result.intent not in _VALID_INTENTS:
             return "general", None, 0.0
-        return result.intent, result.ticker, result.confidence
+        # Gemini 3 會把「沒有 ticker」輸出成字串 "null"，不是 JSON null
+        ticker: str | None = (result.ticker or "").strip()
+        if not ticker or ticker.lower() in ("null", "none"):
+            ticker = None
+        return result.intent, ticker, result.confidence
     except Exception as e:
         logger.warning("LLM intent fallback failed: %s", e)
         return "general", None, 0.0

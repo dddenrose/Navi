@@ -536,7 +536,7 @@ uv run python scripts/run_screener_local.py --skip-stage3 \
 ```bash
 cd backend
 uv run python scripts/run_screener_local.py --top 1 \
-  --model gemini-2.5-flash \
+  --model gemini-3.1-flash-lite \
   --no-persist \
   --tickers 2330.TW,2317.TW,2454.TW
 ```
