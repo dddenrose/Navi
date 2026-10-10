@@ -97,3 +97,67 @@ def test_force_new_starts_a_conversation():
     link = {"conversation_id": "conv-1", "last_message_at": datetime.now(UTC)}
     conversation_id, _ = _resolve(link, force_new=True)
     assert conversation_id != "conv-1"
+
+
+# ── in-flight lock ──────────────────────────────────────────────────────────
+
+
+def _acquire(inflight_until) -> tuple[bool, MagicMock, MagicMock]:
+    """Run try_acquire_inflight against a link doc holding ``inflight_until``.
+
+    transactional() is unwrapped so the test exercises our read-then-write, not
+    the Firestore client's retry machinery.
+    """
+    db, link_ref = _mock_db()
+    link_ref.get.return_value.to_dict.return_value = {
+        "uid": "uid-1",
+        "inflight_until": inflight_until,
+    }
+    with (
+        patch("services.line.store.get_db", return_value=db),
+        patch("services.line.store.firestore_module.transactional", side_effect=lambda fn: fn),
+    ):
+        acquired = store.try_acquire_inflight("U1")
+    transaction = db.transaction.return_value
+    link_ref.get.assert_called_once_with(transaction=transaction)
+    return acquired, link_ref, transaction
+
+
+def test_acquire_when_nothing_in_flight():
+    acquired, link_ref, transaction = _acquire(None)
+    assert acquired is True
+    ref, update = transaction.update.call_args.args
+    assert ref is link_ref
+    lease = update["inflight_until"] - datetime.now(UTC)
+    assert timedelta(seconds=store.INFLIGHT_LEASE_SECONDS - 5) < lease
+    assert lease <= timedelta(seconds=store.INFLIGHT_LEASE_SECONDS)
+
+
+def test_acquire_after_lease_expired():
+    acquired, _, transaction = _acquire(datetime.now(UTC) - timedelta(seconds=1))
+    assert acquired is True
+    transaction.update.assert_called_once()
+
+
+def test_acquire_while_held_is_refused():
+    acquired, _, transaction = _acquire(datetime.now(UTC) + timedelta(seconds=60))
+    assert acquired is False
+    transaction.update.assert_not_called()
+
+
+def test_acquire_fails_open_on_firestore_error():
+    with patch("services.line.store.get_db", side_effect=RuntimeError("firestore down")):
+        assert store.try_acquire_inflight("U1") is True
+
+
+def test_release_clears_the_lock():
+    db, link_ref = _mock_db()
+    with patch("services.line.store.get_db", return_value=db):
+        store.release_inflight("U1")
+    db.collection.assert_called_with("line_links")
+    link_ref.update.assert_called_once_with({"inflight_until": None})
+
+
+def test_release_never_raises():
+    with patch("services.line.store.get_db", side_effect=RuntimeError("firestore down")):
+        store.release_inflight("U1")

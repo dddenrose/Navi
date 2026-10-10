@@ -72,8 +72,10 @@ def env():
     ):
         client.reply = AsyncMock(return_value=True)
         client.push = AsyncMock()
+        client.log_push_usage = AsyncMock()
         client.start_loading = AsyncMock()
         store.claim_event.return_value = True
+        store.try_acquire_inflight.return_value = True
         store.get_link.return_value = {"uid": "uid-1", "email": "me@example.com"}
         store.resolve_conversation.return_value = "conv-1"
         quota.check_and_consume.return_value = _quota()
@@ -113,7 +115,8 @@ async def test_unlinked_user_gets_their_line_id_and_no_push(env):
 
     await handler.handle_event(_event())
 
-    assert LINE_USER_ID in _replied_texts(env)[0]
+    # ID 單獨一則，方便長按複製
+    assert _replied_texts(env) == [handler.NOT_LINKED_REPLY, LINE_USER_ID]
     env.client.push.assert_not_called()
     env.quota.check_and_consume.assert_not_called()
 
@@ -202,6 +205,9 @@ async def test_happy_path_runs_agent_and_replies_plain_text(env):
     ]
     env.client.reply.assert_awaited_once_with("reply-token", ["台積電 現價 1,050 元"])
     env.client.push.assert_not_called()
+    env.client.log_push_usage.assert_not_called()
+    env.store.try_acquire_inflight.assert_called_once_with(LINE_USER_ID)
+    env.store.release_inflight.assert_called_once_with(LINE_USER_ID)
 
     log = env.quota.write_usage_log.call_args.kwargs
     assert log["endpoint"] == "/api/line/webhook"
@@ -226,6 +232,61 @@ async def test_expired_reply_token_falls_back_to_push(env):
         await handler.handle_event(_event())
 
     env.client.push.assert_awaited_once_with(LINE_USER_ID, ["答案"])
+    env.client.log_push_usage.assert_awaited_once()
+
+
+# ── one question at a time per user ─────────────────────────────────────────
+
+
+async def test_second_question_while_busy_is_told_to_wait(env):
+    env.store.try_acquire_inflight.return_value = False
+    env.client.reply.return_value = False  # reply token 已失效也不改用 push
+    calls: list = []
+
+    with patch.object(handler, "run_agent", _fake_agent("不該被呼叫", calls=calls)):
+        await handler.handle_event(_event())
+
+    assert calls == []
+    assert _replied_texts(env) == [handler.BUSY_REPLY]
+    env.client.push.assert_not_called()
+    env.client.start_loading.assert_not_called()
+    env.quota.check_and_consume.assert_not_called()
+    env.store.release_inflight.assert_not_called()  # 鎖是第一題的，不能放
+
+
+@pytest.mark.parametrize(
+    "setup",
+    [
+        pytest.param(
+            lambda env: setattr(env.quota.check_and_consume, "return_value", _quota(False)),
+            id="quota-blocked",
+        ),
+        pytest.param(
+            lambda env: setattr(
+                env.limiter.check, "side_effect", HTTPException(status_code=429, detail="")
+            ),
+            id="rate-limited",
+        ),
+    ],
+)
+async def test_lock_released_on_early_return(env, setup):
+    setup(env)
+    with patch.object(handler, "run_agent", _fake_agent("答案")):
+        await handler.handle_event(_event())
+    env.store.release_inflight.assert_called_once_with(LINE_USER_ID)
+
+
+async def test_lock_released_when_agent_fails(env):
+    with patch.object(handler, "run_agent", _fake_agent(error=RuntimeError("vertex down"))):
+        await handler.handle_event(_event())
+    env.store.release_inflight.assert_called_once_with(LINE_USER_ID)
+    assert _replied_texts(env) == [handler.ERROR_REPLY]
+
+
+async def test_commands_do_not_take_the_lock(env):
+    await handler.handle_event(_event("新對話"))
+    await handler.handle_event(_event(type="follow"))
+    env.store.try_acquire_inflight.assert_not_called()
 
 
 async def test_agent_exception_sends_error_reply(env):

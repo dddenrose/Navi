@@ -3,6 +3,7 @@
 import base64
 import hashlib
 import hmac
+import logging
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -100,3 +101,97 @@ async def test_start_loading_never_raises(mock_settings, mock_post):
     mock_settings.line_channel_access_token = "token-abc"
     mock_post.side_effect = requests.ConnectionError("boom")
     await client.start_loading("U123")
+
+
+# ── log_push_usage ──────────────────────────────────────────────────────────
+
+
+def _json_response(payload: dict, status_code: int = 200) -> MagicMock:
+    response = _response(status_code)
+    response.json.return_value = payload
+    return response
+
+
+def _quota_api(quota: dict, consumption: dict):
+    def _get(url, **kwargs):
+        if url.endswith("/message/quota"):
+            return _json_response(quota)
+        if url.endswith("/message/quota/consumption"):
+            return _json_response(consumption)
+        raise AssertionError(f"unexpected GET {url}")
+
+    return _get
+
+
+def _usage_record(caplog) -> logging.LogRecord:
+    return next(r for r in caplog.records if "LINE push usage this month" in r.getMessage())
+
+
+@pytest.mark.parametrize(
+    ("quota", "used", "expected_text", "expected_level"),
+    [
+        ({"type": "limited", "value": 200}, 12, "12/200", logging.INFO),
+        ({"type": "limited", "value": 200}, 160, "160/200", logging.WARNING),
+        ({"type": "none"}, 5, "5/unlimited", logging.INFO),
+    ],
+)
+@patch("services.line.client.requests.get")
+@patch("services.line.client.settings")
+async def test_push_usage_is_logged(
+    mock_settings, mock_get, caplog, quota, used, expected_text, expected_level
+):
+    mock_settings.line_channel_access_token = "token-abc"
+    mock_get.side_effect = _quota_api(quota, {"totalUsage": used})
+
+    with caplog.at_level(logging.INFO, logger="services.line.client"):
+        await client.log_push_usage()
+
+    record = _usage_record(caplog)
+    assert expected_text in record.getMessage()
+    assert record.levelno == expected_level
+    assert mock_get.call_args.kwargs["headers"] == {"Authorization": "Bearer token-abc"}
+
+
+@patch("services.line.client.requests.get")
+@patch("services.line.client.settings")
+async def test_push_usage_lookup_never_raises(mock_settings, mock_get):
+    mock_settings.line_channel_access_token = "token-abc"
+    mock_get.side_effect = requests.ConnectionError("boom")
+    await client.log_push_usage()
+
+
+@patch("services.line.client.requests.get")
+@patch("services.line.client.settings")
+async def test_push_usage_skipped_in_dry_run(mock_settings, mock_get):
+    mock_settings.line_channel_access_token = ""
+    await client.log_push_usage()
+    mock_get.assert_not_called()
+
+
+# ── get_display_name ────────────────────────────────────────────────────────
+
+
+@patch("services.line.client.requests.get")
+@patch("services.line.client.settings")
+def test_display_name_from_profile(mock_settings, mock_get):
+    mock_settings.line_channel_access_token = "token-abc"
+    mock_get.return_value = _json_response({"userId": "U123", "displayName": "阿明"})
+
+    assert client.get_display_name("U123") == "阿明"
+    assert mock_get.call_args.args[0] == "https://api.line.me/v2/bot/profile/U123"
+
+
+@patch("services.line.client.requests.get")
+@patch("services.line.client.settings")
+def test_display_name_empty_when_profile_unavailable(mock_settings, mock_get):
+    mock_settings.line_channel_access_token = "token-abc"
+    mock_get.return_value = _json_response({"message": "Not found"}, status_code=404)
+    assert client.get_display_name("U123") == ""
+
+
+@patch("services.line.client.requests.get")
+@patch("services.line.client.settings")
+def test_display_name_empty_in_dry_run(mock_settings, mock_get):
+    mock_settings.line_channel_access_token = ""
+    assert client.get_display_name("U123") == ""
+    mock_get.assert_not_called()

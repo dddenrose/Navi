@@ -23,8 +23,11 @@ WELCOME_REPLY = (
     "直接輸入問題就可以開始，例如「台積電現在的技術面如何？」\n"
     "輸入「新對話」可以重新開始。"
 )
-NOT_LINKED_REPLY = "Navi 的 LINE 功能尚未開放。\n\n你的 LINE ID：{line_user_id}"
+NOT_LINKED_REPLY = (
+    "嗨，我是 Navi 🧚 目前採邀請制。\n請把下一則訊息的 ID 傳給邀請你的人，開通後就能直接提問。"
+)
 TEXT_ONLY_REPLY = "目前只支援文字訊息，請直接輸入你的問題。"
+BUSY_REPLY = "上一題還在處理中，請等回覆後再問下一題。"
 NEW_CONVERSATION_REPLY = "已開始新對話，請輸入你的問題。"
 RATE_LIMITED_REPLY = "訊息太頻繁了，請稍等一分鐘再試。"
 QUOTA_EXCEEDED_REPLY = "今日訊息額度已用完，明日 00:00（台北時間）重置。"
@@ -40,6 +43,7 @@ async def _send(
         return
     if allow_push:
         await client.push(line_user_id, texts)
+        await client.log_push_usage()
 
 
 async def _run_agent_text(question: str, conversation_id: str, uid: str, model_name: str) -> str:
@@ -57,7 +61,19 @@ async def _run_agent_text(question: str, conversation_id: str, uid: str, model_n
     return "".join(parts)
 
 
-async def _answer_question(
+async def _answer_question(question: str, reply_token: str, line_user_id: str, link: dict) -> None:
+    """同一人同時只處理一題：第二題直接請他等，不排隊、不計額度."""
+    if not await asyncio.to_thread(store.try_acquire_inflight, line_user_id):
+        # 這則提醒不值得花 push 則數
+        await _send(reply_token, line_user_id, [BUSY_REPLY], allow_push=False)
+        return
+    try:
+        await _answer_question_locked(question, reply_token, line_user_id, link)
+    finally:
+        await asyncio.to_thread(store.release_inflight, line_user_id)
+
+
+async def _answer_question_locked(
     question: str, reply_token: str, line_user_id: str, link: dict
 ) -> None:
     uid = link["uid"]
@@ -87,9 +103,7 @@ async def _answer_question(
     )
     if not quota.allowed:
         message = (
-            ACCOUNT_SUSPENDED_REPLY
-            if quota.reason == "account_suspended"
-            else QUOTA_EXCEEDED_REPLY
+            ACCOUNT_SUSPENDED_REPLY if quota.reason == "account_suspended" else QUOTA_EXCEEDED_REPLY
         )
         await _send(reply_token, line_user_id, [message])
         return
@@ -137,12 +151,10 @@ async def handle_event(event: dict) -> None:
         reply_token = event.get("replyToken", "")
         link = await asyncio.to_thread(store.get_link, line_user_id)
         if not link or not link.get("uid"):
-            # 未綁定的人只用免費的 reply，不為陌生人花 push 則數
+            # 未綁定的人只用免費的 reply，不為陌生人花 push 則數。
+            # ID 單獨一則，手機上長按就能整則複製。
             await _send(
-                reply_token,
-                line_user_id,
-                [NOT_LINKED_REPLY.format(line_user_id=line_user_id)],
-                allow_push=False,
+                reply_token, line_user_id, [NOT_LINKED_REPLY, line_user_id], allow_push=False
             )
             return
     except Exception:

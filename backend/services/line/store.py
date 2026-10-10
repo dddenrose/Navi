@@ -1,4 +1,4 @@
-"""LINE 相關的 Firestore 存取 — 事件去重、帳號綁定、對話延續."""
+"""LINE 相關的 Firestore 存取 — 事件去重、帳號綁定、對話延續、每人一題的鎖."""
 
 import logging
 from datetime import UTC, datetime, timedelta
@@ -15,6 +15,9 @@ LINKS_COLLECTION = "line_links"
 EVENTS_COLLECTION = "line_events"
 EVENT_TTL_DAYS = 7
 SESSION_IDLE_HOURS = 6  # 閒置超過這個時間就開新對話
+# 鎖的租約：不短於 Cloud Tasks 的 dispatch deadline（300 秒），處理中不會提早失效；
+# 行程中途當掉、沒走到 release 時，最多卡這麼久就自動解開。
+INFLIGHT_LEASE_SECONDS = 300
 
 
 def claim_event(event_id: str) -> bool:
@@ -74,3 +77,42 @@ def resolve_conversation(line_user_id: str, link: dict, *, force_new: bool = Fal
         {"conversation_id": conversation_id, "last_message_at": now}
     )
     return conversation_id
+
+
+def _claim_inflight(transaction, link_ref) -> bool:
+    snapshot = link_ref.get(transaction=transaction)
+    inflight_until = (snapshot.to_dict() or {}).get("inflight_until")
+    now = datetime.now(UTC)
+    if isinstance(inflight_until, datetime) and inflight_until > now:
+        return False
+    transaction.update(
+        link_ref, {"inflight_until": now + timedelta(seconds=INFLIGHT_LEASE_SECONDS)}
+    )
+    return True
+
+
+def try_acquire_inflight(line_user_id: str) -> bool:
+    """Mark that this LINE user has a question in progress; False if one already is.
+
+    對話記錄是讀後寫、沒有 transaction：同一人兩題同時跑，後寫的會蓋掉先寫的。
+    佔位記在 line_links 文件的 inflight_until，在 transaction 內讀後寫，
+    兩題同時搶時只有一題拿得到。Firestore 出錯時 fail-open（寧可冒互蓋的風險，
+    也不要吞掉問題）。
+    """
+    try:
+        db = get_db()
+        link_ref = db.collection(LINKS_COLLECTION).document(line_user_id)
+        return firestore_module.transactional(_claim_inflight)(db.transaction(), link_ref)
+    except Exception:
+        logger.exception("Failed to acquire LINE in-flight lock for %s, fail-open", line_user_id)
+        return True
+
+
+def release_inflight(line_user_id: str) -> None:
+    """Clear the in-progress mark. Never raises: the lease expires on its own anyway."""
+    try:
+        get_db().collection(LINKS_COLLECTION).document(line_user_id).update(
+            {"inflight_until": None}
+        )
+    except Exception:
+        logger.warning("Failed to release LINE in-flight lock for %s", line_user_id, exc_info=True)
