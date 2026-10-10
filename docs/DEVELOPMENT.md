@@ -171,9 +171,15 @@ in a second request made by Cloud Tasks. Answers are sent with the free reply
 API; if the reply token has expired (about a minute) they fall back to push,
 which counts against the LINE plan's monthly message quota.
 
-Only LINE users present in the `line_links` Firestore collection are served;
-everyone else gets an invite-only notice followed by their LINE user ID as a
-separate message, so it can be copied with a long press.
+Anyone who adds the bot can use it. On a user's first event the bot creates a
+LINE-only account for them (`services/line/accounts.py`): a Firebase Auth user
+`line_<line-user-id>` with no email or password, so it cannot sign in to the web
+app, and a `users` document on the free tier named after their LINE display
+name. A LINE Official Account cannot block users who have added it as a friend,
+so access is controlled in the admin console instead: suspend a user to stop
+them (they get "account suspended" and the agent never runs), or change their
+tier or daily limit. LINE user IDs are fixed per provider, so removing and
+re-adding the bot keeps the same account, suspension included.
 
 Each user has at most one question in progress. A second question that arrives
 while the first is running gets "still working on your last question" instead
@@ -198,28 +204,16 @@ Every push logs the month's push usage against the plan limit
    redelivery**; turn off auto-reply messages in LINE Official Account Manager.
    The service cold-starts in roughly 30 seconds, so hit `/health` first or the
    console's **Verify** button will time out.
-4. Message the bot, copy the LINE user ID from its reply, and link it:
+4. Optional: to have LINE use an existing web account instead, e.g. your own,
+   so quota, portfolio and conversations are shared, link it:
    `cd backend && uv run python scripts/link_line.py <email-or-uid> <line-user-id>`.
-
-**Adding friends who only use LINE** — they have no Navi account, so create a
-LINE-only one (uid `line_<line-user-id>`, no email, free tier) and link it in
-one step. The friend adds the bot, sends any message, and forwards you the ID
-it replies with:
-
-```bash
-cd backend
-LINE_CHANNEL_ACCESS_TOKEN=$(gcloud secrets versions access latest --secret=line-channel-access-token) \
-  uv run python scripts/link_line.py --create <line-user-id>   # display name read from LINE
-uv run python scripts/link_line.py --create <line-user-id> 阿明  # or give one explicitly
-```
-
-Change their tier or daily limit in the admin console, or with
-`scripts/set_tier.py line_<line-user-id> <tier>`.
+   Your LINE user ID is under **Your user ID** in the Developers Console.
 
 **Local development** — leave `LINE_TASKS_QUEUE` and `LINE_CHANNEL_ACCESS_TOKEN`
 empty and set `LINE_CHANNEL_SECRET` to any value. Events are then handled
 in-process and outgoing messages are only logged, so a signed request is enough
-to exercise the whole flow:
+to exercise the whole flow. Note that the first request from a new LINE user ID
+creates a LINE-only account in whichever Firebase project you are pointed at:
 
 ```bash
 BODY='{"events":[{"type":"message","webhookEventId":"TEST0001","replyToken":"dummy","source":{"type":"user","userId":"U00000000000000000000000000000001"},"message":{"type":"text","id":"1","text":"台積電現在多少"}}]}'

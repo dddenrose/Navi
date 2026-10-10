@@ -161,3 +161,28 @@ def test_release_clears_the_lock():
 def test_release_never_raises():
     with patch("services.line.store.get_db", side_effect=RuntimeError("firestore down")):
         store.release_inflight("U1")
+
+
+# ── create_link_if_absent ───────────────────────────────────────────────────
+
+
+def test_create_link_when_absent():
+    db, doc_ref = _mock_db()
+    with patch("services.line.store.get_db", return_value=db):
+        link = store.create_link_if_absent("U1", "line_U1")
+    payload = doc_ref.create.call_args.args[0]
+    assert payload["uid"] == "line_U1"
+    assert payload["conversation_id"] is None
+    assert link["uid"] == "line_U1"
+    assert isinstance(link["linked_at"], datetime)
+    doc_ref.set.assert_not_called()
+
+
+def test_existing_link_is_kept_and_returned():
+    db, doc_ref = _mock_db()
+    doc_ref.create.side_effect = AlreadyExists("exists")
+    doc_ref.get.return_value.to_dict.return_value = {"uid": "web-uid", "email": "me@example.com"}
+    with patch("services.line.store.get_db", return_value=db):
+        link = store.create_link_if_absent("U1", "line_U1")
+    assert link == {"uid": "web-uid", "email": "me@example.com"}
+    doc_ref.set.assert_not_called()

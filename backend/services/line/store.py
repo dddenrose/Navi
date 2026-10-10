@@ -45,18 +45,35 @@ def get_link(line_user_id: str) -> dict | None:
     return snapshot.to_dict() if snapshot.exists else None
 
 
+def _new_link(uid: str, email: str) -> dict:
+    return {
+        "uid": uid,
+        "email": email,
+        "linked_at": firestore_module.SERVER_TIMESTAMP,
+        # 換綁到別的 uid 時，舊對話不屬於新 uid，必須重開
+        "conversation_id": None,
+        "last_message_at": None,
+    }
+
+
 def set_link(line_user_id: str, uid: str, email: str = "") -> None:
     """Link a LINE user to a Firebase uid (overwrites any previous link)."""
-    get_db().collection(LINKS_COLLECTION).document(line_user_id).set(
-        {
-            "uid": uid,
-            "email": email,
-            "linked_at": firestore_module.SERVER_TIMESTAMP,
-            # 換綁到別的 uid 時，舊對話不屬於新 uid，必須重開
-            "conversation_id": None,
-            "last_message_at": None,
-        }
-    )
+    get_db().collection(LINKS_COLLECTION).document(line_user_id).set(_new_link(uid, email))
+
+
+def create_link_if_absent(line_user_id: str, uid: str, email: str = "") -> dict:
+    """Link a LINE user unless they already are; return the link now in place.
+
+    用 create() 而不是 set()：同一人的兩個事件同時建帳號，或剛好有人用腳本綁到網頁帳號時，
+    不會互相覆蓋。
+    """
+    link_ref = get_db().collection(LINKS_COLLECTION).document(line_user_id)
+    link = _new_link(uid, email)
+    try:
+        link_ref.create(link)
+    except Conflict:
+        return link_ref.get().to_dict() or {}
+    return {**link, "linked_at": datetime.now(UTC)}
 
 
 def resolve_conversation(line_user_id: str, link: dict, *, force_new: bool = False) -> str:
