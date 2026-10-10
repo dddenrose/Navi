@@ -11,9 +11,10 @@
 
 ### Changed（2026-10-10 LINE 開放給親友）
 
-- **只用 LINE 的親友也能用**：`backend/scripts/link_line.py --create <LINE user ID> [顯示名稱]` 會建一個 LINE 專用帳號再綁定。uid 為 `line_<LINE user ID>`，沒有 email、無法登入網頁，預設 free 層；顯示名稱未給時從 LINE profile 抓。Firebase Auth 也建一筆，`set_tier.py` 等既有腳本照常可用。重跑會沿用既有帳號，已綁定的 LINE ID 不會被改。
+- **加好友就能用**：第一次互動（加好友或傳訊息）時自動建立 LINE 專用帳號並綁定（`services/line/accounts.py`）。uid 為 `line_<LINE user ID>`，沒有 email、無法登入網頁，預設 free 層，顯示名稱取自 LINE profile；Firebase Auth 也建一筆，管理後台改 tier 時才能同步 custom claims。綁定用 `create()`，同一人的兩個事件同時建帳號、或腳本同時綁定時不會互蓋。
+  - **存取由管理後台控制**：官方帳號無法封鎖已加好友的人（LINE 平台限制），所以入口不設關卡。停用帳號後只會收到「帳號已被停用」，不會跑 Agent；LINE user ID 在同一 provider 下固定，刪好友再加回來仍是同一個帳號，停用狀態保留。
+  - `backend/scripts/link_line.py` 只剩「把 LINE 改綁到既有網頁帳號」一種用法。
 - **同一人同時只處理一題，不同人不再排隊**：取代原本「整個 queue 序列化」的做法。`line_links/{LINE userId}.inflight_until` 在 Firestore transaction 內佔位，租約 5 分鐘，行程中途當掉也會自動解開；第二題直接以免費 reply 回「上一題還在處理中」，不計額度、不用 push。queue 並行數由 1 提高到 3。
-- **未綁定的人改收到邀請制說明**，LINE ID 單獨一則，手機上長按即可複製。
 - **push 用量量測**：reply token 過期改走 push 後，查 LINE 當月用量寫進 log（`LINE push usage this month: 用量/上限`），達上限 80% 時升為 WARNING。冷啟動約 38 秒加 Agent 約 20 秒，閒置後的第一題可能超過 reply token 約一分鐘的期限；先看實際用量，再決定要不要處理冷啟動。
 
 ### Fixed（2026-10-09 logging）

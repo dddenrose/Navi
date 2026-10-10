@@ -69,6 +69,7 @@ def env():
         patch.object(handler, "store") as store,
         patch.object(handler, "quota_service") as quota,
         patch.object(handler, "chat_limiter") as limiter,
+        patch.object(handler, "accounts") as accounts,
     ):
         client.reply = AsyncMock(return_value=True)
         client.push = AsyncMock()
@@ -79,7 +80,10 @@ def env():
         store.get_link.return_value = {"uid": "uid-1", "email": "me@example.com"}
         store.resolve_conversation.return_value = "conv-1"
         quota.check_and_consume.return_value = _quota()
-        yield SimpleNamespace(client=client, store=store, quota=quota, limiter=limiter)
+        accounts.link_new_user.return_value = {"uid": "line_" + LINE_USER_ID, "email": ""}
+        yield SimpleNamespace(
+            client=client, store=store, quota=quota, limiter=limiter, accounts=accounts
+        )
 
 
 def _replied_texts(env) -> list[str]:
@@ -109,15 +113,41 @@ async def test_unsupported_event_type_is_ignored(env):
     env.client.reply.assert_not_called()
 
 
-async def test_unlinked_user_gets_their_line_id_and_no_push(env):
+async def test_new_user_is_given_an_account_and_answered(env):
     env.store.get_link.return_value = None
-    env.client.reply.return_value = False  # reply token 已失效
+    calls: list = []
+
+    with patch.object(handler, "run_agent", _fake_agent("答案", calls=calls)):
+        await handler.handle_event(_event())
+
+    env.accounts.link_new_user.assert_called_once_with(LINE_USER_ID)
+    env.quota.check_and_consume.assert_called_once_with("line_" + LINE_USER_ID, email="")
+    assert calls[0]["user_id"] == "line_" + LINE_USER_ID
+    assert _replied_texts(env) == ["答案"]
+
+
+async def test_new_user_adding_the_bot_gets_welcome(env):
+    env.store.get_link.return_value = None
+
+    await handler.handle_event(_event(type="follow"))
+
+    env.accounts.link_new_user.assert_called_once_with(LINE_USER_ID)
+    assert _replied_texts(env) == [handler.WELCOME_REPLY]
+
+
+async def test_linked_user_is_not_given_a_new_account(env):
+    with patch.object(handler, "run_agent", _fake_agent("答案")):
+        await handler.handle_event(_event())
+    env.accounts.link_new_user.assert_not_called()
+
+
+async def test_account_creation_failure_sends_error_reply(env):
+    env.store.get_link.return_value = None
+    env.accounts.link_new_user.side_effect = RuntimeError("firebase down")
 
     await handler.handle_event(_event())
 
-    # ID 單獨一則，方便長按複製
-    assert _replied_texts(env) == [handler.NOT_LINKED_REPLY, LINE_USER_ID]
-    env.client.push.assert_not_called()
+    assert _replied_texts(env) == [handler.ERROR_REPLY]
     env.quota.check_and_consume.assert_not_called()
 
 

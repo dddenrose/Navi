@@ -9,7 +9,7 @@ from api.rate_limit import chat_limiter
 from config import model_for_tier
 from services import quota_service
 from services.agent_service import run_agent
-from services.line import client, store
+from services.line import accounts, client, store
 from services.line.formatting import format_for_line
 
 logger = logging.getLogger(__name__)
@@ -22,9 +22,6 @@ WELCOME_REPLY = (
     "嗨，我是 Navi 🧚\n"
     "直接輸入問題就可以開始，例如「台積電現在的技術面如何？」\n"
     "輸入「新對話」可以重新開始。"
-)
-NOT_LINKED_REPLY = (
-    "嗨，我是 Navi 🧚 目前採邀請制。\n請把下一則訊息的 ID 傳給邀請你的人，開通後就能直接提問。"
 )
 TEXT_ONLY_REPLY = "目前只支援文字訊息，請直接輸入你的問題。"
 BUSY_REPLY = "上一題還在處理中，請等回覆後再問下一題。"
@@ -150,18 +147,14 @@ async def handle_event(event: dict) -> None:
 
         reply_token = event.get("replyToken", "")
         link = await asyncio.to_thread(store.get_link, line_user_id)
-        if not link or not link.get("uid"):
-            # 未綁定的人只用免費的 reply，不為陌生人花 push 則數。
-            # ID 單獨一則，手機上長按就能整則複製。
-            await _send(
-                reply_token, line_user_id, [NOT_LINKED_REPLY, line_user_id], allow_push=False
-            )
-            return
     except Exception:
         logger.exception("LINE event %s failed before reaching the user flow", event_id)
         return
 
     try:
+        if not link or not link.get("uid"):
+            # 第一次找 bot 的人自動開通；停用與額度在管理後台控制
+            link = await asyncio.to_thread(accounts.link_new_user, line_user_id)
         await _handle_linked_user(event, reply_token, line_user_id, link)
     except Exception:
         logger.exception("LINE event %s failed", event_id)
