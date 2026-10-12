@@ -603,7 +603,6 @@ export interface UsageLog {
   tier: string;
   endpoint: string;
   conversation_id: string | null;
-  question_preview: string;
   blocked: boolean;
   block_reason: string | null;
   timestamp: string;

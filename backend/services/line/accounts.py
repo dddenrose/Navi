@@ -10,11 +10,9 @@ import firebase_admin.auth as firebase_auth
 
 from services import quota_service
 from services.firestore_client import _init_firebase
-from services.line import client, store
+from services.line import LINE_ONLY_UID_PREFIX, client, store
 
 logger = logging.getLogger(__name__)
-
-LINE_ONLY_UID_PREFIX = "line_"
 
 
 def line_only_uid(line_user_id: str) -> str:

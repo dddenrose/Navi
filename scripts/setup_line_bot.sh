@@ -5,7 +5,7 @@
 #   1. 啟用 Cloud Tasks API，建立 queue（webhook 先回 200，再由 task 另起 request 跑 agent）
 #   2. 授予 Cloud Run runtime SA 在該 queue 建立 task 的權限
 #   3. 把 LINE 的 Channel secret / Channel access token 存進 Secret Manager
-#   4. 為去重用的 line_events collection 設定 Firestore TTL
+#   4. 設定 Firestore TTL：去重用的 line_events、LINE-only 帳號的 conversations
 #
 # Prereq:
 #   1. gcloud auth login & gcloud config set project navi-stock-analyzer
@@ -66,10 +66,19 @@ gcloud tasks queues add-iam-policy-binding "${QUEUE_NAME}" \
   --role="roles/cloudtasks.enqueuer" \
   --quiet >/dev/null
 
-# ── 3. Firestore TTL：line_events 文件到期自動清除 ──────────────────────────
+# ── 3. Firestore TTL：line_events 與 LINE-only 帳號的對話到期自動清除 ───────
 echo "▶ 設定 Firestore TTL: line_events.expires_at"
 gcloud firestore fields ttls update expires_at \
   --collection-group=line_events \
+  --enable-ttl \
+  --project="${PROJECT_ID}" \
+  --async \
+  --quiet >/dev/null
+
+# 只有 LINE-only 帳號的對話有 expires_at，網頁帳號的對話沒有這個欄位，不受影響
+echo "▶ 設定 Firestore TTL: conversations.expires_at"
+gcloud firestore fields ttls update expires_at \
+  --collection-group=conversations \
   --enable-ttl \
   --project="${PROJECT_ID}" \
   --async \

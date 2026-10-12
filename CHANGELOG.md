@@ -9,6 +9,13 @@
 
 ## [Unreleased]
 
+### Changed（2026-10-12 LINE 隱私）
+
+- **管理後台看不到使用者問了什麼**：用量紀錄（`usage_logs`）不再存問題前 100 字，網頁與 LINE 都一樣；後台「使用紀錄」頁拿掉「問題」欄。舊紀錄裡的 `question_preview` 不刪，但後台 API 不再回傳，90 天後隨 TTL 消失。
+- **LINE-only 帳號的對話 30 天後自動刪除**：每次寫入對話都把 `expires_at` 設為 30 天後，由 Firestore TTL 清除（`setup_line_bot.sh` 新增 `conversations.expires_at` 的 TTL）。網頁帳號的對話照舊永久保存，包含綁了網頁帳號的 LINE 對話。
+- **LINE 新指令「刪除紀錄」（`/delete`）**：LINE-only 帳號刪除自己的全部對話；綁網頁帳號的只刪目前這段 LINE 對話，網頁紀錄不動。和提問共用同一把 in-flight 鎖，題目還在跑時會請使用者稍候，避免跑完寫入時把對話建回來。
+- **歡迎訊息加上隱私說明**：後台不顯示內容、30 天自動刪除、可隨時刪除、問題交給 Gemini 回答。已經加過好友的人不會再收到歡迎訊息。
+
 ### Fixed（2026-10-10 冷啟動）
 
 - **每次冷啟動都在重編一萬多個 Python 檔**：線上 image 的 site-packages 有 11,053 個 `.py`、0 個 `.pyc`。uv 預設不編 bytecode，`.dockerignore` 又排除了 `.pyc`，而執行期的 `appuser` 寫不進 root 擁有的 site-packages，所以每個新實例都從原始碼重編、編完也存不下來。LINE 上閒置後的第一題因此要等 36–43 秒容器才開始處理。

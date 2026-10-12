@@ -125,3 +125,25 @@ def test_update_quota_config_negative_daily_limit():
         quota_service.update_quota_config(
             "free", {"daily_limit": -2}, actor_uid="admin"
         )
+
+
+# ── usage log 不含問題內容 ───────────────────────────────────────────────────
+
+
+def test_write_usage_log_does_not_store_question_content():
+    with patch.object(quota_service, "get_db") as mock_db:
+        quota_service.write_usage_log("uid-1", "a@b.c", "free", "/api/chat", conversation_id="c1")
+    doc_ref = mock_db.return_value.collection.return_value.document.return_value
+    doc = doc_ref.set.call_args.args[0]
+    assert doc["conversation_id"] == "c1"
+    assert "question_preview" not in doc
+
+
+def test_list_usage_logs_hides_previews_from_old_logs():
+    old_log = MagicMock(id="log-1")
+    old_log.to_dict.return_value = {"uid": "uid-1", "question_preview": "我的持股", "timestamp": None}
+    with patch.object(quota_service, "get_db") as mock_db:
+        query = mock_db.return_value.collection.return_value
+        query.order_by.return_value.limit.return_value.get.return_value = [old_log]
+        logs = quota_service.list_usage_logs()
+    assert logs == [{"id": "log-1", "uid": "uid-1", "timestamp": None}]

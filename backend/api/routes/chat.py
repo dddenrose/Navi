@@ -90,7 +90,6 @@ async def chat(
             tier=quota.tier,
             endpoint="/api/chat",
             conversation_id=request.conversation_id,
-            question=request.message,
             blocked=True,
             block_reason=quota.reason,
         )
@@ -119,7 +118,6 @@ async def chat(
         tier=quota.tier,
         endpoint="/api/chat",
         conversation_id=request.conversation_id,
-        question=request.message,
         blocked=False,
     )
 

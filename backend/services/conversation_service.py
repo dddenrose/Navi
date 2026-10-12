@@ -2,11 +2,13 @@
 
 import logging
 import uuid
+from datetime import UTC, datetime, timedelta
 
 from google.cloud import firestore as firestore_module
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 
 from services.firestore_client import get_db
+from services.line import LINE_ONLY_RETENTION_DAYS, is_line_only_uid
 
 logger = logging.getLogger(__name__)
 
@@ -114,6 +116,9 @@ def save_history(
         "updated_at": firestore_module.SERVER_TIMESTAMP,
         "turn_count": len(messages) // 2,
     }
+    # LINE-only 帳號的對話每次寫入都把到期日往後推，由 Firestore TTL 刪除；網頁帳號的永久保存
+    if user_id and is_line_only_uid(user_id):
+        update_data["expires_at"] = datetime.now(UTC) + timedelta(days=LINE_ONLY_RETENTION_DAYS)
 
     # Set user_id and title on first save (conversation creation)
     if not doc.exists:
@@ -154,6 +159,24 @@ def get_conversation_messages(conversation_id: str, user_id: str = "") -> list[d
     if user_id and data.get("user_id", "") != user_id:
         return None
     return data.get("messages", [])
+
+
+def delete_all_conversations(user_id: str) -> int:
+    """Delete every conversation owned by user_id; return how many were deleted."""
+    if not user_id:
+        # 空 uid 會比對到所有沒有 user_id 的對話
+        raise ValueError("user_id is required")
+    db = get_db()
+    refs = [
+        doc.reference
+        for doc in db.collection(COLLECTION).where("user_id", "==", user_id).select([]).stream()
+    ]
+    for start in range(0, len(refs), 500):  # Firestore 一個 batch 最多 500 筆
+        batch = db.batch()
+        for ref in refs[start : start + 500]:
+            batch.delete(ref)
+        batch.commit()
+    return len(refs)
 
 
 def list_conversations(user_id: str, limit: int = 20) -> list[dict]:
