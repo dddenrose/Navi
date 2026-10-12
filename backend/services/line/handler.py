@@ -7,9 +7,9 @@ from fastapi import HTTPException
 
 from api.rate_limit import chat_limiter
 from config import model_for_tier
-from services import quota_service
+from services import conversation_service, quota_service
 from services.agent_service import run_agent
-from services.line import accounts, client, store
+from services.line import LINE_ONLY_RETENTION_DAYS, accounts, client, is_line_only_uid, store
 from services.line.formatting import format_for_line
 
 logger = logging.getLogger(__name__)
@@ -17,15 +17,25 @@ logger = logging.getLogger(__name__)
 ENDPOINT = "/api/line/webhook"
 AGENT_TIMEOUT_SECONDS = 240
 NEW_CONVERSATION_COMMANDS = {"/new", "新對話"}
+DELETE_HISTORY_COMMANDS = {"/delete", "刪除紀錄"}
 
 WELCOME_REPLY = (
     "嗨，我是 Navi 🧚\n"
     "直接輸入問題就可以開始，例如「台積電現在的技術面如何？」\n"
-    "輸入「新對話」可以重新開始。"
+    "輸入「新對話」可以重新開始。\n"
+    "\n"
+    "🔒 隱私\n"
+    "・你問的內容不會顯示在管理後台\n"
+    f"・每段對話在最後一次使用 {LINE_ONLY_RETENTION_DAYS} 天後自動刪除\n"
+    "・輸入「刪除紀錄」可以立即刪除\n"
+    "・問題會交給 Google 的 Gemini 模型回答"
 )
 TEXT_ONLY_REPLY = "目前只支援文字訊息，請直接輸入你的問題。"
 BUSY_REPLY = "上一題還在處理中，請等回覆後再問下一題。"
+DELETE_BUSY_REPLY = "上一題還在處理中，請等回覆後再刪除紀錄。"
 NEW_CONVERSATION_REPLY = "已開始新對話，請輸入你的問題。"
+DELETE_ALL_REPLY = "已刪除你的全部對話紀錄（{count} 段）。"
+DELETE_CURRENT_REPLY = "已刪除目前這段對話。網頁版的其他對話請到網頁上刪除。"
 RATE_LIMITED_REPLY = "訊息太頻繁了，請稍等一分鐘再試。"
 QUOTA_EXCEEDED_REPLY = "今日訊息額度已用完，明日 00:00（台北時間）重置。"
 ACCOUNT_SUSPENDED_REPLY = "帳號已被停用，請聯絡管理員。"
@@ -94,7 +104,6 @@ async def _answer_question_locked(
         tier=quota.tier,
         endpoint=ENDPOINT,
         conversation_id=conversation_id,
-        question=question,
         blocked=not quota.allowed,
         block_reason=None if quota.allowed else quota.reason,
     )
@@ -107,6 +116,29 @@ async def _answer_question_locked(
 
     answer = await _run_agent_text(question, conversation_id, uid, model_for_tier(quota.tier))
     await _send(reply_token, line_user_id, format_for_line(answer) or [ERROR_REPLY])
+
+
+async def _delete_history(reply_token: str, line_user_id: str, link: dict) -> None:
+    """LINE-only 帳號刪掉全部對話；綁網頁帳號的只刪目前這段，網頁上的紀錄不動."""
+    # 和提問共用同一把鎖：題目跑到一半就刪，跑完寫入紀錄時會把對話建回來
+    if not await asyncio.to_thread(store.try_acquire_inflight, line_user_id):
+        await _send(reply_token, line_user_id, [DELETE_BUSY_REPLY], allow_push=False)
+        return
+    try:
+        uid = link["uid"]
+        if is_line_only_uid(uid):
+            count = await asyncio.to_thread(conversation_service.delete_all_conversations, uid)
+            message = DELETE_ALL_REPLY.format(count=count)
+        else:
+            if link.get("conversation_id"):
+                await asyncio.to_thread(
+                    conversation_service.delete_conversation, link["conversation_id"], user_id=uid
+                )
+            message = DELETE_CURRENT_REPLY
+        await asyncio.to_thread(store.resolve_conversation, line_user_id, link, force_new=True)
+    finally:
+        await asyncio.to_thread(store.release_inflight, line_user_id)
+    await _send(reply_token, line_user_id, [message])
 
 
 async def _handle_linked_user(event: dict, reply_token: str, line_user_id: str, link: dict) -> None:
@@ -125,6 +157,9 @@ async def _handle_linked_user(event: dict, reply_token: str, line_user_id: str, 
     if text.lower() in NEW_CONVERSATION_COMMANDS:
         await asyncio.to_thread(store.resolve_conversation, line_user_id, link, force_new=True)
         await _send(reply_token, line_user_id, [NEW_CONVERSATION_REPLY])
+        return
+    if text.lower() in DELETE_HISTORY_COMMANDS:
+        await _delete_history(reply_token, line_user_id, link)
         return
 
     await _answer_question(text, reply_token, line_user_id, link)

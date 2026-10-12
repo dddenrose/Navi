@@ -70,6 +70,7 @@ def env():
         patch.object(handler, "quota_service") as quota,
         patch.object(handler, "chat_limiter") as limiter,
         patch.object(handler, "accounts") as accounts,
+        patch.object(handler, "conversation_service") as conversations,
     ):
         client.reply = AsyncMock(return_value=True)
         client.push = AsyncMock()
@@ -81,8 +82,14 @@ def env():
         store.resolve_conversation.return_value = "conv-1"
         quota.check_and_consume.return_value = _quota()
         accounts.link_new_user.return_value = {"uid": "line_" + LINE_USER_ID, "email": ""}
+        conversations.delete_all_conversations.return_value = 3
         yield SimpleNamespace(
-            client=client, store=store, quota=quota, limiter=limiter, accounts=accounts
+            client=client,
+            store=store,
+            quota=quota,
+            limiter=limiter,
+            accounts=accounts,
+            conversations=conversations,
         )
 
 
@@ -175,6 +182,57 @@ async def test_new_conversation_command_resets_without_using_quota(env, command)
     env.client.start_loading.assert_not_called()
 
 
+# ── deleting history ────────────────────────────────────────────────────────
+
+
+@pytest.mark.parametrize("command", ["/delete", "/DELETE", " 刪除紀錄 "])
+async def test_line_only_user_deletes_all_conversations(env, command):
+    link = {"uid": "line_" + LINE_USER_ID, "email": "", "conversation_id": "conv-1"}
+    env.store.get_link.return_value = link
+
+    await handler.handle_event(_event(command))
+
+    env.conversations.delete_all_conversations.assert_called_once_with("line_" + LINE_USER_ID)
+    env.conversations.delete_conversation.assert_not_called()
+    env.store.resolve_conversation.assert_called_once_with(LINE_USER_ID, link, force_new=True)
+    assert _replied_texts(env) == [handler.DELETE_ALL_REPLY.format(count=3)]
+    env.store.release_inflight.assert_called_once_with(LINE_USER_ID)
+    env.quota.check_and_consume.assert_not_called()
+
+
+async def test_web_linked_user_deletes_only_the_current_line_conversation(env):
+    link = {"uid": "web-uid", "email": "me@example.com", "conversation_id": "conv-1"}
+    env.store.get_link.return_value = link
+
+    await handler.handle_event(_event("刪除紀錄"))
+
+    env.conversations.delete_conversation.assert_called_once_with("conv-1", user_id="web-uid")
+    env.conversations.delete_all_conversations.assert_not_called()
+    env.store.resolve_conversation.assert_called_once_with(LINE_USER_ID, link, force_new=True)
+    assert _replied_texts(env) == [handler.DELETE_CURRENT_REPLY]
+
+
+async def test_delete_waits_for_the_question_in_progress(env):
+    env.store.get_link.return_value = {"uid": "line_" + LINE_USER_ID, "email": ""}
+    env.store.try_acquire_inflight.return_value = False
+
+    await handler.handle_event(_event("刪除紀錄"))
+
+    env.conversations.delete_all_conversations.assert_not_called()
+    assert _replied_texts(env) == [handler.DELETE_BUSY_REPLY]
+    env.store.release_inflight.assert_not_called()  # 鎖是那一題的，不能放
+
+
+async def test_lock_released_when_delete_fails(env):
+    env.store.get_link.return_value = {"uid": "line_" + LINE_USER_ID, "email": ""}
+    env.conversations.delete_all_conversations.side_effect = RuntimeError("firestore down")
+
+    await handler.handle_event(_event("刪除紀錄"))
+
+    env.store.release_inflight.assert_called_once_with(LINE_USER_ID)
+    assert _replied_texts(env) == [handler.ERROR_REPLY]
+
+
 # ── limits ──────────────────────────────────────────────────────────────────
 
 
@@ -243,6 +301,7 @@ async def test_happy_path_runs_agent_and_replies_plain_text(env):
     assert log["endpoint"] == "/api/line/webhook"
     assert log["conversation_id"] == "conv-1"
     assert log["blocked"] is False
+    assert "台積電現在多少" not in str(log)  # 管理後台看得到這份紀錄，不能有問題內容
 
 
 async def test_free_tier_uses_the_free_model(env):

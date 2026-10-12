@@ -65,7 +65,6 @@ export default function AdminLogs() {
               <th className="px-4 py-3">時間</th>
               <th className="px-4 py-3">Email / UID</th>
               <th className="px-4 py-3">Tier</th>
-              <th className="px-4 py-3">問題</th>
               <th className="px-4 py-3">狀態</th>
             </tr>
           </thead>
@@ -74,7 +73,7 @@ export default function AdminLogs() {
               <tr>
                 <td
                   className="px-4 py-6 text-center text-ink-faint"
-                  colSpan={5}
+                  colSpan={4}
                 >
                   載入中…
                 </td>
@@ -83,7 +82,7 @@ export default function AdminLogs() {
               <tr>
                 <td
                   className="px-4 py-6 text-center text-ink-faint"
-                  colSpan={5}
+                  colSpan={4}
                 >
                   無資料
                 </td>
@@ -103,9 +102,6 @@ export default function AdminLogs() {
                     </div>
                   </td>
                   <td className="px-4 py-3 text-ink">{l.tier}</td>
-                  <td className="px-4 py-3 text-ink-secondary max-w-md truncate">
-                    {l.question_preview || "—"}
-                  </td>
                   <td className="px-4 py-3">
                     {l.blocked ? (
                       <span className="text-rose-400">

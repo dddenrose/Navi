@@ -193,17 +193,36 @@ users run in parallel, up to the queue's 3 concurrent dispatches.
 Every push logs the month's push usage against the plan limit
 (`LINE push usage this month`), at WARNING once it reaches 80%.
 
+**Privacy** — friends and family use the bot, so what they ask is kept out of
+the admin's view and is not kept longer than it is useful:
+
+- Usage logs (`usage_logs`, shown in the admin console) record who, when and
+  whether the request was blocked, never the question. Older logs that still
+  carry `question_preview` are not returned by the admin API.
+- Conversations of LINE-only accounts get `expires_at` = last write + 30 days
+  (`LINE_ONLY_RETENTION_DAYS`) and are removed by Firestore TTL. Conversations
+  of web accounts, including your own LINE chats when LINE is linked to your web
+  account, never expire.
+- Sending `刪除紀錄` (or `/delete`) deletes every conversation of a LINE-only
+  account; for a LINE user linked to a web account it deletes only the current
+  LINE conversation, leaving the web history alone.
+- The welcome message tells new friends all of the above. Turn off **Chat** in
+  LINE Official Account Manager, or every incoming message is also readable
+  there.
+
 **One-time setup**
 
 1. Create a LINE Official Account, enable the Messaging API, and copy the
    channel secret and a long-lived channel access token from the LINE Developers
    Console.
 2. `./scripts/setup_line_bot.sh --secrets` — enables Cloud Tasks, creates the
-   `line-events` queue, stores both secrets in Secret Manager, and prints the
-   `gcloud run services update --update-secrets=...` command to run once.
+   `line-events` queue, sets the Firestore TTL policies, stores both secrets in
+   Secret Manager, and prints the `gcloud run services update --update-secrets=...`
+   command to run once.
 3. Deploy the backend, then set the webhook URL to
    `<Cloud Run URL>/api/line/webhook`. Turn on **Use webhook** and **Webhook
-   redelivery**; turn off auto-reply messages in LINE Official Account Manager.
+   redelivery**; turn off auto-reply messages and **Chat** in LINE Official
+   Account Manager.
    The service cold-starts in roughly 30 seconds, so hit `/health` first or the
    console's **Verify** button will time out.
 4. Optional: to have LINE use an existing web account instead, e.g. your own,

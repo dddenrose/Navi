@@ -469,11 +469,13 @@ def write_usage_log(
     endpoint: str,
     *,
     conversation_id: str | None = None,
-    question: str | None = None,
     blocked: bool = False,
     block_reason: str | None = None,
 ) -> None:
-    """Best-effort audit log. Never raises."""
+    """Best-effort audit log. Never raises.
+
+    刻意不記問題內容：管理後台看得到這份紀錄，使用者問了什麼不該出現在這裡。
+    """
     try:
         db = get_db()
         log_id = uuid.uuid4().hex
@@ -483,7 +485,6 @@ def write_usage_log(
             "tier": tier,
             "endpoint": endpoint,
             "conversation_id": conversation_id,
-            "question_preview": (question or "")[:100],
             "blocked": blocked,
             "block_reason": block_reason,
             "timestamp": firestore_module.SERVER_TIMESTAMP,
@@ -559,6 +560,8 @@ def list_usage_logs(
         elif ts is not None:
             data["timestamp"] = str(ts)
         data.pop("expires_at", None)
+        # 舊版紀錄存了問題前 100 字，到期（USAGE_TTL_DAYS）前一律不回傳
+        data.pop("question_preview", None)
         out.append(data)
     return out
 
