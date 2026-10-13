@@ -1,18 +1,22 @@
 """Portfolio Tool — Agent 可查詢使用者投資組合."""
 
+from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import tool
 
 from services.portfolio_service import get_portfolio_summary
+from tools.runtime import user_id_from
 
 
 @tool
-def get_portfolio(user_id: str) -> str:
+def get_portfolio(config: RunnableConfig) -> str:
     """查詢使用者的投資組合，包含持股明細、即時市值、損益。
     當使用者問到「我的持股」「投資組合表現」「我的股票賺了多少」時使用此工具。
-
-    Args:
-        user_id: 使用者 ID。必須使用系統上下文中提供的 user_id 值，不可自行填入。
+    查的一定是目前對話的使用者本人，不需要任何參數。
     """
+    # uid 由後端注入，不讓模型指定：否則一句話就能查別人的持股
+    user_id = user_id_from(config)
+    if not user_id:
+        return "⚠️ 未提供 user_id，跳過投資組合查詢"
     try:
         summary = get_portfolio_summary(user_id)
     except Exception as e:

@@ -12,6 +12,7 @@ from tools.macro import (
 from tools.margin_trading import get_margin_trading
 from tools.news_search import search_financial_news
 from tools.portfolio_tool import get_portfolio
+from tools.screener_tool import get_screener_picks
 from tools.stock_price import get_stock_price
 from tools.technical_analysis import analyze_technicals
 
@@ -28,6 +29,7 @@ ALL_TOOLS = [
     get_market_overview,
     get_market_institutional_flows,
     get_market_futures_positions,
+    get_screener_picks,
 ]
 
 __all__ = [
@@ -44,4 +46,5 @@ __all__ = [
     "get_market_overview",
     "get_market_institutional_flows",
     "get_market_futures_positions",
+    "get_screener_picks",
 ]

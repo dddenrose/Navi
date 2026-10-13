@@ -117,7 +117,7 @@ navi/
 │   │   ├── screener/            #   Screener pipeline (rules, scoring, valuation, AI, email, tracking)
 │   │   ├── line/                #   LINE chat channel (client, event handler, formatting, task enqueue)
 │   │   └── firestore_client.py  #   Firestore client singleton
-│   ├── tools/                   # LangChain / LangGraph Agent Tools (12 tools)
+│   ├── tools/                   # LangChain / LangGraph Agent Tools (13 tools)
 │   ├── models/                  # Pydantic Schemas (schemas.py)
 │   ├── knowledge_base/          # Curated knowledge docs (24 Markdown files, 8 categories)
 │   │   ├── technical_analysis/  #   RSI, MACD, KD, MA, BB, volume, candlesticks, S/R

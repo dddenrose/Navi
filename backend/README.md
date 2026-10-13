@@ -126,7 +126,7 @@ backend/
 │   ├── backtest_service.py        # 回測引擎（僅供 agent tool 呼叫，無 REST 路由）
 │   ├── embedding_service.py       # text-embedding-004 + Vector Search
 │   └── firestore_client.py        # Firestore singleton
-├── tools/                         # LangChain / LangGraph Agent Tools（9 種）
+├── tools/                         # LangChain / LangGraph Agent Tools（13 種）
 │   ├── stock_price.py             # get_stock_price
 │   ├── technical_analysis.py      # analyze_technicals
 │   ├── fundamental_analysis.py    # analyze_fundamentals
@@ -134,8 +134,11 @@ backend/
 │   ├── institutional.py           # get_institutional
 │   ├── margin_trading.py          # get_margin_trading
 │   ├── news_search.py             # search_financial_news
-│   ├── portfolio_tool.py          # get_portfolio
-│   └── backtest_tool.py           # run_strategy_backtest
+│   ├── portfolio_tool.py          # get_portfolio（uid 由後端注入）
+│   ├── backtest_tool.py           # run_strategy_backtest
+│   ├── macro.py                   # get_market_overview / institutional_flows / futures_positions
+│   ├── screener_tool.py           # get_screener_picks（智能選股報告）
+│   └── runtime.py                 # 後端注入工具的 per-request 值（uid）
 ├── models/
 │   └── schemas.py                 # Pydantic models
 ├── data_pipeline/
