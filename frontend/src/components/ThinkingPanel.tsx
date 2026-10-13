@@ -15,6 +15,7 @@ const TOOL_DISPLAY_NAMES: Record<string, string> = {
   get_market_overview: "大盤指數",
   get_market_institutional_flows: "法人資金流向",
   get_market_futures_positions: "期貨未平倉",
+  get_screener_picks: "智能選股",
 };
 
 const INTENT_DISPLAY_NAMES: Record<string, string> = {
@@ -29,6 +30,7 @@ const INTENT_DISPLAY_NAMES: Record<string, string> = {
   backtest: "策略回測",
   knowledge: "知識查詢",
   macro_overview: "大盤總覽",
+  screener: "智能選股",
   general: "一般對話",
 };
 

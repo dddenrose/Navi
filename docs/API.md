@@ -110,3 +110,4 @@ answering a `/api/chat` request.
 | `get_market_overview`            | Whole-market index quote (intraday / latest close)                                       |
 | `get_market_institutional_flows` | Aggregate market-wide institutional buy/sell (foreign / trust / dealer)                  |
 | `get_market_futures_positions`   | TAIFEX index-futures open-interest positioning (TXF / MXF / TMF)                         |
+| `get_screener_picks`             | Latest Navi screener picks (momentum / value) with reasons and evidence disclosure       |

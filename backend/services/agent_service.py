@@ -26,7 +26,10 @@ from services.conversation_service import (
     load_history,
     save_history,
 )
+from services.screener.evidence import get_evidence
 from tools import ALL_TOOLS
+from tools.runtime import user_config
+from tools.screener_tool import PROFILE_LABELS
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +56,7 @@ class ToolEndEvent(TypedDict):
 
 class Citation(TypedDict, total=False):
     id: int
-    type: str  # tool category: price | technicals | fundamentals | institutional | margin | news | knowledge | backtest | portfolio
+    type: str  # tool category: price | technicals | fundamentals | institutional | margin | news | knowledge | backtest | portfolio | screener
     source: str  # human-readable provider name
     title: str | None  # news article title / knowledge doc title
     url: str | None  # link to source (news article, TWSE page, etc.)
@@ -133,6 +136,11 @@ _TOOL_SOURCE_INFO: dict[str, dict[str, str | None]] = {
         "type": "futures",
         "source": "臺灣期貨交易所（三大法人區分各期貨契約類別交易情形）",
         "url": "https://www.taifex.com.tw/cht/3/futContractsDate",
+    },
+    "get_screener_picks": {
+        "type": "screener",
+        "source": "Navi 智能選股報告（每週日盤後規則篩選）",
+        "url": None,
     },
 }
 
@@ -255,6 +263,8 @@ def _build_citations(tool_calls: list[dict]) -> list[Citation]:
             note = "Forward EPS / Forward PE 為第三方分析師共識估值，非 Navi 預測"
         elif name == "run_strategy_backtest":
             note = "回測績效不代表未來表現"
+        elif name == "get_screener_picks":
+            note = "選股名單為規則篩選結果，不是買進建議"
 
         _add(
             Citation(
@@ -281,7 +291,8 @@ def _build_citations(tool_calls: list[dict]) -> list[Citation]:
 AGENT_SYSTEM_PROMPT = """\
 <role>
 你是 Navi 🧚，一位來自薩爾達傳說的 AI 投資分析精靈。
-你專精於股票技術分析、基本面分析和投資理論。
+你專精於台股個股分析（技術面、基本面、籌碼面）、大盤動向與投資理論，
+也能查詢使用者的投資組合與 Navi 智能選股報告。
 回答使用繁體中文，保持專業但友善。
 </role>
 
@@ -303,6 +314,10 @@ AGENT_SYSTEM_PROMPT = """\
    讓使用者根據自己的週期與風險承受度取用。
 8. **個人化原則**：若訊息中包含「投資組合」資料或 get_portfolio 回傳顯示使用者
    已持有該檔或集中於同產業，必須以「你的部位狀況」段落進行集中度與加碼合理性提醒。
+9. **Navi 智能選股報告**：get_screener_picks 回傳的是系統依固定規則篩選的名單，不是你的推薦。
+   可以轉述名單與入選理由，但必須標明報告日期、原文照錄工具回傳的「🔎 策略證據」標題，
+   並說明這是規則篩選結果；不可延伸成「建議買進」或保證報酬。
+   工具回傳無權限、查無報告或錯誤時照實告知，不可自行列出任何名單。
 </core_rules>
 
 <prohibitions>
@@ -350,10 +365,11 @@ AGENT_SYSTEM_PROMPT = """\
 | 新聞 / 利多利空 | search_financial_news |
 | 回測 / 策略績效 | run_strategy_backtest（strategy: ma_cross/rsi/macd；period: 3mo/6mo/1y/2y）|
 | 投資理論 / 教學 / 名詞解釋 | search_knowledge |
-| 我的持股 / 投資組合 | get_portfolio（user_id 使用 <context> 區塊提供的值）|
+| 我的持股 / 投資組合 | get_portfolio |
 | 大盤現在多少 / 加權指數 / 櫃買 | get_market_overview（market="TWSE" 或 "TPEx"）|
 | 外資今天買賣超 / 三大法人總額 / 市場資金流向 | get_market_institutional_flows |
 | 台指期 / 外資多空單 / 期貨未平倉 | get_market_futures_positions（commodity="TXF" 預設）|
+| Navi 選股名單 / 某檔是否入選、為什麼入選 | get_screener_picks（只在使用者提到選股或名單時用）|
 
 預設呼叫原則：可平行呼叫的工具（同一檔股票的多個面向）應同時觸發，不要串行等待。
 
@@ -417,7 +433,7 @@ AGENT_SYSTEM_PROMPT = """\
   get_margin_trading(ticker="鴻海")
   search_financial_news(query="鴻海")
   search_knowledge(query="進場分析 目標價 估值 RSI 鈍化 三大法人解讀")
-  get_portfolio(user_id="<context 提供的值>")
+  get_portfolio()
   </tool_calls>
   <response>
 📌 現價位置：鴻海 178 元，位於 MA20（175）上方約 1.7%；
@@ -531,6 +547,13 @@ _AGENT_FORMAT_INSTRUCTIONS: dict[str, str] = {
     "price_query": (
         "📌 {股票} 即時報價\n• 現價、漲跌幅、成交量\n• 簡短技術位置描述（如在均線上方 / 下方）"
     ),
+    "screener": (
+        "📋 Navi 智能選股（策略名稱與報告日期）\n"
+        "• 問名單：依排名列出名稱、代號、產業、評等與一句入選重點\n"
+        "• 問單檔：入選理由、通過的規則、估值參考帶、風險提示、入選後表現\n"
+        "• 🔎 策略證據：原文照錄工具回傳的標題與主要警語\n"
+        "• 提醒這是規則篩選結果，不是買進建議"
+    ),
 }
 
 
@@ -555,6 +578,13 @@ def _build_llm(model_name: str | None = None) -> ChatVertexAI:
 
 # Regex patterns for intent classification (compiled once)
 _INTENT_PATTERNS: list[tuple[str, re.Pattern, float]] = [
+    # screener: Navi 智能選股報告。放最前面：「選股名單裡的帆宣技術面如何」也要走
+    # agent 模式，否則會被技術面 / 個股分析規則攔走，查不到名單
+    (
+        "screener",
+        re.compile(r"(選股|入選|選進|選出|被選|(動能|價值)(策略|股)?.{0,2}名單)"),
+        0.9,
+    ),
     # macro_overview: 大盤 / 外資總額 / 期貨多空（無個股 ticker）
     (
         "macro_overview",
@@ -814,8 +844,8 @@ def _classify_intent(question: str) -> tuple[str, str | None, float]:
     # Match intent patterns (first match wins — patterns ordered by specificity)
     for intent, pattern, confidence in _INTENT_PATTERNS:
         if pattern.search(q):
-            # macro_overview is market-wide; suppress any noisy ticker extraction
-            if intent in _NON_TICKER_PREFETCH_INTENTS:
+            # 大盤與選股名單不針對單一個股；suppress any noisy ticker extraction
+            if intent in _TICKERLESS_INTENTS:
                 return intent, None, confidence
             return intent, ticker, confidence
 
@@ -829,6 +859,7 @@ def _classify_intent(question: str) -> tuple[str, str | None, float]:
 # ── LLM structured-output fallback (for low-confidence regex results) ────────
 
 _VALID_INTENTS = (
+    "screener",
     "entry_analysis",
     "comprehensive_analysis",
     "technical_analysis",
@@ -847,6 +878,7 @@ class _IntentResult(BaseModel):
     """Structured output schema for LLM-based intent classification."""
 
     intent: Literal[
+        "screener",
         "entry_analysis",
         "comprehensive_analysis",
         "technical_analysis",
@@ -873,6 +905,7 @@ _LLM_CLASSIFY_PROMPT = """\
 - confidence：0.0 到 1.0 之間
 
 意圖定義：
+- screener：問 Navi 智能選股名單、哪些股票入選、某檔為什麼被選進來
 - entry_analysis：問「是否可以買、多少錢進場、值得買嗎、目標價」
 - comprehensive_analysis：全面分析某檔股票（未特指面向）
 - technical_analysis：只問技術面 / 走勢 / 均線 / RSI / KD / MACD / 支撐壓力
@@ -985,6 +1018,8 @@ _PREFETCH_INTENTS: dict[str, list[str]] = {
 
 # Macro intent 不需要 ticker，但仍走 prefetch 流程；這個集合用於 dispatch 判斷
 _NON_TICKER_PREFETCH_INTENTS: frozenset[str] = frozenset({"macro_overview"})
+# 分類時不抽 ticker 的意圖（「最新的選股名單」會被抽成 ticker「最新」）
+_TICKERLESS_INTENTS: frozenset[str] = _NON_TICKER_PREFETCH_INTENTS | {"screener"}
 
 # ── 預取模式回答格式 ─────────────────────────────────────────────────────────
 
@@ -1134,9 +1169,8 @@ async def _prefetch_tool_results(
                 inp = {"query": ticker} if ticker else {"query": "台股 大盤 外資"}
             elif name == "get_portfolio":
                 # 個人化：進場 / 綜合分析時並行查詢使用者持股，讓 LLM 能作集中度 / 加碼合理性判斷
-                if not user_id:
-                    return name, {}, "⚠️ 未提供 user_id，跳過投資組合查詢"
-                inp = {"user_id": user_id}
+                # uid 由 config 注入，不是工具參數
+                inp = {}
             elif name == "search_knowledge":
                 if ticker:
                     # 個股分析：引入「眉角」與台股實務解讀
@@ -1164,7 +1198,7 @@ async def _prefetch_tool_results(
                 inp = {"commodity": "TXF"}
             else:
                 inp = {"ticker": ticker} if ticker else {}
-            output = await asyncio.to_thread(tool_fn.invoke, inp)
+            output = await asyncio.to_thread(tool_fn.invoke, inp, user_config(user_id))
             return name, inp, str(output)
         except Exception as e:
             logger.warning("Prefetch tool %s failed: %s", name, e)
@@ -1197,6 +1231,28 @@ def _missing_disclaimer(full_output: str) -> str:
     return _DISCLAIMER_TEXT
 
 
+def _missing_screener_disclosure(full_output: str, tool_calls: list[dict]) -> str:
+    """選股策略的證據揭露同樣不能依賴 LLM 轉述。
+
+    工具輸出含某策略的證據標題、但回答裡沒有原文時，回傳要補上的揭露文字。
+    """
+    outputs = "\n".join(
+        str(call.get("output") or "")
+        for call in tool_calls
+        if call.get("name") == "get_screener_picks"
+    )
+    if not outputs or not full_output:
+        return ""
+    lines = []
+    for profile, label in PROFILE_LABELS.items():
+        headline = get_evidence(profile)["headline"]
+        if headline in outputs and headline not in full_output:
+            lines.append(f"・{label}：{headline}")
+    if not lines:
+        return ""
+    return "\n\n🔎 策略證據\n" + "\n".join(lines)
+
+
 async def _run_prefetch_mode(
     question: str,
     intent: str,
@@ -1213,12 +1269,9 @@ async def _run_prefetch_mode(
         thinking_steps.append(dict(intent_event))
 
     for name in tool_names:
-        if name == "get_portfolio":
-            start_input: dict[str, Any] = {"user_id": user_id} if user_id else {}
-        elif ticker:
-            start_input = {"ticker": ticker}
-        else:
-            start_input = {}
+        start_input: dict[str, Any] = (
+            {"ticker": ticker} if ticker and name != "get_portfolio" else {}
+        )
         start_event = ToolStartEvent(type="tool_start", tool=name, input=start_input)
         thinking_steps.append(dict(start_event))
         yield start_event
@@ -1296,11 +1349,12 @@ async def _run_prefetch_mode(
 # ── LangGraph Agent Mode ─────────────────────────────────────────────────────
 
 
-def _build_agent_system_prompt(intent: str, user_id: str) -> str:
-    """Build system prompt with intent-specific format and user context.
+def _build_agent_system_prompt(intent: str) -> str:
+    """Build system prompt with the intent-specific format.
 
-    Appends XML-tagged <response_format> and <context> blocks to the base
-    prompt, matching the tag style used in AGENT_SYSTEM_PROMPT.
+    Appends an XML-tagged <response_format> block to the base prompt, matching
+    the tag style used in AGENT_SYSTEM_PROMPT. The user's uid is not in the
+    prompt: tools that need it get it from the run config.
     """
     parts = [AGENT_SYSTEM_PROMPT]
 
@@ -1312,15 +1366,6 @@ def _build_agent_system_prompt(intent: str, user_id: str) -> str:
             f"本次使用者意圖為 {intent}，請以此結構骨架組織回覆：\n\n"
             f"{fmt}\n"
             "</response_format>"
-        )
-
-    # Inject user context
-    if user_id:
-        parts.append(
-            "\n<context>\n"
-            f'目前使用者 user_id = "{user_id}"\n'
-            "呼叫 get_portfolio 時，user_id 參數請使用此值。\n"
-            "</context>"
         )
 
     return "\n".join(parts)
@@ -1335,7 +1380,8 @@ async def _run_agent_mode(
     intent_event: IntentEvent | None = None,
 ) -> AsyncGenerator[StreamChunk, None]:
     """LangGraph ReAct Agent 模式：自主決策工具呼叫。"""
-    system_prompt = _build_agent_system_prompt(intent, user_id)
+    system_prompt = _build_agent_system_prompt(intent)
+    run_config = user_config(user_id)
 
     thinking_steps: list[dict] = []
     if intent_event is not None:
@@ -1365,6 +1411,7 @@ async def _run_agent_mode(
 
         async for event in agent.astream_events(
             {"messages": input_messages},
+            config=run_config,
             version="v2",
         ):
             kind = event["event"]
@@ -1407,11 +1454,16 @@ async def _run_agent_mode(
                     yield content
 
         if not full_output:
-            result = await agent.ainvoke({"messages": input_messages})
+            result = await agent.ainvoke({"messages": input_messages}, config=run_config)
             last_msg = result["messages"][-1]
             if isinstance(last_msg, AIMessage) and last_msg.content:
                 full_output = last_msg.content
                 yield full_output
+
+        disclosure = _missing_screener_disclosure(full_output, list(tool_calls_by_run.values()))
+        if disclosure:
+            full_output += disclosure
+            yield disclosure
 
         disclaimer = _missing_disclaimer(full_output)
         if disclaimer:

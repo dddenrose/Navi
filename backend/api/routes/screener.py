@@ -36,6 +36,7 @@ from services.screener.picks_tracker import (
     rebuild_tracking_summary,
     update_all_tracking,
 )
+from services.screener.reports import find_latest_report, load_pick_docs
 
 logger = logging.getLogger(__name__)
 
@@ -150,11 +151,8 @@ def _doc_to_summary(doc: dict) -> ReportSummary:
 
 
 def _load_picks(report_id: str) -> dict[str, list[PickDoc]]:
-    db = get_db()
-    picks_coll = db.collection(REPORTS_COLLECTION).document(report_id).collection("picks")
     by_industry: dict[str, list[PickDoc]] = {}
-    for snap in picks_coll.stream():
-        data = snap.to_dict() or {}
+    for data in load_pick_docs(report_id):
         pick = PickDoc(**{k: v for k, v in data.items() if k in PickDoc.model_fields})
         by_industry.setdefault(pick.industry or "未分類", []).append(pick)
     # 排序
@@ -236,14 +234,7 @@ async def latest_report(
     frequency: str = Query("daily", pattern="^(daily|weekly)$"),
     _: dict = Depends(require_screener_access),
 ) -> ReportDetail:
-    db = get_db()
-    docs = [snap.to_dict() or {} for snap in db.collection(REPORTS_COLLECTION).stream()]
-    docs.sort(key=lambda d: d.get("report_id", ""), reverse=True)
-    target_doc: dict | None = None
-    for doc in docs:
-        if doc.get("profile") == profile and doc.get("frequency") == frequency:
-            target_doc = doc
-            break
+    target_doc = find_latest_report(profile, frequency)
     if target_doc is None:
         raise HTTPException(status_code=404, detail="No report found")
     return ReportDetail(
@@ -461,18 +452,10 @@ class NotifyResponse(BaseModel):
 )
 async def notify_subscribers(payload: NotifyRequest) -> NotifyResponse:
     """Render the latest matching report and email it to active subscribers."""
-    db = get_db()
     target_id = payload.report_id
     if not target_id:
-        docs = [snap.to_dict() or {} for snap in db.collection(REPORTS_COLLECTION).stream()]
-        docs.sort(key=lambda d: d.get("report_id", ""), reverse=True)
-        for doc in docs:
-            if (
-                doc.get("profile") == payload.profile
-                and doc.get("frequency") == payload.frequency
-            ):
-                target_id = doc.get("report_id")
-                break
+        latest = find_latest_report(payload.profile, payload.frequency)
+        target_id = latest.get("report_id") if latest else None
         if not target_id:
             raise HTTPException(status_code=404, detail="No matching report to notify.")
 

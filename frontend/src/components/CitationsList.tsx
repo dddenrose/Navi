@@ -12,6 +12,7 @@ const TYPE_LABELS: Record<string, string> = {
   knowledge: "知識庫",
   backtest: "回測",
   portfolio: "投資組合",
+  screener: "智能選股",
 };
 
 function getTypeLabel(t: string): string {
