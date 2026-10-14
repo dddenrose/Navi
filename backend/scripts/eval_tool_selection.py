@@ -12,10 +12,9 @@ Usage:
   # 指定模型（預設用 pro 層的 GEMINI_MODEL_NAME）
   uv run python scripts/eval_tool_selection.py --model gemini-3.5-flash-lite
 
-  # 公司網路會攔 global endpoint（aiplatform.googleapis.com）時，改走 us multi-region。
-  # SDK 會把 location="us" 拼成不存在的 us-aiplatform…，所以 hostname 要另外給。
-  GEMINI_LOCATION=us uv run python scripts/eval_tool_selection.py \
-      --endpoint aiplatform.us.rep.googleapis.com
+  # 公司網路會攔 global endpoint（aiplatform.googleapis.com）時，改走 us multi-region
+  GEMINI_LOCATION=us GEMINI_API_ENDPOINT=aiplatform.us.rep.googleapis.com \
+      uv run python scripts/eval_tool_selection.py
 
   模型名稱與 thinking budget 依 settings 判斷；本機 .env 若與線上不同，
   用 GEMINI_MODEL_NAME / GEMINI_MODEL_NAME_FREE 環境變數蓋過去。
@@ -25,7 +24,6 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import functools
 import inspect
 import json
 import sys
@@ -134,19 +132,13 @@ async def main() -> None:
     parser.add_argument("--model", default=settings.gemini_model_name)
     parser.add_argument("--runs", type=int, default=3)
     parser.add_argument("--out", type=Path, default=None)
-    parser.add_argument("--endpoint", default=None, help="Vertex API hostname override")
     args = parser.parse_args()
 
-    if args.endpoint:
-        # 只換連線位址，模型參數仍由 _build_llm 決定，跟線上一致
-        agent_service.ChatVertexAI = functools.partial(
-            agent_service.ChatVertexAI, api_endpoint=args.endpoint
-        )
     llm = agent_service._build_llm(args.model)
     bound = llm.bind_tools(ALL_TOOLS)
     print(
         f"model={args.model} location={settings.gemini_location} "
-        f"endpoint={args.endpoint or 'default'} tools={len(ALL_TOOLS)}"
+        f"endpoint={settings.gemini_api_endpoint or 'default'} tools={len(ALL_TOOLS)}"
     )
 
     results = []

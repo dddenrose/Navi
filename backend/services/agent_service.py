@@ -21,7 +21,7 @@ from langchain_google_vertexai import ChatVertexAI
 from langgraph.prebuilt import create_react_agent  # pyright: ignore[reportDeprecated]
 from pydantic import BaseModel, Field
 
-from config import settings
+from config import gemini_endpoint_kwargs, settings
 from services.conversation_service import (
     load_history,
     save_history,
@@ -569,7 +569,7 @@ def _build_llm(model_name: str | None = None) -> ChatVertexAI:
         model_name=name,
         temperature=0.3,
         project=settings.google_cloud_project,
-        location=settings.gemini_location,
+        **gemini_endpoint_kwargs(),
         **extra,
     )
 
