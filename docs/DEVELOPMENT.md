@@ -194,6 +194,36 @@ users run in parallel, up to the queue's 3 concurrent dispatches.
 Every push logs the month's push usage against the plan limit
 (`LINE push usage this month`), at WARNING once it reaches 80%.
 
+**Recording holdings** — LINE users can't open the web portfolio page, so in LINE
+the agent gets two extra tools (`tools/line_portfolio_tool.py`; the web chat
+doesn't have them):
+
+- `propose_trades` for trades the user says already happened ("今天買 1 張台積電
+  600"), recorded as buy/sell transactions with the same average-cost and fee
+  rules as the web page.
+- `propose_set_holdings` for a broker app screenshot, or "把台積電改成 3000 股、
+  均價 590": sets shares and average cost directly. Holdings not in the list are
+  left alone.
+
+Neither tool writes anything. They check the input (stock name → code, 張 → 股,
+selling more than held, future dates) in `services/portfolio_changes.py`, store
+the change on the user's `line_links` document (`pending_portfolio`, valid for
+10 minutes) and return a list for the user to check. The agent makes sure that
+list appears in the reply word for word, appending it if the model left it out.
+The user replies `確認` (or `/confirm`) to write it, or `取消` (`/cancel`) to drop
+it; the handler does the write itself, without the model and without using quota.
+Any other message drops the pending change. `確認` is only intercepted while a
+change is pending, so it still reaches the agent otherwise.
+
+Existing holdings are matched by stock code after normalizing both sides,
+because the web page stores tickers inconsistently (`0050`, `南亞科`, `2330.TW`).
+Deleting a holding is still web-only.
+
+**Images** — image messages are downloaded from the LINE content API and sent to
+the model with the question (intent `image`, always agent mode). They are not
+stored; the conversation history keeps `[圖片]` in their place. Other message
+types (stickers, video, files) still get "text and images only".
+
 **Privacy** — friends and family use the bot, so what they ask is kept out of
 the admin's view and is not kept longer than it is useful:
 
@@ -207,6 +237,7 @@ the admin's view and is not kept longer than it is useful:
 - Sending `刪除紀錄` (or `/delete`) deletes every conversation of a LINE-only
   account; for a LINE user linked to a web account it deletes only the current
   LINE conversation, leaving the web history alone.
+- Images are only passed to the model for that one answer and never stored.
 - The welcome message tells new friends all of the above. Turn off **Chat** in
   LINE Official Account Manager, or every incoming message is also readable
   there.

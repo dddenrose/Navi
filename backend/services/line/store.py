@@ -18,6 +18,9 @@ SESSION_IDLE_HOURS = 6  # 閒置超過這個時間就開新對話
 # 鎖的租約：不短於 Cloud Tasks 的 dispatch deadline（300 秒），處理中不會提早失效；
 # 行程中途當掉、沒走到 release 時，最多卡這麼久就自動解開。
 INFLIGHT_LEASE_SECONDS = 300
+# 待確認的持股變更存在 line_links 文件的這個欄位；超過時間沒確認就作廢
+PENDING_PORTFOLIO_FIELD = "pending_portfolio"
+PENDING_PORTFOLIO_MINUTES = 10
 
 
 def claim_event(event_id: str) -> bool:
@@ -133,3 +136,49 @@ def release_inflight(line_user_id: str) -> None:
         )
     except Exception:
         logger.warning("Failed to release LINE in-flight lock for %s", line_user_id, exc_info=True)
+
+
+def save_pending_portfolio(line_user_id: str, kind: str, items: list[dict]) -> None:
+    """Store a portfolio change waiting for the user's 確認 (replaces any earlier one)."""
+    now = datetime.now(UTC)
+    get_db().collection(LINKS_COLLECTION).document(line_user_id).update(
+        {
+            PENDING_PORTFOLIO_FIELD: {
+                "kind": kind,
+                "items": items,
+                "created_at": now,
+                "expires_at": now + timedelta(minutes=PENDING_PORTFOLIO_MINUTES),
+            }
+        }
+    )
+
+
+def _take_pending(transaction, link_ref) -> dict | None:
+    snapshot = link_ref.get(transaction=transaction)
+    pending = (snapshot.to_dict() or {}).get(PENDING_PORTFOLIO_FIELD)
+    if pending:
+        transaction.update(link_ref, {PENDING_PORTFOLIO_FIELD: firestore_module.DELETE_FIELD})
+    return pending
+
+
+def take_pending_portfolio(line_user_id: str) -> dict | None:
+    """Remove and return the pending change; None if there is none or it expired.
+
+    讀和刪在同一個 transaction：同一個「確認」重送或連按兩次，只有一次拿得到。
+    """
+    db = get_db()
+    link_ref = db.collection(LINKS_COLLECTION).document(line_user_id)
+    pending = firestore_module.transactional(_take_pending)(db.transaction(), link_ref)
+    if not pending:
+        return None
+    expires_at = pending.get("expires_at")
+    if not isinstance(expires_at, datetime) or expires_at <= datetime.now(UTC):
+        return None
+    return pending
+
+
+def discard_pending_portfolio(line_user_id: str) -> None:
+    """Drop the pending change, e.g. when the user moves on to another message."""
+    get_db().collection(LINKS_COLLECTION).document(line_user_id).update(
+        {PENDING_PORTFOLIO_FIELD: firestore_module.DELETE_FIELD}
+    )

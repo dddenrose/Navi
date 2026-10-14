@@ -40,9 +40,17 @@ def _quota(allowed: bool = True, tier: str = "pro", reason: str | None = None) -
 
 
 def _fake_agent(
-    *chunks, calls: list | None = None, delay: float = 0, error: Exception | None = None
+    *chunks,
+    calls: list | None = None,
+    delay: float = 0,
+    error: Exception | None = None,
+    received: list | None = None,
 ):
-    async def _run_agent(question, conversation_id=None, user_id="", model_name=None):
+    async def _run_agent(
+        question, conversation_id=None, user_id="", model_name=None, extras=None, images=None
+    ):
+        if received is not None:
+            received.append({"extras": extras, "images": images})
         if calls is not None:
             calls.append(
                 {
@@ -76,6 +84,7 @@ def env():
         client.push = AsyncMock()
         client.log_push_usage = AsyncMock()
         client.start_loading = AsyncMock()
+        client.get_message_content = AsyncMock(return_value=(b"png-bytes", "image/png"))
         store.claim_event.return_value = True
         store.try_acquire_inflight.return_value = True
         store.get_link.return_value = {"uid": "uid-1", "email": "me@example.com"}
@@ -164,7 +173,7 @@ async def test_follow_event_gets_welcome(env):
     env.quota.check_and_consume.assert_not_called()
 
 
-async def test_non_text_message_gets_text_only_reply(env):
+async def test_unsupported_message_gets_text_only_reply(env):
     await handler.handle_event(_event(message={"type": "sticker", "id": "1"}))
     assert _replied_texts(env) == [handler.TEXT_ONLY_REPLY]
     env.quota.check_and_consume.assert_not_called()
@@ -403,3 +412,170 @@ async def test_failed_delivery_does_not_raise(env):
     env.client.reply.side_effect = RuntimeError("LINE unreachable")
     with patch.object(handler, "run_agent", _fake_agent("答案")):
         await handler.handle_event(_event())
+
+
+# ── images ──────────────────────────────────────────────────────────────────
+
+
+def _image_event(message_id: str = "img-1") -> dict:
+    return _event(message={"type": "image", "id": message_id, "contentProvider": {"type": "line"}})
+
+
+async def test_image_is_downloaded_and_sent_to_the_agent_with_line_tools(env):
+    calls: list = []
+    received: list = []
+
+    with patch.object(
+        handler, "run_agent", _fake_agent("我整理好了", calls=calls, received=received)
+    ):
+        await handler.handle_event(_image_event())
+
+    env.client.get_message_content.assert_awaited_once_with("img-1")
+    env.quota.check_and_consume.assert_called_once()
+    assert calls[0]["question"] == ""
+    images = received[0]["images"]
+    assert len(images) == 1
+    assert (images[0].data, images[0].mime_type) == (b"png-bytes", "image/png")
+    extras = received[0]["extras"]
+    assert {t.name for t in extras.tools} == {"propose_trades", "propose_set_holdings"}
+    assert extras.tool_context == {"line_user_id": LINE_USER_ID}
+    assert _replied_texts(env) == ["我整理好了"]
+
+
+async def test_failed_image_download_is_not_counted(env):
+    env.client.get_message_content.return_value = None
+    calls: list = []
+
+    with patch.object(handler, "run_agent", _fake_agent("x", calls=calls)):
+        await handler.handle_event(_image_event())
+
+    assert _replied_texts(env) == [handler.IMAGE_FAILED_REPLY]
+    env.quota.check_and_consume.assert_not_called()
+    assert calls == []
+    env.store.release_inflight.assert_called_once_with(LINE_USER_ID)
+
+
+async def test_text_questions_also_get_the_line_tools(env):
+    received: list = []
+    with patch.object(handler, "run_agent", _fake_agent("ok", received=received)):
+        await handler.handle_event(_event("今天買了 1 張台積電 600"))
+
+    assert received[0]["images"] is None
+    assert {t.name for t in received[0]["extras"].tools} == {
+        "propose_trades",
+        "propose_set_holdings",
+    }
+
+
+# ── pending portfolio changes ───────────────────────────────────────────────
+
+
+def _with_pending(env) -> None:
+    env.store.PENDING_PORTFOLIO_FIELD = "pending_portfolio"
+    env.store.PENDING_PORTFOLIO_MINUTES = 10
+    env.store.get_link.return_value = {
+        "uid": "uid-1",
+        "email": "me@example.com",
+        "pending_portfolio": {"kind": "trades", "items": [{"ticker": "2330.TW"}]},
+    }
+
+
+@pytest.mark.parametrize("command", ["確認", "/confirm", " /CONFIRM "])
+async def test_confirm_writes_without_the_model_or_quota(env, command):
+    _with_pending(env)
+    env.store.take_pending_portfolio.return_value = {
+        "kind": "trades",
+        "items": [{"ticker": "2330.TW"}],
+    }
+    calls: list = []
+
+    with (
+        patch.object(handler.portfolio_changes, "apply", return_value="✅ 已寫入 1 筆") as apply,
+        patch.object(handler, "run_agent", _fake_agent("x", calls=calls)),
+    ):
+        await handler.handle_event(_event(command))
+
+    apply.assert_called_once_with("uid-1", "trades", [{"ticker": "2330.TW"}])
+    assert _replied_texts(env) == ["✅ 已寫入 1 筆"]
+    assert calls == []
+    env.quota.check_and_consume.assert_not_called()
+    env.store.try_acquire_inflight.assert_called_once_with(LINE_USER_ID)
+    env.store.release_inflight.assert_called_once_with(LINE_USER_ID)
+
+
+async def test_confirm_after_expiry_writes_nothing(env):
+    _with_pending(env)
+    env.store.take_pending_portfolio.return_value = None
+
+    with patch.object(handler.portfolio_changes, "apply") as apply:
+        await handler.handle_event(_event("確認"))
+
+    apply.assert_not_called()
+    assert _replied_texts(env) == [handler.PENDING_EXPIRED_REPLY.format(minutes=10)]
+
+
+async def test_confirm_while_busy_is_told_to_wait(env):
+    _with_pending(env)
+    env.store.try_acquire_inflight.return_value = False
+
+    with patch.object(handler.portfolio_changes, "apply") as apply:
+        await handler.handle_event(_event("確認"))
+
+    apply.assert_not_called()
+    env.store.take_pending_portfolio.assert_not_called()
+    env.client.reply.assert_awaited_once_with("reply-token", [handler.CONFIRM_BUSY_REPLY])
+    env.client.push.assert_not_called()
+
+
+async def test_lock_released_when_writing_fails(env):
+    _with_pending(env)
+    env.store.take_pending_portfolio.return_value = {"kind": "trades", "items": []}
+
+    with patch.object(handler.portfolio_changes, "apply", side_effect=RuntimeError("boom")):
+        await handler.handle_event(_event("確認"))
+
+    env.store.release_inflight.assert_called_once_with(LINE_USER_ID)
+    assert _replied_texts(env) == [handler.ERROR_REPLY]
+
+
+async def test_cancel_drops_the_pending_change(env):
+    _with_pending(env)
+
+    await handler.handle_event(_event("取消"))
+
+    env.store.discard_pending_portfolio.assert_called_once_with(LINE_USER_ID)
+    assert _replied_texts(env) == [handler.PENDING_CANCELLED_REPLY]
+    env.quota.check_and_consume.assert_not_called()
+
+
+async def test_confirm_without_a_pending_change_goes_to_the_agent(env):
+    # 模型問「你是指台積電嗎？」時回「確認」，不能被攔掉
+    calls: list = []
+    with patch.object(handler, "run_agent", _fake_agent("好的", calls=calls)):
+        await handler.handle_event(_event("確認"))
+
+    env.store.take_pending_portfolio.assert_not_called()
+    assert calls[0]["question"] == "確認"
+
+
+async def test_another_message_drops_the_pending_change_before_the_agent_runs(env):
+    _with_pending(env)
+    order: list = []
+    env.store.discard_pending_portfolio.side_effect = lambda _: order.append("discard")
+
+    async def _agent(*args, **kwargs):
+        order.append("agent")
+        yield "ok"
+
+    with patch.object(handler, "run_agent", _agent):
+        await handler.handle_event(_event("台積電現在多少"))
+
+    assert order == ["discard", "agent"]
+
+
+async def test_no_discard_write_when_nothing_is_pending(env):
+    env.store.PENDING_PORTFOLIO_FIELD = "pending_portfolio"
+    with patch.object(handler, "run_agent", _fake_agent("ok")):
+        await handler.handle_event(_event())
+
+    env.store.discard_pending_portfolio.assert_not_called()

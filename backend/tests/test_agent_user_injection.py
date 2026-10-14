@@ -1,48 +1,14 @@
 """工具拿到的 uid 一定來自後端，模型無法指定；選股證據揭露由程式補上."""
 
-import json
 from unittest.mock import MagicMock, patch
 
-from langchain_core.language_models import BaseChatModel
-from langchain_core.messages import AIMessage, AIMessageChunk
-from langchain_core.outputs import ChatGeneration, ChatGenerationChunk, ChatResult
+from langchain_core.messages import AIMessage
 
 from services import agent_service
 from services.screener.evidence import get_evidence
+from tests.scripted_model import ScriptedModel
 from tools.portfolio_tool import get_portfolio
 from tools.runtime import user_config
-
-
-class _ScriptedModel(BaseChatModel):
-    """依序回傳預先寫好的訊息；串流時保留 tool call（內建假模型串流會丟掉）."""
-
-    responses: list[AIMessage]
-    turn: int = 0
-
-    @property
-    def _llm_type(self) -> str:
-        return "scripted"
-
-    def bind_tools(self, tools, **kwargs):
-        return self
-
-    def _next(self) -> AIMessage:
-        message = self.responses[self.turn]
-        self.turn += 1
-        return message
-
-    def _generate(self, messages, stop=None, run_manager=None, **kwargs):
-        return ChatResult(generations=[ChatGeneration(message=self._next())])
-
-    def _stream(self, messages, stop=None, run_manager=None, **kwargs):
-        message = self._next()
-        tool_call_chunks = [
-            {"name": tc["name"], "args": json.dumps(tc["args"]), "id": tc["id"], "index": i}
-            for i, tc in enumerate(message.tool_calls)
-        ]
-        yield ChatGenerationChunk(
-            message=AIMessageChunk(content=message.content, tool_call_chunks=tool_call_chunks)
-        )
 
 
 def _empty_portfolio():
@@ -69,7 +35,7 @@ def test_portfolio_without_user_skips_the_lookup():
 
 
 async def test_agent_mode_injects_the_signed_in_user_even_if_the_model_names_another():
-    model = _ScriptedModel(
+    model = ScriptedModel(
         responses=[
             AIMessage(
                 content="",

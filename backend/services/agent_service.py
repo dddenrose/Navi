@@ -5,9 +5,11 @@ and from LLM-based intent classification to rule-based for lower latency.
 """
 
 import asyncio
+import base64
 import logging
 import re
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Callable
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any, Literal, TypedDict
 
@@ -72,6 +74,24 @@ class CitationsEvent(TypedDict):
 
 ThinkingEvent = IntentEvent | ToolStartEvent | ToolEndEvent | CitationsEvent
 StreamChunk = str | ThinkingEvent
+
+
+@dataclass
+class AgentImage:
+    data: bytes
+    mime_type: str
+
+
+@dataclass
+class AgentExtras:
+    """呼叫端（例如 LINE）額外給 agent 的工具與規則；網頁聊天不帶."""
+
+    tools: list = field(default_factory=list)
+    instructions: str = ""
+    # 由後端注入工具的值（RunnableConfig），模型看不到也改不了
+    tool_context: dict[str, str] = field(default_factory=dict)
+    # 依這一輪的工具呼叫，回傳必須原樣出現在回覆裡的文字；模型漏了由程式補上
+    required_blocks: Callable[[list[dict]], list[str]] | None = None
 
 
 # ── Citation Source Registry ─────────────────────────────────────────────────
@@ -547,6 +567,12 @@ _AGENT_FORMAT_INSTRUCTIONS: dict[str, str] = {
     "price_query": (
         "📌 {股票} 即時報價\n• 現價、漲跌幅、成交量\n• 簡短技術位置描述（如在均線上方 / 下方）"
     ),
+    "portfolio_update": (
+        "📝 記錄持股\n"
+        "• 使用者在記錄已成交的買賣或設定持股：用可用的工具建立待確認清單，把清單原樣給使用者核對\n"
+        "• 沒有可用的記錄工具時：請使用者到網頁的投資組合頁面操作\n"
+        "• 使用者其實只是在查持股：呼叫 get_portfolio 回答"
+    ),
     "screener": (
         "📋 Navi 智能選股（策略名稱與報告日期）\n"
         "• 問名單：依排名列出名稱、代號、產業、評等與一句入選重點\n"
@@ -583,6 +609,25 @@ _INTENT_PATTERNS: list[tuple[str, re.Pattern, float]] = [
     (
         "screener",
         re.compile(r"(選股|入選|選進|選出|被選|(動能|價值)(策略|股)?.{0,2}名單)"),
+        0.9,
+    ),
+    # portfolio_update: 記錄已成交的買賣或設定持股（LINE 可寫入）。放在進場分析前面，
+    # 「今天買入 1 張台積電」才不會被當成「可不可以買」送去個股預取。
+    # 問句（嗎、？）與法人買賣超不算，避免搶走分析問題。
+    (
+        "portfolio_update",
+        re.compile(
+            r"^(?!.*(嗎|？|\?|外資|投信|自營|法人|主力|大盤))(?=.*("
+            r"(買|賣)(了|掉)|"
+            r"(今天|昨天|前天|剛剛|剛才|早上|上午|中午|下午|盤中)(有)?(買|賣|加碼|減碼)|"
+            r"(加碼|減碼|出清|停損|停利)了?\s*\d|"
+            r"(幫我|請)(記|紀錄|記錄)|記一筆|"
+            r"(買|賣)(進|入|出)?\s*\d+(\.\d+)?\s*(張|股)|"
+            r"\d+(\.\d+)?\s*(張|股).{0,12}(買|賣)|"
+            r"(改成|設為|設成).{0,12}\d+(\.\d+)?\s*(張|股)|"
+            r"(新增|加入|匯入|更新)(持股|庫存)"
+            r"))",
+        ),
         0.9,
     ),
     # macro_overview: 大盤 / 外資總額 / 期貨多空（無個股 ticker）
@@ -860,6 +905,7 @@ def _classify_intent(question: str) -> tuple[str, str | None, float]:
 
 _VALID_INTENTS = (
     "screener",
+    "portfolio_update",
     "entry_analysis",
     "comprehensive_analysis",
     "technical_analysis",
@@ -879,6 +925,7 @@ class _IntentResult(BaseModel):
 
     intent: Literal[
         "screener",
+        "portfolio_update",
         "entry_analysis",
         "comprehensive_analysis",
         "technical_analysis",
@@ -906,6 +953,7 @@ _LLM_CLASSIFY_PROMPT = """\
 
 意圖定義：
 - screener：問 Navi 智能選股名單、哪些股票入選、某檔為什麼被選進來
+- portfolio_update：記錄已經成交的買賣，或要新增／修改持股（例如「今天買了 1 張台積電 600」）
 - entry_analysis：問「是否可以買、多少錢進場、值得買嗎、目標價」
 - comprehensive_analysis：全面分析某檔股票（未特指面向）
 - technical_analysis：只問技術面 / 走勢 / 均線 / RSI / KD / MACD / 支撐壓力
@@ -1019,7 +1067,10 @@ _PREFETCH_INTENTS: dict[str, list[str]] = {
 # Macro intent 不需要 ticker，但仍走 prefetch 流程；這個集合用於 dispatch 判斷
 _NON_TICKER_PREFETCH_INTENTS: frozenset[str] = frozenset({"macro_overview"})
 # 分類時不抽 ticker 的意圖（「最新的選股名單」會被抽成 ticker「最新」）
-_TICKERLESS_INTENTS: frozenset[str] = _NON_TICKER_PREFETCH_INTENTS | {"screener"}
+_TICKERLESS_INTENTS: frozenset[str] = _NON_TICKER_PREFETCH_INTENTS | {
+    "screener",
+    "portfolio_update",
+}
 
 # ── 預取模式回答格式 ─────────────────────────────────────────────────────────
 
@@ -1253,6 +1304,37 @@ def _missing_screener_disclosure(full_output: str, tool_calls: list[dict]) -> st
     return "\n\n🔎 策略證據\n" + "\n".join(lines)
 
 
+def _missing_required_blocks(full_output: str, blocks: list[str]) -> str:
+    """呼叫端要求原樣出現的文字（例如待確認清單），回覆裡沒有就補在後面.
+
+    比對時忽略空白：模型常改動換行或縮排，內容一樣就不重複貼。
+    """
+    squeezed = re.sub(r"\s+", "", full_output)
+    missing = [b for b in blocks if b and re.sub(r"\s+", "", b) not in squeezed]
+    return "".join(f"\n\n{block}" for block in missing)
+
+
+_IMAGE_ONLY_TEXT = "（使用者傳了一張圖片，沒有附文字）"
+
+
+def _human_message(question: str, images: list[AgentImage] | None) -> HumanMessage:
+    if not images:
+        return HumanMessage(content=question)
+    parts: list[str | dict] = [{"type": "text", "text": question or _IMAGE_ONLY_TEXT}]
+    for image in images:
+        encoded = base64.b64encode(image.data).decode()
+        url = f"data:{image.mime_type};base64,{encoded}"
+        parts.append({"type": "image_url", "image_url": {"url": url}})
+    return HumanMessage(content=parts)
+
+
+def _history_question(question: str, images: list[AgentImage] | None) -> str:
+    # 圖片不存進對話紀錄，只留標記
+    if not images:
+        return question
+    return f"[圖片] {question}".strip()
+
+
 async def _run_prefetch_mode(
     question: str,
     intent: str,
@@ -1378,10 +1460,15 @@ async def _run_agent_mode(
     conversation_id: str | None,
     user_id: str,
     intent_event: IntentEvent | None = None,
+    extras: AgentExtras | None = None,
+    images: list[AgentImage] | None = None,
 ) -> AsyncGenerator[StreamChunk, None]:
     """LangGraph ReAct Agent 模式：自主決策工具呼叫。"""
+    extras = extras or AgentExtras()
     system_prompt = _build_agent_system_prompt(intent)
-    run_config = user_config(user_id)
+    if extras.instructions:
+        system_prompt += "\n" + extras.instructions
+    run_config = user_config(user_id, **extras.tool_context)
 
     thinking_steps: list[dict] = []
     if intent_event is not None:
@@ -1389,7 +1476,7 @@ async def _run_agent_mode(
 
     agent = create_react_agent(
         model=llm,
-        tools=ALL_TOOLS,
+        tools=[*ALL_TOOLS, *extras.tools],
         prompt=system_prompt,
     )
 
@@ -1401,7 +1488,7 @@ async def _run_agent_mode(
             logger.warning("Failed to load history for %s: %s", conversation_id, e)
 
     input_messages = list(chat_history_messages)
-    input_messages.append(HumanMessage(content=question))
+    input_messages.append(_human_message(question, images))
 
     try:
         full_output = ""
@@ -1460,10 +1547,15 @@ async def _run_agent_mode(
                 full_output = last_msg.content
                 yield full_output
 
-        disclosure = _missing_screener_disclosure(full_output, list(tool_calls_by_run.values()))
-        if disclosure:
-            full_output += disclosure
-            yield disclosure
+        tool_calls = list(tool_calls_by_run.values())
+        required = extras.required_blocks(tool_calls) if extras.required_blocks else []
+        for addition in (
+            _missing_required_blocks(full_output, required),
+            _missing_screener_disclosure(full_output, tool_calls),
+        ):
+            if addition:
+                full_output += addition
+                yield addition
 
         disclaimer = _missing_disclaimer(full_output)
         if disclaimer:
@@ -1478,7 +1570,7 @@ async def _run_agent_mode(
             try:
                 save_history(
                     conversation_id,
-                    question,
+                    _history_question(question, images),
                     full_output,
                     user_id=user_id,
                     thinking=thinking_steps or None,
@@ -1500,6 +1592,9 @@ async def run_agent(
     conversation_id: str | None = None,
     user_id: str = "",
     model_name: str | None = None,
+    *,
+    extras: AgentExtras | None = None,
+    images: list[AgentImage] | None = None,
 ) -> AsyncGenerator[StreamChunk, None]:
     """Run the tool-calling agent with hybrid intent classification.
 
@@ -1512,11 +1607,16 @@ async def run_agent(
 
     Args:
         model_name: 依使用者 tier 傳入（config.model_for_tier）；None 用預設 Pro。
+        extras: 呼叫端額外的工具與規則（LINE 記錄持股用）。
+        images: 使用者傳的圖片；有圖片時不做文字分類，直接走 agent 模式。
     """
     llm = _build_llm(model_name)
 
     # Step 1: 混合式意圖分類（regex 為主，低信心時 LLM 補強）
-    intent, ticker, confidence = await _classify_intent_hybrid(question, llm)
+    if images:
+        intent, ticker, confidence = "image", None, 1.0
+    else:
+        intent, ticker, confidence = await _classify_intent_hybrid(question, llm)
     logger.info("Intent: %s | Ticker: %s | Confidence: %.2f", intent, ticker, confidence)
 
     intent_event = IntentEvent(
@@ -1527,7 +1627,7 @@ async def run_agent(
     # Step 2: 分流執行策略
     prefetch_tools = _PREFETCH_INTENTS.get(intent)
     needs_ticker = intent not in _NON_TICKER_PREFETCH_INTENTS
-    if prefetch_tools and (ticker or not needs_ticker):
+    if prefetch_tools and (ticker or not needs_ticker) and not images:
         logger.info("→ Prefetch mode (%d tools, ticker=%s)", len(prefetch_tools), ticker or "—")
         async for chunk in _run_prefetch_mode(
             question,
@@ -1549,6 +1649,8 @@ async def run_agent(
             conversation_id,
             user_id,
             intent_event=intent_event,
+            extras=extras,
+            images=images,
         ):
             yield chunk
 

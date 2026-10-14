@@ -1,4 +1,4 @@
-"""LINE Messaging API client — 簽章驗證、reply / push / loading 動畫、用量與 profile 查詢.
+"""LINE Messaging API client — 簽章驗證、reply / push / loading 動畫、用量、profile 與圖片下載.
 
 未設定 LINE_CHANNEL_ACCESS_TOKEN 時走 dry-run：只 log 要送的內容，不呼叫 LINE。
 """
@@ -18,6 +18,9 @@ logger = logging.getLogger(__name__)
 
 SIGNATURE_HEADER = "X-Line-Signature"
 API_BASE = "https://api.line.me/v2/bot"
+# 使用者傳的圖片等內容要從另一個網域下載
+DATA_API_BASE = "https://api-data.line.me/v2/bot"
+MAX_CONTENT_BYTES = 10 * 1024 * 1024  # LINE 圖片上限 10 MB
 TIMEOUT_SECONDS = 10
 LOADING_SECONDS = 60  # LINE 允許 5–60 秒
 PUSH_USAGE_WARN_RATIO = 0.8  # 當月 push 用量達方案上限的這個比例時，log 升為 WARNING
@@ -118,6 +121,39 @@ async def log_push_usage() -> None:
         )
     except Exception:
         logger.warning("LINE push usage lookup failed", exc_info=True)
+
+
+def _get_content(message_id: str) -> tuple[bytes, str] | None:
+    token = settings.line_channel_access_token
+    if not token:
+        logger.info("[LINE dry-run] GET content of message %s", message_id)
+        return None
+    response = requests.get(
+        f"{DATA_API_BASE}/message/{message_id}/content",
+        headers={"Authorization": f"Bearer {token}"},
+        timeout=TIMEOUT_SECONDS,
+    )
+    # 202 = LINE 還在處理（影片才常見）；當成拿不到
+    if response.status_code != 200:
+        logger.warning("LINE content %s returned %s", message_id, response.status_code)
+        return None
+    if len(response.content) > MAX_CONTENT_BYTES:
+        logger.warning("LINE content %s too large: %d bytes", message_id, len(response.content))
+        return None
+    mime_type = response.headers.get("Content-Type", "image/jpeg").split(";")[0].strip()
+    return response.content, mime_type
+
+
+async def get_message_content(message_id: str) -> tuple[bytes, str] | None:
+    """Download what a user sent (e.g. an image) as (bytes, mime type). Never raises.
+
+    回 None 表示拿不到：dry-run、LINE 回非 200、超過大小上限或連線失敗。
+    """
+    try:
+        return await asyncio.to_thread(_get_content, message_id)
+    except Exception:
+        logger.warning("LINE content download failed for %s", message_id, exc_info=True)
+        return None
 
 
 def get_display_name(user_id: str) -> str:
