@@ -33,6 +33,12 @@ class FakeDocRef:
         self._coll = coll
         self._id = doc_id
 
+    def get(self):
+        data = self._coll._docs.get(self._id)
+        snap = FakeDoc(self._coll, self._id, data or {})
+        snap.exists = data is not None
+        return snap
+
     def update(self, patch_data):
         self._coll._docs[self._id].update(patch_data)
 
@@ -120,6 +126,27 @@ class TestAddTransaction:
         fee = round(gross * 0.001425, 2)
         tax = round(gross * 0.003, 2)
         assert tx.realized_pnl == round(gross - fee - tax - 500_000, 2)
+
+    def test_holding_id_targets_a_holding_stored_under_another_name(self, fake_store):
+        # 網頁存的 ticker 可能是「南亞科」；LINE 傳 2408.TW 加上比對好的 holding_id
+        holdings, _ = fake_store
+        _, doc = holdings.add({"ticker": "南亞科", "name": "南亞科", "shares": 1000, "avg_cost": 50})
+
+        add_transaction("u1", "2408.TW", "buy", 1000, 70, fee=0, holding_id=doc.id)
+        tx = add_transaction("u1", "2408.TW", "sell", 500, 80, holding_id=doc.id)
+
+        docs = holdings.stream()
+        assert len(docs) == 1  # 沒有因為字串不同多開一筆
+        d = docs[0].to_dict()
+        assert d["ticker"] == "南亞科"
+        assert d["shares"] == 1500
+        assert abs(d["avg_cost"] - 60.0) < 0.01
+        # 費稅用傳入的 2408.TW 估算，不是 0
+        assert tx.tax == round(500 * 80 * 0.003, 2)
+
+    def test_unknown_holding_id_rejected(self, fake_store):
+        with pytest.raises(ValueError, match="找不到要更新的持股"):
+            add_transaction("u1", "2330.TW", "sell", 100, 500, holding_id="missing")
 
     def test_sell_all_deletes_holding(self, fake_store):
         holdings, _ = fake_store

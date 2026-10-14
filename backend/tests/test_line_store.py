@@ -186,3 +186,77 @@ def test_existing_link_is_kept_and_returned():
         link = store.create_link_if_absent("U1", "line_U1")
     assert link == {"uid": "web-uid", "email": "me@example.com"}
     doc_ref.set.assert_not_called()
+
+
+# ── pending portfolio change ────────────────────────────────────────────────
+
+
+def test_save_pending_replaces_the_field_with_an_expiry():
+    db, link_ref = _mock_db()
+    with patch("services.line.store.get_db", return_value=db):
+        store.save_pending_portfolio("U1", "trades", [{"ticker": "2330.TW"}])
+
+    db.collection.assert_called_with("line_links")
+    pending = link_ref.update.call_args.args[0][store.PENDING_PORTFOLIO_FIELD]
+    assert pending["kind"] == "trades"
+    assert pending["items"] == [{"ticker": "2330.TW"}]
+    assert pending["expires_at"] - pending["created_at"] == timedelta(
+        minutes=store.PENDING_PORTFOLIO_MINUTES
+    )
+
+
+def _take(pending) -> tuple[dict | None, MagicMock]:
+    db, link_ref = _mock_db()
+    link_ref.get.return_value.to_dict.return_value = {
+        "uid": "uid-1",
+        store.PENDING_PORTFOLIO_FIELD: pending,
+    }
+    with (
+        patch("services.line.store.get_db", return_value=db),
+        patch("services.line.store.firestore_module.transactional", side_effect=lambda fn: fn),
+    ):
+        taken = store.take_pending_portfolio("U1")
+    return taken, db.transaction.return_value
+
+
+def test_take_pending_returns_and_clears_it():
+    pending = {
+        "kind": "trades",
+        "items": [],
+        "expires_at": datetime.now(UTC) + timedelta(minutes=5),
+    }
+
+    taken, transaction = _take(pending)
+
+    assert taken == pending
+    _, update = transaction.update.call_args.args
+    assert update == {store.PENDING_PORTFOLIO_FIELD: store.firestore_module.DELETE_FIELD}
+
+
+def test_expired_pending_is_cleared_but_not_returned():
+    pending = {
+        "kind": "trades",
+        "items": [],
+        "expires_at": datetime.now(UTC) - timedelta(seconds=1),
+    }
+
+    taken, transaction = _take(pending)
+
+    assert taken is None
+    transaction.update.assert_called_once()
+
+
+def test_take_without_pending_writes_nothing():
+    taken, transaction = _take(None)
+
+    assert taken is None
+    transaction.update.assert_not_called()
+
+
+def test_discard_pending_deletes_the_field():
+    db, link_ref = _mock_db()
+    with patch("services.line.store.get_db", return_value=db):
+        store.discard_pending_portfolio("U1")
+    link_ref.update.assert_called_once_with(
+        {store.PENDING_PORTFOLIO_FIELD: store.firestore_module.DELETE_FIELD}
+    )

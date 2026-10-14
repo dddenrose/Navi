@@ -195,3 +195,53 @@ def test_display_name_empty_in_dry_run(mock_settings, mock_get):
     mock_settings.line_channel_access_token = ""
     assert client.get_display_name("U123") == ""
     mock_get.assert_not_called()
+
+
+# ── get_message_content ─────────────────────────────────────────────────────
+
+
+def _content_response(status_code: int, body: bytes = b"img", content_type: str = "image/jpeg"):
+    return MagicMock(status_code=status_code, content=body, headers={"Content-Type": content_type})
+
+
+@patch("services.line.client.requests.get")
+@patch("services.line.client.settings")
+async def test_image_content_is_downloaded_from_the_data_api(mock_settings, mock_get):
+    mock_settings.line_channel_access_token = "token-abc"
+    mock_get.return_value = _content_response(200, b"png", "image/png; charset=binary")
+
+    assert await client.get_message_content("msg-1") == (b"png", "image/png")
+    assert mock_get.call_args.args[0] == "https://api-data.line.me/v2/bot/message/msg-1/content"
+    assert mock_get.call_args.kwargs["headers"] == {"Authorization": "Bearer token-abc"}
+
+
+@pytest.mark.parametrize(
+    "response",
+    [
+        _content_response(202),
+        _content_response(404),
+        _content_response(200, b"x" * (client.MAX_CONTENT_BYTES + 1)),
+    ],
+)
+@patch("services.line.client.requests.get")
+@patch("services.line.client.settings")
+async def test_unusable_content_returns_none(mock_settings, mock_get, response):
+    mock_settings.line_channel_access_token = "token-abc"
+    mock_get.return_value = response
+    assert await client.get_message_content("msg-1") is None
+
+
+@patch("services.line.client.requests.get")
+@patch("services.line.client.settings")
+async def test_content_download_never_raises(mock_settings, mock_get):
+    mock_settings.line_channel_access_token = "token-abc"
+    mock_get.side_effect = requests.ConnectionError("down")
+    assert await client.get_message_content("msg-1") is None
+
+
+@patch("services.line.client.requests.get")
+@patch("services.line.client.settings")
+async def test_content_dry_run_downloads_nothing(mock_settings, mock_get):
+    mock_settings.line_channel_access_token = ""
+    assert await client.get_message_content("msg-1") is None
+    mock_get.assert_not_called()

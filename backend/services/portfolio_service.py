@@ -211,6 +211,7 @@ def add_transaction(
     name: str = "",
     notes: str = "",
     fee: float | None = None,
+    holding_id: str | None = None,
 ) -> Transaction:
     """記錄一筆買/賣交易，並同步維護持股（平均成本法）.
 
@@ -218,6 +219,8 @@ def add_transaction(
     - 賣出：已實現損益 = 賣出淨額（扣費稅）－ 股數 × 平均成本；平均成本不變，
       股數歸零時刪除該持股
     - fee 可自行覆寫（券商折讓），不填則以台股牌告費率估算
+    - holding_id：呼叫端已比對出要更新哪一筆持股時傳入。持股的 ticker 可能存成
+      「0050」或「南亞科」，用字串比對會對不上而多開一筆
     """
     if action not in ("buy", "sell"):
         raise ValueError("action 必須是 buy 或 sell")
@@ -234,11 +237,17 @@ def add_transaction(
     # 找到既有持股（同 ticker 只取第一筆；帳本制下每檔應只有一筆 holding）
     holdings_ref = _holdings_ref(user_id)
     existing = None
-    for doc in holdings_ref.stream():
-        d = doc.to_dict() or {}
-        if d.get("ticker", "").upper() == ticker:
-            existing = (doc.id, d)
-            break
+    if holding_id:
+        snap = holdings_ref.document(holding_id).get()
+        if not snap.exists:
+            raise ValueError(f"找不到要更新的持股 {holding_id}")
+        existing = (holding_id, snap.to_dict() or {})
+    else:
+        for doc in holdings_ref.stream():
+            d = doc.to_dict() or {}
+            if d.get("ticker", "").upper() == ticker:
+                existing = (doc.id, d)
+                break
 
     now = _now_iso()
     realized_pnl = 0.0
