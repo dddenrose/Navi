@@ -2,6 +2,8 @@
 
 from unittest.mock import patch
 
+import pytest
+
 from config import Settings, settings
 from services import agent_service
 from services.screener import ai_evaluator
@@ -35,6 +37,26 @@ def test_screener_llm_uses_global_endpoint():
     kwargs = _chat_kwargs(ai_evaluator)
     assert kwargs["model_name"] == settings.screener_llm_model
     assert kwargs["location"] == settings.gemini_location
+
+
+@pytest.mark.parametrize("module", [agent_service, ai_evaluator])
+def test_no_endpoint_override_by_default(module):
+    # 線上不設 GEMINI_API_ENDPOINT：hostname 交給 SDK 依 location 決定
+    with patch.object(settings, "gemini_api_endpoint", ""):
+        assert "api_endpoint" not in _chat_kwargs(module)
+
+
+@pytest.mark.parametrize("module", [agent_service, ai_evaluator])
+def test_endpoint_override_reaches_every_gemini_client(module):
+    # 本機被防火牆擋 global 時改走 us multi-region；兩個建 LLM 的地方都要吃到
+    with (
+        patch.object(settings, "gemini_location", "us"),
+        patch.object(settings, "gemini_api_endpoint", "aiplatform.us.rep.googleapis.com"),
+    ):
+        kwargs = _chat_kwargs(module)
+
+    assert kwargs["location"] == "us"
+    assert kwargs["api_endpoint"] == "aiplatform.us.rep.googleapis.com"
 
 
 def test_defaults_do_not_use_retired_gemini_2_x():

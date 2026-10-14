@@ -65,6 +65,7 @@ CI runs the same suite on every push and pull request against `main`
 | `GEMINI_MODEL_NAME`              | LLM model for paid tiers (pro/unlimited/admin)              | `gemini-3.8-flash`                    |
 | `GEMINI_MODEL_NAME_FREE`         | LLM model for the free tier                                 | `gemini-3.5-flash-lite`               |
 | `GEMINI_LOCATION`                | Vertex AI endpoint for Gemini (3.x PayGo: `global`/`us`/`eu`) | `global`                            |
+| `GEMINI_API_ENDPOINT`            | Hostname override, e.g. `aiplatform.us.rep.googleapis.com` with `GEMINI_LOCATION=us` (local dev behind a firewall that blocks the global endpoint) | — |
 | `GEMINI_THINKING_BUDGET`         | Per-call thinking token cap for the paid-tier model          | `1024`                                |
 | `EMBEDDING_MODEL_NAME`           | Embedding model                                             | `text-embedding-004`                  |
 | `AUTH_REQUIRED`                  | Enable JWT authentication                                   | `true`                                |

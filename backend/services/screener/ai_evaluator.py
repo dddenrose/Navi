@@ -28,7 +28,7 @@ import vertexai
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_google_vertexai import ChatVertexAI
 
-from config import settings
+from config import gemini_endpoint_kwargs, settings
 from services.screener.factor_scorer import EvaluatedStock
 from services.screener.prompts import (
     StockInterpretation,
@@ -58,7 +58,7 @@ def _build_llm(model_name: str | None = None) -> ChatVertexAI:
         model_name=model_name or settings.screener_llm_model,
         temperature=0.2,
         project=settings.google_cloud_project,
-        location=settings.gemini_location,
+        **gemini_endpoint_kwargs(),
     )
 
 

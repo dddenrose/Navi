@@ -24,6 +24,10 @@ class Settings(BaseSettings):
     gemini_model_name: str = "gemini-3.8-flash"  # pro/unlimited/admin 層
     gemini_model_name_free: str = "gemini-3.5-flash-lite"  # free 層
     gemini_location: str = "global"
+    # 只給本機用：公司網路的防火牆攔 global endpoint 時，改走 GEMINI_LOCATION=us 加
+    # GEMINI_API_ENDPOINT=aiplatform.us.rep.googleapis.com（SDK 會把 "us" 拼成不存在的
+    # us-aiplatform.googleapis.com）。空字串 = 依 location 由 SDK 決定，線上不設。
+    gemini_api_endpoint: str = ""
     # 付費層每次呼叫的 thinking 上限。3.8 Flash 預設 MEDIUM，一句話問題實測就燒 ~380 tokens，
     # ReAct 多步工具呼叫會放大延遲；SDK 2.1.x 沒有 thinking_level，用 budget 封頂近似 LOW。
     gemini_thinking_budget: int = 1024
@@ -69,6 +73,14 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+
+def gemini_endpoint_kwargs() -> dict[str, str]:
+    """ChatVertexAI 的連線參數；所有 Gemini 呼叫共用，避免各處端點設定不一致."""
+    kwargs = {"location": settings.gemini_location}
+    if settings.gemini_api_endpoint:
+        kwargs["api_endpoint"] = settings.gemini_api_endpoint
+    return kwargs
 
 
 def model_for_tier(tier: str) -> str:
